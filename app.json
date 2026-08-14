@@ -1,0 +1,75 @@
+{
+  "expo": {
+    "name": "Morpheo",
+    "slug": "morpheo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0d0d1a"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.morpheo.app",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Morpheo uses Face ID to protect your dream journal.",
+        "NSSpeechRecognitionUsageDescription": "Morpheo uses speech recognition for voice dream logging.",
+        "NSMicrophoneUsageDescription": "Morpheo uses the microphone for voice dream logging."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0d0d1a"
+      },
+      "package": "com.morpheo.app",
+      "permissions": [
+        "RECORD_AUDIO",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Morpheo uses Face ID to protect your dream journal."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#7c5cbf",
+          "sounds": []
+        }
+      ],
+      "@react-native-voice/voice",
+      "expo-apple-authentication",
+      "@react-native-community/datetimepicker",
+      "expo-sqlite",
+      "expo-video",
+      "expo-asset",
+      "expo-font"
+    ],
+    "scheme": "morpheo",
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

@@ -1,0 +1,117 @@
+# Morpheo — CLAUDE.md
+
+AI dream interpretation app for iOS and Android. Solo-built, portfolio-grade.
+
+## Stack
+
+- **React Native / Expo SDK 53+** (managed workflow) — TypeScript strict mode
+- **Expo Router v4** — file-based navigation (`(auth)/`, `(main)/`)
+- **Supabase** — PostgreSQL + Auth + Storage + Edge Functions + Realtime
+- **Claude claude-sonnet-4-6** — text interpretation via `tool_use` (`format_interpretation`)
+- **DALL-E 3** — synchronous image generation
+- **Luma Dream Machine v2** — async video generation
+- **RevenueCat** — cross-platform IAP
+- **expo-sqlite + drizzle-orm** — offline-first local persistence
+- **Zustand** (planned) — global state
+
+## Project Structure
+
+```
+src/
+  app/           # Expo Router screens
+    (auth)/      # Onboarding, sign-in, lock
+    (main)/      # Journal, log, insights, settings
+  features/      # Feature-based modules
+  services/      # Adapter interfaces + concrete implementations
+  shared/        # Design tokens, components
+  db/            # Drizzle schema + SQLite client
+  supabase/      # Supabase client + secure store adapter
+supabase/
+  functions/     # Edge Functions (Deno)
+  migrations/    # SQL migrations (001–007)
+  seed/          # system_prompts.sql
+tests/
+  unit/          # Jest unit tests
+  integration/   # Integration tests
+  e2e/           # Detox/Maestro E2E
+```
+
+## Critical Constraints (from speckit-analyze remediation)
+
+| # | Constraint | Detail |
+|---|-----------|--------|
+| C1 | Account deletion phrase | Exact string `DELETE MY ACCOUNT` — matches Edge Function contract |
+| C2 | Idle timeout key | `AsyncStorage` key `lock_idle_timeout_minutes` — NOT `profiles.notification_reminder_time` |
+| C3 | Voice dictation | `@react-native-voice/voice` for STT — NOT `expo-speech` (TTS-only) |
+| H1 | Luma training opt-out | `{ "do_not_train": true }` MUST be included in every Luma API call |
+| H2 | SQLite emotion filter | `json_each()` subquery — NOT PostgreSQL `@>` array syntax |
+| H3 | generation_jobs RLS | SELECT policy for owner — enables client polling |
+| H4 | Cache size query | `getCacheSize(): Promise<number>` — NOT `evictToLimit(0)` (destructive) |
+
+## Service Adapter Pattern
+
+All 8 external integrations are behind TypeScript interfaces in `src/services/`.
+Feature code always uses `useServices()` hook — never imports concrete classes directly.
+`ServicesProvider` in `_layout.tsx` injects concrete implementations at app startup.
+
+## Development Commands
+
+```bash
+npm install               # Install dependencies
+npx expo start            # Start dev server
+npx expo run:ios          # Run on iOS simulator
+npx expo run:android      # Run on Android emulator
+npm test                  # Run Jest tests
+npm run typecheck         # TypeScript check
+npm run lint              # ESLint
+```
+
+## Environment Variables
+
+Copy `.env.example` to `.env.local`:
+
+```
+EXPO_PUBLIC_SUPABASE_URL=
+EXPO_PUBLIC_SUPABASE_ANON_KEY=
+EXPO_PUBLIC_REVENUECAT_IOS_KEY=
+EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=
+```
+
+Edge Function secrets (set via `supabase secrets set`):
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
+- `LUMA_API_KEY`
+- `REVENUECAT_WEBHOOK_AUTH_HEADER`
+
+## Supabase Local Development
+
+```bash
+supabase start            # Start local Supabase
+supabase db push          # Apply migrations
+supabase db seed          # Seed system_prompts
+supabase functions serve  # Serve Edge Functions locally
+```
+
+## Architecture Decisions
+
+- **Offline-first**: SQLite as primary store; sync queue drains on network reconnect
+- **Server-side gates**: Entitlement checks in Edge Functions are the actual gate; client-side checks are UX only
+- **System prompt versioning**: `system_prompts` table, server-side only; no client access
+- **LWW sync**: `last_modified_at` timestamp for last-write-wins conflict resolution
+- **200MB cache cap**: `ExpoStorageService.evictToLimit(200MB)` called on every foreground transition
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/app/_layout.tsx` | Root layout, service wiring, lock gate, cache eviction |
+| `src/services/ServicesProvider.tsx` | React context for service injection |
+| `src/services/registry.ts` | ServiceRegistry type |
+| `src/db/schema.ts` | Drizzle ORM SQLite schema |
+| `src/db/client.ts` | SQLite singleton |
+| `supabase/functions/interpret/index.ts` | Claude interpretation Edge Function |
+| `supabase/migrations/005_rls.sql` | All RLS policies |
+| `supabase/migrations/006_triggers.sql` | Recurrence trigger |
+| `supabase/migrations/007_pg_cron.sql` | Monthly reset + deletion cleanup |
+| `specs/001-morpheo-app/` | Full specification, plan, tasks |
+| `.specify/memory/constitution.md` | Morpheo governance constitution |

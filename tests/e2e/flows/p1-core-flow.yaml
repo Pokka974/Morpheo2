@@ -1,0 +1,60 @@
+appId: com.morpheo.app
+name: P1 Core Flow — Fresh install to interpretation
+
+---
+
+- launchApp:
+    clearState: true
+
+# Onboarding
+- assertVisible: "Welcome to Morpheo"
+- tapOn: "Get Started"
+
+# Consent
+- assertVisible: "Your dreams, your data"
+- tapOn: "I Agree"
+
+# PIN setup
+- assertVisible: "Set Up Lock"
+- inputRandomNumber:
+    length: 4
+    label: "Enter PIN"
+- tapOn: "Continue"
+- inputRandomNumber:
+    length: 4
+    label: "Confirm PIN"
+- tapOn: "Set PIN"
+
+# Sign up
+- assertVisible: "Create Account"
+- tapOn:
+    id: "email-input"
+- inputText: "test@morpheo.app"
+- tapOn:
+    id: "password-input"
+- inputText: "TestPassword123!"
+- tapOn: "Create Account"
+
+# Wait for journal
+- assertVisible: "Your dream journal is empty"
+
+# Log dream (offline simulation skipped in yaml — use device airplane mode before this step)
+- tapOn: "Log a Dream"
+- tapOn:
+    id: "dream-description-input"
+- inputText: "I was standing on a cliff above a vast dark ocean. The moon was huge and red, and strange fish-like shapes moved in the clouds above me. I felt both terrified and at peace."
+- tapOn: "Save Dream"
+
+# Navigate to dream detail
+- assertVisible: "Interpret Dream"
+- tapOn: "Interpret Dream"
+
+# Wait for interpretation
+- waitForAnimationToEnd
+- assertVisible: "Interpretation"
+- assertVisible: "Symbols"
+- assertVisible: "Emotions"
+
+# Verify image generation triggered
+- waitForAnimationToEnd
+- assertVisible: "Dream illustration"

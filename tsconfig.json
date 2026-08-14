@@ -1,0 +1,38 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": false,
+    "types": [
+      "jest"
+    ],
+    "paths": {
+      "@features/*": [
+        "./src/features/*"
+      ],
+      "@services/*": [
+        "./src/services/*"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
+      ],
+      "@db/*": [
+        "./src/db/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "supabase/functions",
+    "tests"
+  ]
+}
