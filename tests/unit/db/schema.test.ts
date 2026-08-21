@@ -3,7 +3,7 @@ import { dreams, interpretations, media, recurrencePatterns } from '@db/schema';
 describe('dreams table schema', () => {
   it('exports dreams table with correct columns', () => {
     expect(Object.keys(dreams)).toBeDefined();
-    const col = (dreams as Record<string, { name: string }>);
+    const col = (dreams as unknown as Record<string, { name: string }>);
     expect(col['id']).toBeDefined();
     expect(col['userId']).toBeDefined();
     expect(col['description']).toBeDefined();
@@ -21,7 +21,7 @@ describe('dreams table schema', () => {
 describe('interpretations table schema', () => {
   it('exports interpretations table', () => {
     expect(interpretations).toBeDefined();
-    const col = (interpretations as Record<string, { name: string }>);
+    const col = (interpretations as unknown as Record<string, { name: string }>);
     expect(col['dreamId']).toBeDefined();
     expect(col['isDegraded']).toBeDefined();
     expect(col['promptVersion']).toBeDefined();
@@ -42,7 +42,7 @@ describe('media table schema', () => {
 describe('recurrencePatterns table schema', () => {
   it('exports recurrence patterns table', () => {
     expect(recurrencePatterns).toBeDefined();
-    const col = (recurrencePatterns as Record<string, { name: string }>);
+    const col = (recurrencePatterns as unknown as Record<string, { name: string }>);
     expect(col['symbol']).toBeDefined();
     expect(col['occurrenceCount']).toBeDefined();
   });

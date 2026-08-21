@@ -16,7 +16,7 @@ jest.mock('expo-file-system', () => ({
     }
     const entry = mockFiles[path];
     if (!entry) return { exists: false };
-    return { exists: true, ...entry };
+    return { ...entry };
   }),
   makeDirectoryAsync: jest.fn(async (path: string) => {
     mockDirExists = true;
@@ -51,7 +51,7 @@ describe('ExpoStorageService', () => {
     it('downloads file when not cached', async () => {
       const path = await service.cacheMedia('media-001', 'https://example.com/img.jpg');
       expect(mockDownloadedFiles).toHaveLength(1);
-      expect(mockDownloadedFiles[0].url).toBe('https://example.com/img.jpg');
+      expect(mockDownloadedFiles[0]?.url).toBe('https://example.com/img.jpg');
       expect(path).toContain('media-001');
     });
 

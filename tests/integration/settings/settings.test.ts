@@ -16,7 +16,7 @@ describe('Settings integration', () => {
 
     it('delete-account screen disables confirm button until exact phrase typed', () => {
       // UI contract: button disabled unless confirmationText === 'DELETE MY ACCOUNT'
-      const PHRASE = 'DELETE MY ACCOUNT';
+      const PHRASE: string = 'DELETE MY ACCOUNT';
       expect(''.length === PHRASE.length).toBe(false);
       expect('delete my account' === PHRASE).toBe(false);
       expect('DELETE MY ACCOUNT' === PHRASE).toBe(true);

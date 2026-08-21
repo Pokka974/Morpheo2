@@ -6,9 +6,13 @@
     "noImplicitOverride": true,
     "exactOptionalPropertyTypes": false,
     "types": [
-      "jest"
+      "jest",
+      "node"
     ],
     "paths": {
+      "@app/*": [
+        "./src/app/*"
+      ],
       "@features/*": [
         "./src/features/*"
       ],
@@ -32,7 +36,6 @@
     "node_modules",
     "dist",
     "build",
-    "supabase/functions",
-    "tests"
+    "supabase/functions"
   ]
 }

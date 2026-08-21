@@ -10,12 +10,15 @@ import { MockVideoGenerationService } from '@services/ai/video/__mocks__/MockVid
 import { MockStorageService } from '@services/storage/__mocks__/MockStorageService';
 import { MockNotificationService } from '@services/notifications/__mocks__/MockNotificationService';
 import type { ServiceRegistry } from '@services/registry';
+import { sqlite as db } from '@db/client';
 
+const mockRouterReplace = jest.fn();
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({
     dreamId: 'test-dream-id',
     description: 'I was walking through a misty forest and found a glowing door.',
   }),
+  useRouter: () => ({ replace: mockRouterReplace }),
 }));
 
 jest.mock('@services/../supabase/client', () => ({
@@ -50,6 +53,8 @@ describe('InterpretationScreen', () => {
   beforeEach(() => {
     interpretationService.configure('success');
     entitlementService.configure('free');
+    mockRouterReplace.mockClear();
+    (db.runAsync as jest.Mock).mockClear();
   });
 
   it('shows empty state (Interpret CTA) initially', () => {
@@ -86,6 +91,25 @@ describe('InterpretationScreen', () => {
     fireEvent.press(getByText('Interpret Dream'));
     await waitFor(() => {
       expect(getByText('Try Again')).toBeTruthy();
+    });
+  });
+
+  it('persists the interpretation to local SQLite and navigates back to the detail screen on success', async () => {
+    const { getByText } = render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+    fireEvent.press(getByText('Interpret Dream'));
+
+    await waitFor(() => {
+      expect(db.runAsync).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT OR REPLACE INTO interpretations'),
+        expect.arrayContaining(['test-dream-id'])
+      );
+    });
+    await waitFor(() => {
+      expect(mockRouterReplace).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail');
     });
   });
 

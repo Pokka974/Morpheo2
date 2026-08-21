@@ -27,8 +27,8 @@ describe('recurrenceRepository', () => {
     it('returns patterns ordered by occurrence_count DESC', async () => {
       mockExecuteSync.mockReturnValue([waterPattern, firePattern]);
       const result = await getTopRecurrences('user-001', 'keyword', 10);
-      expect(result[0].term).toBe('water');
-      expect(result[0].occurrenceCount).toBe(4);
+      expect(result[0]?.term).toBe('water');
+      expect(result[0]?.occurrenceCount).toBe(4);
     });
 
     it('includes days parameter when specified', async () => {
@@ -48,13 +48,13 @@ describe('recurrenceRepository', () => {
     it('queries emotion type correctly', async () => {
       mockExecuteSync.mockReturnValue([fearEmotion]);
       const result = await getTopRecurrences('user-001', 'emotion', 3, 30);
-      expect(result[0].patternType).toBe('emotion');
+      expect(result[0]?.patternType).toBe('emotion');
     });
 
     it('parses dreamIds from JSON string', async () => {
       mockExecuteSync.mockReturnValue([waterPattern]);
       const result = await getTopRecurrences('user-001', 'keyword', 10);
-      expect(result[0].dreamIds).toEqual(['d1', 'd2', 'd3', 'd4']);
+      expect(result[0]?.dreamIds).toEqual(['d1', 'd2', 'd3', 'd4']);
     });
   });
 

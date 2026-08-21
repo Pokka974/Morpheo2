@@ -104,6 +104,54 @@ describe('Image generation integration', () => {
     expect(getByLabelText('Dream illustration')).toBeTruthy();
   });
 
+  it('renders a Generate Image button (not Regenerate) when no image exists yet, and calls onGenerate', () => {
+    const onGenerate = jest.fn();
+    const onRegenerate = jest.fn();
+    const { getByText, queryByText } = render(
+      <DreamMediaView
+        media={null}
+        isGenerating={false}
+        canRegenerate={true}
+        onGenerate={onGenerate}
+        onRegenerate={onRegenerate}
+      />
+    );
+
+    expect(queryByText(/Regenerate/)).toBeNull();
+    fireEvent.press(getByText('Generate Image'));
+    expect(onGenerate).toHaveBeenCalled();
+    expect(onRegenerate).not.toHaveBeenCalled();
+  });
+
+  it('renders a Retry button (calling onGenerate) when generation previously failed', () => {
+    const failedMedia = {
+      id: 'media-001',
+      dreamId: 'dream-001',
+      mediaType: 'image' as const,
+      generationStatus: 'failed' as const,
+      signedUrl: null,
+      localCachePath: null,
+      regenerationCount: 0,
+      maxRegenerations: 3,
+      errorMessage: 'Image generation failed — retry or skip',
+      createdAt: '2026-08-14T00:00:00Z',
+      updatedAt: '2026-08-14T00:00:00Z',
+    };
+    const onGenerate = jest.fn();
+    const { getByText } = render(
+      <DreamMediaView
+        media={failedMedia}
+        isGenerating={false}
+        canRegenerate={true}
+        onGenerate={onGenerate}
+        onRegenerate={() => {}}
+      />
+    );
+
+    fireEvent.press(getByText('Retry'));
+    expect(onGenerate).toHaveBeenCalled();
+  });
+
   it('renders regenerate button when regenerations remain', () => {
     const media = {
       id: 'media-001',
