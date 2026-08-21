@@ -7,11 +7,12 @@ import { colors } from '@shared/tokens/colors';
 interface DreamMediaViewProps {
   media: MediaResult | null;
   isGenerating: boolean;
+  onGenerate?: () => void;
   onRegenerate?: () => void;
   canRegenerate: boolean;
 }
 
-export function DreamMediaView({ media, isGenerating, onRegenerate, canRegenerate }: DreamMediaViewProps) {
+export function DreamMediaView({ media, isGenerating, onGenerate, onRegenerate, canRegenerate }: DreamMediaViewProps) {
   if (isGenerating) {
     return (
       <View style={styles.placeholder}>
@@ -27,6 +28,11 @@ export function DreamMediaView({ media, isGenerating, onRegenerate, canRegenerat
         <Text style={styles.hint}>
           {media?.errorMessage ?? 'No illustration yet'}
         </Text>
+        {onGenerate && (
+          <TouchableOpacity style={styles.regenButton} onPress={onGenerate} accessibilityRole="button">
+            <Text style={styles.regenText}>{media?.errorMessage ? 'Retry' : 'Generate Image'}</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }

@@ -16,13 +16,18 @@ import { Button } from '@shared/components/Button';
 import { spacing } from '@shared/tokens/spacing';
 import { fontSize } from '@shared/tokens/typography';
 import { saveDream, validateForInterpretation } from '@features/dream-log/dreamRepository';
+import { syncPendingDreams } from '@features/dream-log/syncService';
 import { useServices } from '@services/useServices';
 
 const MIN_DESCRIPTION = 20;
-let dreamIdCounter = 0;
 
 function generateId(): string {
-  return `dream_${Date.now()}_${++dreamIdCounter}`;
+  // dreams.id is a Postgres uuid column — must be a valid UUID, not a local-only string.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 export default function DreamLogScreen() {
@@ -78,6 +83,10 @@ export default function DreamLogScreen() {
         occurredAt: occurredAt.toISOString().slice(0, 10),
       });
       setDescription('');
+      // Best-effort immediate sync so the dream exists server-side before the
+      // user requests an interpretation (interpretations.dream_id has an FK
+      // to dreams.id). Offline saves still queue via useSyncOnConnect.
+      syncPendingDreams().catch(() => {});
       router.navigate('/(main)/journal');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save dream.');

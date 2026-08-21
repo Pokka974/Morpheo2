@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@services/../supabase/client';
 import { SupabaseAuthService } from '@services/auth/SupabaseAuthService';
@@ -31,8 +32,17 @@ const services: ServiceRegistry = {
 type AuthState = 'loading' | 'onboarding' | 'unauthenticated' | 'locked' | 'ready';
 
 export default function RootLayout() {
+  return (
+    <SafeAreaProvider>
+      <AppNavigator />
+    </SafeAreaProvider>
+  );
+}
+
+function AppNavigator() {
   const router = useRouter();
   const segments = useSegments();
+  const insets = useSafeAreaInsets();
   const [authState, setAuthState] = useState<AuthState>('loading');
 
   useEffect(() => {
@@ -85,7 +95,12 @@ export default function RootLayout() {
 
   return (
     <ServicesProvider services={services}>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { paddingTop: insets.top },
+        }}
+      >
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(main)" />
       </Stack>

@@ -31,7 +31,7 @@ export default function DreamDetailScreen() {
   const [imageMedia, setImageMedia] = useState<MediaResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const { state: imageState, regenerate } = useImageGeneration();
+  const { state: imageState, generate, regenerate } = useImageGeneration();
   const { state: videoState, submit: submitVideo } = useVideoGeneration();
 
   useEffect(() => {
@@ -86,6 +86,19 @@ export default function DreamDetailScreen() {
     load();
   }, [dreamId, imageGeneration]);
 
+  // Auto-trigger image generation once an interpretation exists and no image
+  // has been generated yet (per US5: image auto-generates after interpretation).
+  useEffect(() => {
+    if (!dream || !interpretation || imageMedia || isLoading) return;
+    if (imageState.status !== 'idle') return;
+    generate({
+      dreamId: dream.id,
+      description: dream.description,
+      keywords: interpretation.keywords,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dream, interpretation, imageMedia, isLoading]);
+
   const handleDelete = () => {
     Alert.alert('Delete Dream', 'This will permanently remove this dream entry.', [
       { text: 'Cancel', style: 'cancel' },
@@ -132,6 +145,11 @@ export default function DreamDetailScreen() {
           media={activeImage}
           isGenerating={imageState.status === 'generating'}
           canRegenerate={true}
+          onGenerate={() => generate({
+            dreamId: dream.id,
+            description: dream.description,
+            keywords: interpretation?.keywords ?? [],
+          })}
           onRegenerate={() => regenerate({
             dreamId: dream.id,
             description: dream.description,

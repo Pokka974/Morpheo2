@@ -30,13 +30,17 @@ serve(async (req: Request) => {
   }
 
   // Check entitlements
-  const { data: entitlement } = await supabase
+  const { data: entitlement, error: entError } = await supabase
     .from('entitlements')
-    .select('tier, image_generations_used_this_month, monthly_image_limit')
+    .select('subscription_tier, images_used_this_month, monthly_image_limit')
     .eq('user_id', user.id)
     .single();
 
-  if (entitlement && entitlement.image_generations_used_this_month >= entitlement.monthly_image_limit) {
+  if (entError) {
+    console.error('Entitlement query failed:', entError);
+  }
+
+  if (entitlement && entitlement.monthly_image_limit !== null && entitlement.images_used_this_month >= entitlement.monthly_image_limit) {
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
     return new Response(JSON.stringify({ error: 'limit_reached', resetDate: nextMonth.toISOString() }), { status: 429, headers: corsHeaders });
@@ -94,6 +98,7 @@ serve(async (req: Request) => {
     .upload(storagePath, imageBuffer, { contentType: 'image/png', upsert: false });
 
   if (uploadError) {
+    console.error('Storage upload failed:', uploadError);
     return new Response(JSON.stringify({ error: 'upload_failed' }), { status: 503, headers: corsHeaders });
   }
 
@@ -104,7 +109,7 @@ serve(async (req: Request) => {
       dream_id: dreamId,
       user_id: user.id,
       media_type: 'image',
-      storage_path: storagePath,
+      storage_key: storagePath,
       generation_status: 'complete',
       regeneration_count: isRegeneration ? 1 : 0,
       max_regenerations: 3,
@@ -113,6 +118,7 @@ serve(async (req: Request) => {
     .single();
 
   if (insertError || !media) {
+    console.error('Media insert failed:', insertError);
     return new Response(JSON.stringify({ error: 'record_failed' }), { status: 503, headers: corsHeaders });
   }
 
@@ -122,10 +128,13 @@ serve(async (req: Request) => {
     .createSignedUrl(storagePath, 3600);
 
   // Increment usage counter
-  await supabase
+  const { error: usageError } = await supabase
     .from('entitlements')
-    .update({ image_generations_used_this_month: (entitlement?.image_generations_used_this_month ?? 0) + 1 })
+    .update({ images_used_this_month: (entitlement?.images_used_this_month ?? 0) + 1 })
     .eq('user_id', user.id);
+  if (usageError) {
+    console.error('Failed to increment images_used_this_month:', usageError);
+  }
 
   return new Response(JSON.stringify({
     id: media.id,

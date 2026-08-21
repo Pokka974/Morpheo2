@@ -16,3 +16,4 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON dreams TO authenticated;
 GRANT SELECT, INSERT ON interpretations TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON media TO authenticated;
 GRANT SELECT ON recurrence_patterns TO authenticated;
+GRANT SELECT ON generation_jobs TO authenticated;

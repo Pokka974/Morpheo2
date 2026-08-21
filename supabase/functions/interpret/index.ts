@@ -79,6 +79,7 @@ serve(async (req: Request) => {
       .single();
 
     if (entError || !entitlement) {
+      console.error('Entitlement query failed:', entError);
       return new Response(JSON.stringify({ error: 'Entitlement check failed' }), { status: 500 });
     }
 
@@ -105,6 +106,7 @@ serve(async (req: Request) => {
       .single();
 
     if (!promptRow) {
+      console.error('No active system prompt found in system_prompts table');
       return new Response(JSON.stringify({ error: 'No active system prompt' }), { status: 500 });
     }
 
@@ -164,6 +166,7 @@ serve(async (req: Request) => {
       .single();
 
     if (insertError || !interpretation) {
+      console.error('Interpretation insert failed:', insertError);
       return new Response(JSON.stringify({ error: 'Failed to save interpretation' }), { status: 500 });
     }
 
