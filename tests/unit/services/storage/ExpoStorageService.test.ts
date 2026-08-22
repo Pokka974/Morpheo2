@@ -48,6 +48,13 @@ describe('ExpoStorageService', () => {
   });
 
   describe('cacheMedia', () => {
+    it('creates the cache directory when it does not exist yet', async () => {
+      mockDirExists = false;
+      await service.cacheMedia('media-001', 'https://example.com/img.jpg');
+      expect(mockCreatedDirs.length).toBeGreaterThan(0);
+      expect(mockDirExists).toBe(true);
+    });
+
     it('downloads file when not cached', async () => {
       const path = await service.cacheMedia('media-001', 'https://example.com/img.jpg');
       expect(mockDownloadedFiles).toHaveLength(1);
@@ -113,6 +120,17 @@ describe('ExpoStorageService', () => {
       await service.evictToLimit(200 * 1024 * 1024);
       expect(mockDeletedPaths).toHaveLength(0);
     });
+
+    it('skips directory entries and vanished entries when computing eviction candidates', async () => {
+      mockDirContents = ['a-subdir', 'gone-file', 'real-file'];
+      mockFiles['file://cache/morpheo/media/a-subdir'] = { exists: true, isDirectory: true, size: 999999, modificationTime: 500 };
+      // 'gone-file' has no entry in mockFiles, so getInfoAsync resolves { exists: false }.
+      mockFiles['file://cache/morpheo/media/real-file'] = { exists: true, size: 1024, modificationTime: 1000 };
+
+      await service.evictToLimit(0);
+
+      expect(mockDeletedPaths).toEqual(['file://cache/morpheo/media/real-file']);
+    });
   });
 
   describe('clearCache', () => {
@@ -138,6 +156,15 @@ describe('ExpoStorageService', () => {
       mockDirContents = [];
       const size = await service.getCacheSize();
       expect(size).toBe(0);
+    });
+
+    it('excludes directory entries and vanished entries from the total', async () => {
+      mockDirContents = ['a-subdir', 'gone-file', 'real-file'];
+      mockFiles['file://cache/morpheo/media/a-subdir'] = { exists: true, isDirectory: true, size: 999999 };
+      mockFiles['file://cache/morpheo/media/real-file'] = { exists: true, size: 500 };
+
+      const size = await service.getCacheSize();
+      expect(size).toBe(500);
     });
   });
 });

@@ -75,6 +75,104 @@ describe('DallEImageGenerationService', () => {
     await expect(service.generateImage(testRequest)).rejects.toThrow(ImageLimitError);
   });
 
+  it('rethrows the raw error for an unrecognized error status', async () => {
+    const rawError = { status: 500, message: 'server error' };
+    mockInvoke.mockResolvedValueOnce({ data: null, error: rawError });
+    await expect(service.generateImage(testRequest)).rejects.toEqual(rawError);
+  });
+
+  it('returns the plain result (no localCachePath) when caching throws', async () => {
+    jest.spyOn(mockStorage, 'cacheMedia').mockRejectedValueOnce(new Error('disk full'));
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        id: 'media-001', dreamId: 'dream-001', mediaType: 'image', generationStatus: 'complete',
+        signedUrl: 'https://example.com/img.jpg', localCachePath: null, regenerationCount: 0,
+        maxRegenerations: 3, errorMessage: null, createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z',
+      },
+      error: null,
+    });
+
+    const result = await service.generateImage(testRequest);
+    expect(result.localCachePath).toBeNull();
+  });
+
+  it('does not attempt caching when generationStatus is not complete', async () => {
+    const cacheSpy = jest.spyOn(mockStorage, 'cacheMedia');
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        id: 'media-001', dreamId: 'dream-001', mediaType: 'image', generationStatus: 'processing',
+        signedUrl: null, localCachePath: null, regenerationCount: 0,
+        maxRegenerations: 3, errorMessage: null, createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z',
+      },
+      error: null,
+    });
+
+    await service.generateImage(testRequest);
+    expect(cacheSpy).not.toHaveBeenCalled();
+  });
+
+  describe('getImage', () => {
+    it('maps a found row to a MediaResult', async () => {
+      const mockSelect = jest.fn().mockReturnThis();
+      const mockEq = jest.fn().mockReturnThis();
+      const mockOrder = jest.fn().mockReturnThis();
+      const mockLimit = jest.fn().mockReturnThis();
+      const mockSingle = jest.fn().mockResolvedValue({
+        data: {
+          id: 'media-001', dream_id: 'dream-001', media_type: 'image', generation_status: 'complete',
+          regeneration_count: 0, max_regenerations: 3, error_message: null,
+          created_at: '2026-08-14T00:00:00Z', updated_at: '2026-08-14T00:00:00Z',
+        },
+        error: null,
+      });
+      mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq, order: mockOrder, limit: mockLimit, single: mockSingle });
+      mockSelect.mockReturnValue({ eq: mockEq });
+      mockEq.mockReturnValue({ eq: mockEq, order: mockOrder });
+      mockOrder.mockReturnValue({ limit: mockLimit });
+      mockLimit.mockReturnValue({ single: mockSingle });
+
+      const result = await service.getImage('dream-001');
+      expect(result).toEqual(
+        expect.objectContaining({ id: 'media-001', dreamId: 'dream-001', mediaType: 'image', generationStatus: 'complete' })
+      );
+    });
+
+    it('returns null when no row is found', async () => {
+      const mockSelect = jest.fn().mockReturnThis();
+      const mockEq = jest.fn().mockReturnThis();
+      const mockOrder = jest.fn().mockReturnThis();
+      const mockLimit = jest.fn().mockReturnThis();
+      const mockSingle = jest.fn().mockResolvedValue({ data: null, error: null });
+      mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq, order: mockOrder, limit: mockLimit, single: mockSingle });
+      mockSelect.mockReturnValue({ eq: mockEq });
+      mockEq.mockReturnValue({ eq: mockEq, order: mockOrder });
+      mockOrder.mockReturnValue({ limit: mockLimit });
+      mockLimit.mockReturnValue({ single: mockSingle });
+
+      const result = await service.getImage('dream-001');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getSignedUrl', () => {
+    it('returns the signed URL on success', async () => {
+      mockInvoke.mockResolvedValueOnce({ data: { signedUrl: 'https://example.com/signed.jpg' }, error: null });
+      const url = await service.getSignedUrl('media-001');
+      expect(url).toBe('https://example.com/signed.jpg');
+      expect(mockInvoke).toHaveBeenCalledWith('media-url', { body: { mediaId: 'media-001' } });
+    });
+
+    it('throws when the function errors', async () => {
+      mockInvoke.mockResolvedValueOnce({ data: null, error: { message: 'boom' } });
+      await expect(service.getSignedUrl('media-001')).rejects.toThrow('Failed to get signed URL');
+    });
+
+    it('throws when there is no data', async () => {
+      mockInvoke.mockResolvedValueOnce({ data: null, error: null });
+      await expect(service.getSignedUrl('media-001')).rejects.toThrow('Failed to get signed URL');
+    });
+  });
+
   it('caches image locally when signedUrl is present and status is complete', async () => {
     jest.spyOn(mockStorage, 'cacheMedia').mockResolvedValueOnce('/local/path/img.jpg');
     mockInvoke.mockResolvedValueOnce({

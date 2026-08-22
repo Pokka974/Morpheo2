@@ -53,6 +53,39 @@ describe('ExpoLocalLockService', () => {
     });
   });
 
+  describe('verifyPin', () => {
+    it('returns false when no PIN is stored', async () => {
+      mockGetItem.mockReturnValue(null);
+      expect(await service.verifyPin('123456')).toBe(false);
+    });
+
+    it('returns false and does not record auth when the PIN does not match', async () => {
+      mockGetItem.mockReturnValue('some-other-stored-hash');
+
+      const result = await service.verifyPin('123456');
+      expect(result).toBe(false);
+      // Never authenticated, so it should still require lock (proves verifyPin did not call recordAuthentication).
+      expect(service.isLockRequired()).toBe(true);
+    });
+
+    it('returns true and records auth when the PIN matches', async () => {
+      mockSetItem.mockResolvedValue(undefined);
+      await service.setupPin('123456');
+      const hash = mockSetItem.mock.calls[0]?.[1];
+      mockGetItem.mockReturnValue(hash);
+
+      // Force lock-required again so a subsequent verifyPin success is the only thing that can clear it.
+      service.setIdleTimeoutMs(0);
+      expect(service.isLockRequired()).toBe(true);
+
+      const result = await service.verifyPin('123456');
+      expect(result).toBe(true);
+
+      service.setIdleTimeoutMs(5 * 60 * 1000);
+      expect(service.isLockRequired()).toBe(false);
+    });
+  });
+
   describe('getLockMethod', () => {
     it('returns biometric when hardware available and enrolled', async () => {
       mockHasHardware.mockResolvedValue(true);
@@ -91,6 +124,24 @@ describe('ExpoLocalLockService', () => {
 
       const result = await service.authenticate('Unlock Morpheo');
       expect(result).toBe(false);
+    });
+
+    it('returns false without prompting when there is no biometric hardware', async () => {
+      mockHasHardware.mockResolvedValue(false);
+      mockIsEnrolled.mockResolvedValue(false);
+
+      const result = await service.authenticate('Unlock Morpheo');
+      expect(result).toBe(false);
+      expect(mockAuthenticate).not.toHaveBeenCalled();
+    });
+
+    it('returns false without prompting when hardware exists but nothing is enrolled', async () => {
+      mockHasHardware.mockResolvedValue(true);
+      mockIsEnrolled.mockResolvedValue(false);
+
+      const result = await service.authenticate('Unlock Morpheo');
+      expect(result).toBe(false);
+      expect(mockAuthenticate).not.toHaveBeenCalled();
     });
   });
 

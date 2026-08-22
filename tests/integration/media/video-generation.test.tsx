@@ -14,13 +14,19 @@ import type { ServiceRegistry } from '@services/registry';
 import { useVideoGeneration } from '@features/media-generation/useVideoGeneration';
 import { VideoGenerationButton } from '@features/media-generation/VideoGenerationButton';
 
+let capturedOnHandler: ((payload: { new: { status: string; id: string } }) => void) | null = null;
+const mockRemoveChannel = jest.fn();
+
 jest.mock('@services/../supabase/client', () => ({
   supabase: {
     channel: jest.fn().mockReturnValue({
-      on: jest.fn().mockReturnThis(),
+      on: jest.fn().mockImplementation((_event, _filter, handler) => {
+        capturedOnHandler = handler;
+        return { subscribe: jest.fn().mockReturnThis() };
+      }),
       subscribe: jest.fn().mockReturnThis(),
     }),
-    removeChannel: jest.fn(),
+    removeChannel: (...args: unknown[]) => mockRemoveChannel(...args),
     auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'user-001' } } }) },
   },
 }));
@@ -53,6 +59,105 @@ const testParams = {
 describe('Video generation integration', () => {
   beforeEach(() => {
     videoService.configure('success');
+    capturedOnHandler = null;
+    mockRemoveChannel.mockClear();
+  });
+
+  it('shows a generic failed state when the provider throws a plain Error', async () => {
+    jest.spyOn(videoService, 'submitVideoJob').mockRejectedValueOnce(new Error('provider down'));
+    const { result } = renderHook(() => useVideoGeneration(), { wrapper });
+
+    await act(async () => {
+      result.current.submit(testParams);
+    });
+
+    expect(result.current.state).toEqual({ status: 'failed', message: 'provider down' });
+  });
+
+  it('falls back to a default failure message when a non-Error is thrown', async () => {
+    jest.spyOn(videoService, 'submitVideoJob').mockRejectedValueOnce('nope');
+    const { result } = renderHook(() => useVideoGeneration(), { wrapper });
+
+    await act(async () => {
+      result.current.submit(testParams);
+    });
+
+    expect(result.current.state).toEqual({ status: 'failed', message: 'Failed to submit video job' });
+  });
+
+  it('realtime update to "complete" transitions state and unsubscribes the channel', async () => {
+    const { result } = renderHook(() => useVideoGeneration(), { wrapper });
+
+    await act(async () => {
+      result.current.submit(testParams);
+    });
+    expect(capturedOnHandler).not.toBeNull();
+
+    act(() => {
+      capturedOnHandler!({ new: { status: 'complete', id: 'job-x' } });
+    });
+
+    expect(result.current.state.status).toBe('complete');
+    expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
+  });
+
+  it('realtime update to "failed" transitions state and unsubscribes the channel', async () => {
+    const { result } = renderHook(() => useVideoGeneration(), { wrapper });
+
+    await act(async () => {
+      result.current.submit(testParams);
+    });
+    expect(capturedOnHandler).not.toBeNull();
+
+    act(() => {
+      capturedOnHandler!({ new: { status: 'failed', id: 'job-x' } });
+    });
+
+    expect(result.current.state).toEqual({ status: 'failed', message: 'Video generation failed' });
+    expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
+  });
+
+  it('realtime update to an intermediate status keeps state at "processing"', async () => {
+    const { result } = renderHook(() => useVideoGeneration(), { wrapper });
+
+    await act(async () => {
+      result.current.submit(testParams);
+    });
+
+    act(() => {
+      capturedOnHandler!({ new: { status: 'processing', id: 'job-x' } });
+    });
+
+    expect(result.current.state.status).toBe('processing');
+    expect(mockRemoveChannel).not.toHaveBeenCalled();
+  });
+
+  it('reset() cleans up the realtime channel and returns state to idle', async () => {
+    const { result } = renderHook(() => useVideoGeneration(), { wrapper });
+
+    await act(async () => {
+      result.current.submit(testParams);
+    });
+    expect(result.current.state.status).not.toBe('idle');
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.state.status).toBe('idle');
+    expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
+  });
+
+  it('unmounting the hook cleans up the realtime channel', async () => {
+    const { result, unmount } = renderHook(() => useVideoGeneration(), { wrapper });
+
+    await act(async () => {
+      result.current.submit(testParams);
+    });
+
+    unmount();
+
+    expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
   });
 
   it('transitions from idle → submitting → processing', async () => {
@@ -100,5 +205,48 @@ describe('Video generation integration', () => {
     );
 
     expect(getByText(/2 min/)).toBeTruthy();
+  });
+
+  it('VideoGenerationButton idle state renders a Generate button that calls onSubmit', () => {
+    const onSubmit = jest.fn();
+    const { getByText } = render(
+      <VideoGenerationButton state={{ status: 'idle' }} onSubmit={onSubmit} onUpgrade={() => {}} />
+    );
+
+    fireEvent.press(getByText('Generate Dream Video'));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('VideoGenerationButton submitting state shows a spinner and "Submitting..." text', () => {
+    const { getByText } = render(
+      <VideoGenerationButton state={{ status: 'submitting' }} onSubmit={() => {}} onUpgrade={() => {}} />
+    );
+    expect(getByText('Submitting...')).toBeTruthy();
+  });
+
+  it('VideoGenerationButton complete state shows "Video ready!"', () => {
+    const state = {
+      status: 'complete' as const,
+      job: { jobId: 'job-001', mediaId: 'media-001', status: 'complete' as const, estimatedDurationSeconds: 0 },
+    };
+    const { getByText } = render(
+      <VideoGenerationButton state={state} onSubmit={() => {}} onUpgrade={() => {}} />
+    );
+    expect(getByText('Video ready!')).toBeTruthy();
+  });
+
+  it('VideoGenerationButton failed state shows the error message and a Retry that calls onSubmit', () => {
+    const onSubmit = jest.fn();
+    const { getByText } = render(
+      <VideoGenerationButton
+        state={{ status: 'failed', message: 'Something broke' }}
+        onSubmit={onSubmit}
+        onUpgrade={() => {}}
+      />
+    );
+
+    expect(getByText('Something broke')).toBeTruthy();
+    fireEvent.press(getByText('Retry'));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 });
