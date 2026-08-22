@@ -12,7 +12,13 @@ interface DreamMediaViewProps {
   canRegenerate: boolean;
 }
 
-export function DreamMediaView({ media, isGenerating, onGenerate, onRegenerate, canRegenerate }: DreamMediaViewProps) {
+export function DreamMediaView({
+  media,
+  isGenerating,
+  onGenerate,
+  onRegenerate,
+  canRegenerate,
+}: DreamMediaViewProps) {
   if (isGenerating) {
     return (
       <View style={styles.placeholder}>
@@ -25,11 +31,13 @@ export function DreamMediaView({ media, isGenerating, onGenerate, onRegenerate, 
   if (!media || media.generationStatus === 'failed') {
     return (
       <View style={styles.placeholder}>
-        <Text style={styles.hint}>
-          {media?.errorMessage ?? 'No illustration yet'}
-        </Text>
+        <Text style={styles.hint}>{media?.errorMessage ?? 'No illustration yet'}</Text>
         {onGenerate && (
-          <TouchableOpacity style={styles.regenButton} onPress={onGenerate} accessibilityRole="button">
+          <TouchableOpacity
+            style={styles.regenButton}
+            onPress={onGenerate}
+            accessibilityRole="button"
+          >
             <Text style={styles.regenText}>{media?.errorMessage ? 'Retry' : 'Generate Image'}</Text>
           </TouchableOpacity>
         )}
@@ -55,7 +63,11 @@ export function DreamMediaView({ media, isGenerating, onGenerate, onRegenerate, 
       )}
 
       {canRegenerate && onRegenerate && media.regenerationCount < media.maxRegenerations && (
-        <TouchableOpacity style={styles.regenButton} onPress={onRegenerate} accessibilityRole="button">
+        <TouchableOpacity
+          style={styles.regenButton}
+          onPress={onRegenerate}
+          accessibilityRole="button"
+        >
           <Text style={styles.regenText}>
             Regenerate ({media.maxRegenerations - media.regenerationCount} left)
           </Text>

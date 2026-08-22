@@ -16,7 +16,8 @@ export function InterpretationResultView({ result }: Props) {
       {result.isDegraded ? (
         <View style={styles.degradedBanner}>
           <Text style={styles.degradedText}>
-            This dream had limited detail, so the interpretation may be less precise than usual. It reflects general patterns rather than specific symbols.
+            This dream had limited detail, so the interpretation may be less precise than usual. It
+            reflects general patterns rather than specific symbols.
           </Text>
         </View>
       ) : null}

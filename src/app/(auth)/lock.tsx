@@ -13,7 +13,7 @@ export default function LockScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    attemptBiometric();
+    void attemptBiometric();
   }, []);
 
   const attemptBiometric = async () => {
@@ -50,8 +50,18 @@ export default function LockScreen() {
         accessibilityLabel="Enter PIN"
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Button label="Unlock" onPress={handlePinSubmit} disabled={pin.length < 4} />
-      <TouchableOpacity onPress={attemptBiometric}>
+      <Button
+        label="Unlock"
+        onPress={() => {
+          void handlePinSubmit();
+        }}
+        disabled={pin.length < 4}
+      />
+      <TouchableOpacity
+        onPress={() => {
+          void attemptBiometric();
+        }}
+      >
         <Text style={styles.biometricLink}>Use Face ID / Touch ID</Text>
       </TouchableOpacity>
       <TouchableOpacity onPress={() => router.push('/(auth)/forgot-pin')}>

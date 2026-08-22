@@ -23,9 +23,9 @@ export class ExpoLocalLockService implements LocalLockService {
     this.idleTimeoutMs = ms;
   }
 
-  async isConfigured(): Promise<boolean> {
+  isConfigured(): Promise<boolean> {
     const pin = SecureStore.getItem(PIN_KEY);
-    return pin !== null;
+    return Promise.resolve(pin !== null);
   }
 
   async setupPin(pin: string): Promise<void> {
@@ -34,12 +34,12 @@ export class ExpoLocalLockService implements LocalLockService {
     this.recordAuthentication();
   }
 
-  async verifyPin(pin: string): Promise<boolean> {
+  verifyPin(pin: string): Promise<boolean> {
     const stored = SecureStore.getItem(PIN_KEY);
-    if (!stored) return false;
+    if (!stored) return Promise.resolve(false);
     const matches = hashPin(pin) === stored;
     if (matches) this.recordAuthentication();
-    return matches;
+    return Promise.resolve(matches);
   }
 
   async authenticate(reason: string): Promise<boolean> {

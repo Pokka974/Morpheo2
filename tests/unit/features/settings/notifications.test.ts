@@ -13,6 +13,7 @@ jest.mock('expo-notifications', () => ({
   cancelScheduledNotificationAsync: jest.fn(),
   getExpoPushTokenAsync: jest.fn().mockResolvedValue({ data: 'token' }),
   SchedulableTriggerInputTypes: { DAILY: 'daily' },
+  PermissionStatus: { GRANTED: 'granted', UNDETERMINED: 'undetermined', DENIED: 'denied' },
 }));
 
 jest.mock('expo-device', () => ({ isDevice: true }));

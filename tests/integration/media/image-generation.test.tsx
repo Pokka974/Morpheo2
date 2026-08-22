@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 import { ServicesProvider } from '@services/ServicesProvider';
 import { MockImageGenerationService } from '@services/ai/image/__mocks__/MockImageGenerationService';
 import { MockAuthService } from '@services/auth/__mocks__/MockAuthService';

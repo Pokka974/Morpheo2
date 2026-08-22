@@ -11,8 +11,13 @@ export interface RecurrencePattern {
 }
 
 type RecurrenceRow = {
-  id: string; user_id: string; term: string; pattern_type: string;
-  occurrence_count: number; dream_ids: string; last_seen_at: string;
+  id: string;
+  user_id: string;
+  term: string;
+  pattern_type: string;
+  occurrence_count: number;
+  dream_ids: string;
+  last_seen_at: string;
 };
 
 function mapRow(r: RecurrenceRow): RecurrencePattern {
@@ -22,20 +27,18 @@ function mapRow(r: RecurrenceRow): RecurrencePattern {
     term: r.term,
     patternType: r.pattern_type as RecurrencePattern['patternType'],
     occurrenceCount: r.occurrence_count,
-    dreamIds: JSON.parse(r.dream_ids ?? '[]'),
+    dreamIds: JSON.parse(r.dream_ids ?? '[]') as string[],
     lastSeenAt: r.last_seen_at,
   };
 }
 
-export async function getTopRecurrences(
+export function getTopRecurrences(
   userId: string,
   type: 'keyword' | 'emotion' | 'cultural_reference',
   limit: number,
   days?: number
 ): Promise<RecurrencePattern[]> {
-  const dateFilter = days
-    ? `AND last_seen_at >= datetime('now', '-${days} days')`
-    : '';
+  const dateFilter = days ? `AND last_seen_at >= datetime('now', '-${days} days')` : '';
 
   const stmt = sqlite.prepareSync(`
     SELECT id, user_id, term, pattern_type, occurrence_count, dream_ids, last_seen_at
@@ -47,10 +50,10 @@ export async function getTopRecurrences(
     LIMIT ?
   `);
   const rows = Array.from(stmt.executeSync([userId, type, limit])) as unknown as RecurrenceRow[];
-  return rows.map(mapRow);
+  return Promise.resolve(rows.map(mapRow));
 }
 
-export async function getRecurrencesForDream(dreamId: string): Promise<RecurrencePattern[]> {
+export function getRecurrencesForDream(dreamId: string): Promise<RecurrencePattern[]> {
   const stmt = sqlite.prepareSync(`
     SELECT id, user_id, term, pattern_type, occurrence_count, dream_ids, last_seen_at
     FROM recurrence_patterns
@@ -59,7 +62,5 @@ export async function getRecurrencesForDream(dreamId: string): Promise<Recurrenc
     ORDER BY occurrence_count DESC
   `);
   const rows = Array.from(stmt.executeSync([`%${dreamId}%`])) as unknown as RecurrenceRow[];
-  return rows
-    .map(mapRow)
-    .filter(p => p.dreamIds.includes(dreamId));
+  return Promise.resolve(rows.map(mapRow).filter(p => p.dreamIds.includes(dreamId)));
 }

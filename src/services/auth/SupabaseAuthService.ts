@@ -3,7 +3,7 @@ import { supabase } from '../../supabase/client';
 import type { Session } from '@supabase/supabase-js';
 
 function sessionToAuthSession(session: Session): AuthSession {
-  const provider = (session.user.app_metadata['provider'] as string | undefined) ?? 'email';
+  const provider = session.user.app_metadata['provider'] ?? 'email';
   const authUser: AuthUser = {
     id: session.user.id,
     email: session.user.email ?? null,
@@ -26,10 +26,13 @@ export class SupabaseAuthService implements AuthService {
   async signInWithGoogle(): Promise<AuthSession> {
     const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
     await GoogleSignin.hasPlayServices();
-    const userInfo = await GoogleSignin.signIn();
+    await GoogleSignin.signIn();
     const { idToken } = await GoogleSignin.getTokens();
     if (!idToken) throw new Error('No Google ID token');
-    const { data, error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: idToken,
+    });
     if (error || !data.session) throw new Error(error?.message ?? 'Google sign-in failed');
     return sessionToAuthSession(data.session);
   }
@@ -68,7 +71,9 @@ export class SupabaseAuthService implements AuthService {
   }
 
   onAuthStateChange(callback: (session: AuthSession | null) => void): () => void {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       callback(session ? sessionToAuthSession(session) : null);
     });
     return () => subscription.unsubscribe();

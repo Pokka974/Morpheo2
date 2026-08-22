@@ -25,9 +25,16 @@ import { useSyncOnConnect } from '@features/dream-log/useSyncOnConnect';
 import { AuthExpiredError } from '@features/dream-log/syncService';
 import type { AuthService } from '@services/auth/AuthService';
 
-function getNetInfoHandler(): (state: { isConnected: boolean; isInternetReachable: boolean | null }) => Promise<void> {
+function getNetInfoHandler(): (state: { isConnected: boolean; isInternetReachable: boolean | null }) => void {
   const calls = mockAddEventListener.mock.calls;
   return calls[calls.length - 1]![0];
+}
+
+// The production listener wraps the async handler in a fire-and-forget `void` call
+// (required so it type-checks against NetInfo's void-returning listener signature),
+// so calling it no longer yields a promise we can await — flush pending microtasks instead.
+function flush(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0));
 }
 
 describe('useSyncOnConnect', () => {
@@ -53,7 +60,8 @@ describe('useSyncOnConnect', () => {
     renderHook(() => useSyncOnConnect(auth));
     const handler = getNetInfoHandler();
 
-    await handler({ isConnected: false, isInternetReachable: null });
+    handler({ isConnected: false, isInternetReachable: null });
+    await flush();
     expect(mockSyncPendingDreams).not.toHaveBeenCalled();
   });
 
@@ -61,7 +69,8 @@ describe('useSyncOnConnect', () => {
     renderHook(() => useSyncOnConnect(auth));
     const handler = getNetInfoHandler();
 
-    await handler({ isConnected: true, isInternetReachable: true });
+    handler({ isConnected: true, isInternetReachable: true });
+    await flush();
     expect(mockSyncPendingDreams).not.toHaveBeenCalled();
   });
 
@@ -70,8 +79,10 @@ describe('useSyncOnConnect', () => {
     renderHook(() => useSyncOnConnect(auth));
     const handler = getNetInfoHandler();
 
-    await handler({ isConnected: false, isInternetReachable: null });
-    await handler({ isConnected: true, isInternetReachable: true });
+    handler({ isConnected: false, isInternetReachable: null });
+    await flush();
+    handler({ isConnected: true, isInternetReachable: true });
+    await flush();
 
     expect(mockSyncPendingDreams).toHaveBeenCalledTimes(1);
   });
@@ -80,10 +91,12 @@ describe('useSyncOnConnect', () => {
     renderHook(() => useSyncOnConnect(auth));
     const handler = getNetInfoHandler();
 
-    await handler({ isConnected: true, isInternetReachable: false });
+    handler({ isConnected: true, isInternetReachable: false });
+    await flush();
     expect(mockSyncPendingDreams).not.toHaveBeenCalled();
 
-    await handler({ isConnected: true, isInternetReachable: true });
+    handler({ isConnected: true, isInternetReachable: true });
+    await flush();
     expect(mockSyncPendingDreams).toHaveBeenCalledTimes(1);
   });
 
@@ -96,8 +109,10 @@ describe('useSyncOnConnect', () => {
     renderHook(() => useSyncOnConnect(auth));
     const handler = getNetInfoHandler();
 
-    await handler({ isConnected: false, isInternetReachable: null });
-    await handler({ isConnected: true, isInternetReachable: true });
+    handler({ isConnected: false, isInternetReachable: null });
+    await flush();
+    handler({ isConnected: true, isInternetReachable: true });
+    await flush();
 
     expect(auth.getSession).toHaveBeenCalledTimes(1);
     expect(mockSyncPendingDreams).toHaveBeenCalledTimes(2);
@@ -110,8 +125,10 @@ describe('useSyncOnConnect', () => {
     renderHook(() => useSyncOnConnect(auth));
     const handler = getNetInfoHandler();
 
-    await handler({ isConnected: false, isInternetReachable: null });
-    await expect(handler({ isConnected: true, isInternetReachable: true })).resolves.toBeUndefined();
+    handler({ isConnected: false, isInternetReachable: null });
+    await flush();
+    expect(() => handler({ isConnected: true, isInternetReachable: true })).not.toThrow();
+    await flush();
 
     expect(mockSyncPendingDreams).toHaveBeenCalledTimes(1);
   });
@@ -122,8 +139,10 @@ describe('useSyncOnConnect', () => {
     renderHook(() => useSyncOnConnect(auth));
     const handler = getNetInfoHandler();
 
-    await handler({ isConnected: false, isInternetReachable: null });
-    await expect(handler({ isConnected: true, isInternetReachable: true })).resolves.toBeUndefined();
+    handler({ isConnected: false, isInternetReachable: null });
+    await flush();
+    expect(() => handler({ isConnected: true, isInternetReachable: true })).not.toThrow();
+    await flush();
 
     expect(auth.getSession).not.toHaveBeenCalled();
   });

@@ -5,7 +5,6 @@ const mockPurchasePackage = jest.fn();
 const mockShowManageSubscriptions = jest.fn();
 const mockSetLogLevel = jest.fn();
 const mockConfigure = jest.fn();
-const mockSupabaseSelect = jest.fn();
 
 jest.mock('react-native-purchases', () => ({
   __esModule: true,

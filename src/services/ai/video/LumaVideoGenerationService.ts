@@ -1,13 +1,18 @@
 import { supabase } from '../../../supabase/client';
-import type { VideoGenerationService, VideoGenerationRequest, VideoJob } from './VideoGenerationService';
+import type {
+  VideoGenerationService,
+  VideoGenerationRequest,
+  VideoJob,
+} from './VideoGenerationService';
 import { PremiumRequiredError } from './VideoGenerationService';
 import type { MediaResult } from '../image/ImageGenerationService';
 
 export class LumaVideoGenerationService implements VideoGenerationService {
   async submitVideoJob(request: VideoGenerationRequest): Promise<VideoJob> {
-    const { data, error } = await supabase.functions.invoke('generate-video', {
+    const response = (await supabase.functions.invoke<unknown>('generate-video', {
       body: request,
-    });
+    })) as { data: unknown; error: unknown };
+    const { data, error } = response;
 
     if (error) {
       const status = (error as { status?: number }).status;
@@ -27,39 +32,42 @@ export class LumaVideoGenerationService implements VideoGenerationService {
       .single();
 
     if (error || !data) throw new Error(`Job ${jobId} not found`);
+    const row = data as Record<string, unknown>;
 
     return {
-      jobId: data['id'] as string,
-      mediaId: data['media_id'] as string,
-      status: data['status'] as VideoJob['status'],
-      estimatedDurationSeconds: data['estimated_duration_seconds'] as number,
+      jobId: row['id'] as string,
+      mediaId: row['media_id'] as string,
+      status: row['status'] as VideoJob['status'],
+      estimatedDurationSeconds: row['estimated_duration_seconds'] as number,
     };
   }
 
   async getVideo(dreamId: string): Promise<MediaResult | null> {
-    const { data, error } = await supabase
+    const response = (await supabase
       .from('media')
       .select('*')
       .eq('dream_id', dreamId)
       .eq('media_type', 'video')
       .order('created_at', { ascending: false })
       .limit(1)
-      .single();
+      .single()) as { data: unknown; error: unknown };
+    const { data, error } = response;
 
     if (error || !data) return null;
+    const row = data as Record<string, unknown>;
 
     return {
-      id: data['id'] as string,
-      dreamId: data['dream_id'] as string,
+      id: row['id'] as string,
+      dreamId: row['dream_id'] as string,
       mediaType: 'video',
-      generationStatus: data['generation_status'] as MediaResult['generationStatus'],
+      generationStatus: row['generation_status'] as MediaResult['generationStatus'],
       signedUrl: null,
       localCachePath: null,
-      regenerationCount: data['regeneration_count'] as number,
-      maxRegenerations: data['max_regenerations'] as number,
-      errorMessage: data['error_message'] as string | null,
-      createdAt: data['created_at'] as string,
-      updatedAt: data['updated_at'] as string,
+      regenerationCount: row['regeneration_count'] as number,
+      maxRegenerations: row['max_regenerations'] as number,
+      errorMessage: row['error_message'] as string | null,
+      createdAt: row['created_at'] as string,
+      updatedAt: row['updated_at'] as string,
     };
   }
 }

@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../../supabase/client';
 import { spacing } from '@shared/tokens/spacing';
@@ -90,7 +98,9 @@ export default function DeleteAccountScreen() {
 
           <TouchableOpacity
             style={[styles.deleteButton, !isConfirmed && styles.deleteButtonDisabled]}
-            onPress={handleConfirmDelete}
+            onPress={() => {
+              void handleConfirmDelete();
+            }}
             disabled={!isConfirmed || isDeleting}
             accessibilityRole="button"
           >
@@ -101,7 +111,11 @@ export default function DeleteAccountScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.cancelButton} onPress={() => setStep(1)} accessibilityRole="button">
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={() => setStep(1)}
+            accessibilityRole="button"
+          >
             <Text style={styles.cancelText}>Back</Text>
           </TouchableOpacity>
         </>
@@ -114,26 +128,55 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0d0d1a' },
   content: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl },
   title: { fontSize: 20, color: '#fff', fontWeight: '700' },
-  warningCard: { backgroundColor: '#2a1a1a', borderRadius: 12, padding: spacing.md, gap: spacing.sm },
+  warningCard: {
+    backgroundColor: '#2a1a1a',
+    borderRadius: 12,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
   warningTitle: { fontSize: 16, color: '#e05c5c', fontWeight: '700' },
   warningText: { fontSize: 13, color: '#aaa' },
   bullet: { fontSize: 13, color: '#aaa', marginLeft: spacing.sm },
-  proceedButton: { backgroundColor: '#3a1a1a', borderWidth: 1, borderColor: '#e05c5c', borderRadius: 8, padding: spacing.md, alignItems: 'center' },
+  proceedButton: {
+    backgroundColor: '#3a1a1a',
+    borderWidth: 1,
+    borderColor: '#e05c5c',
+    borderRadius: 8,
+    padding: spacing.md,
+    alignItems: 'center',
+  },
   proceedText: { color: '#e05c5c', fontWeight: '600' },
   cancelButton: { alignItems: 'center', padding: spacing.sm },
   cancelText: { color: '#555', fontSize: 14 },
   confirmInstruction: { fontSize: 14, color: '#aaa' },
   phraseHighlight: { color: '#e05c5c', fontWeight: '700', fontFamily: 'monospace' },
   confirmInput: {
-    backgroundColor: '#1a1a2e', color: '#fff', borderRadius: 8,
-    padding: spacing.md, fontSize: 14, borderWidth: 2, borderColor: '#333',
+    backgroundColor: '#1a1a2e',
+    color: '#fff',
+    borderRadius: 8,
+    padding: spacing.md,
+    fontSize: 14,
+    borderWidth: 2,
+    borderColor: '#333',
     fontFamily: 'monospace',
   },
   confirmInputValid: { borderColor: '#e05c5c' },
-  deleteButton: { backgroundColor: '#e05c5c', borderRadius: 8, padding: spacing.md, alignItems: 'center' },
+  deleteButton: {
+    backgroundColor: '#e05c5c',
+    borderRadius: 8,
+    padding: spacing.md,
+    alignItems: 'center',
+  },
   deleteButtonDisabled: { opacity: 0.4 },
   deleteText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  doneContainer: { flex: 1, backgroundColor: '#0d0d1a', alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.md },
+  doneContainer: {
+    flex: 1,
+    backgroundColor: '#0d0d1a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    gap: spacing.md,
+  },
   doneIcon: { fontSize: 48 },
   doneTitle: { fontSize: 20, color: '#fff', fontWeight: '700', textAlign: 'center' },
   doneText: { fontSize: 14, color: '#aaa', textAlign: 'center', lineHeight: 22 },

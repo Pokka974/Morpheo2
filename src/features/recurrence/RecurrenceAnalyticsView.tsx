@@ -36,7 +36,7 @@ export function RecurrenceAnalyticsView({ userId }: RecurrenceAnalyticsViewProps
         setIsLoading(false);
       }
     }
-    load();
+    void load();
   }, [userId, timeRange]);
 
   const ranges: { label: string; value: TimeRange }[] = [
@@ -114,7 +114,12 @@ export function RecurrenceAnalyticsView({ userId }: RecurrenceAnalyticsViewProps
 const styles = StyleSheet.create({
   container: { padding: spacing.md, gap: spacing.lg },
   rangeSelector: { flexDirection: 'row', gap: spacing.xs },
-  rangeButton: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 20, backgroundColor: '#1a1a2e' },
+  rangeButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: 20,
+    backgroundColor: '#1a1a2e',
+  },
   rangeButtonActive: { backgroundColor: colors.primary },
   rangeText: { color: '#888', fontSize: 13 },
   rangeTextActive: { color: '#fff', fontWeight: '600' },
@@ -122,7 +127,13 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 14, color: '#888', fontWeight: '600' },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   term: { width: 100, fontSize: 13, color: '#ccc' },
-  barContainer: { flex: 1, height: 8, backgroundColor: '#1a1a2e', borderRadius: 4, overflow: 'hidden' },
+  barContainer: {
+    flex: 1,
+    height: 8,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
   bar: { height: 8, backgroundColor: colors.primary, borderRadius: 4 },
   count: { width: 28, fontSize: 12, color: '#888', textAlign: 'right' },
   empty: { color: '#555', textAlign: 'center', marginTop: spacing.xl },

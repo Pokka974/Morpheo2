@@ -10,7 +10,9 @@ export function useIdleTimeout(localLock: LocalLockService, onLockRequired: () =
   const lastActiveRef = useRef<number>(Date.now());
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    const subscription = AppState.addEventListener('change', nextState => {
+      void handleAppStateChange(nextState);
+    });
     return () => subscription.remove();
   }, [localLock]);
 

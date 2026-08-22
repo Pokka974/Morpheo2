@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@shared/components/Button';
 import { ErrorState } from '@shared/components/ErrorState';
@@ -38,7 +38,10 @@ export default function SignUpScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <Text style={styles.title}>Create your account</Text>
       {error ? <ErrorState message={error} /> : null}
       <TextInput
@@ -71,7 +74,9 @@ export default function SignUpScreen() {
       />
       <Button
         label={loading ? 'Creating account...' : 'Create Account'}
-        onPress={handleSignUp}
+        onPress={() => {
+          void handleSignUp();
+        }}
         disabled={loading || !email || !password || !confirmPassword}
       />
     </KeyboardAvoidingView>

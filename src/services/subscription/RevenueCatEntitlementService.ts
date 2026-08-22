@@ -4,13 +4,13 @@ import type { EntitlementService, Entitlement } from '../entitlement/Entitlement
 
 export class RevenueCatEntitlementService implements EntitlementService {
   static configure(apiKey: string) {
-    Purchases.setLogLevel(LOG_LEVEL.ERROR);
+    void Purchases.setLogLevel(LOG_LEVEL.ERROR);
     Purchases.configure({ apiKey });
   }
 
   async fetchEntitlement(): Promise<Entitlement> {
     // Server-authoritative: always fetch from Supabase, never trust client SDK
-    const { data, error } = await supabase
+    const { data, error }: { data: unknown; error: unknown } = await supabase
       .from('entitlements')
       .select('*')
       .single();
@@ -18,7 +18,7 @@ export class RevenueCatEntitlementService implements EntitlementService {
     if (error || !data) throw new Error('Failed to fetch entitlement');
 
     const e = data as Record<string, unknown>;
-    const resetDate = new Date(e['reset_date'] as string ?? Date.now());
+    const resetDate = new Date((e['reset_date'] as string) ?? Date.now());
     const nextMonth = new Date(resetDate);
     nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
 
@@ -29,7 +29,9 @@ export class RevenueCatEntitlementService implements EntitlementService {
       imagesUsedThisMonth: e['image_generations_used_this_month'] as number,
       monthlyImageLimit: e['monthly_image_limit'] as number | null,
       resetDate,
-      subscriptionExpiresAt: e['subscription_expires_at'] ? new Date(e['subscription_expires_at'] as string) : null,
+      subscriptionExpiresAt: e['subscription_expires_at']
+        ? new Date(e['subscription_expires_at'] as string)
+        : null,
     };
   }
 

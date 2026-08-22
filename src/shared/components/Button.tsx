@@ -23,6 +23,10 @@ export function Button({ label, variant = 'primary', disabled, ...rest }: Props)
   );
 }
 
+// react-native/no-unused-styles can't see the computed accesses above
+// (styles[variant], styles[`${variant}Label`]), so it misflags every variant
+// style below as dead code.
+/* eslint-disable react-native/no-unused-styles */
 const styles = StyleSheet.create({
   base: {
     borderRadius: 10,

@@ -19,7 +19,7 @@ export function useJournalFilters() {
   const [results, setResults] = useState<FilterResult[] | null>(null);
   const [isFiltering, setIsFiltering] = useState(false);
 
-  const applyFilters = useCallback(async (newFilters: JournalFilters) => {
+  const applyFilters = useCallback((newFilters: JournalFilters) => {
     setFilters(newFilters);
     const hasFilters = newFilters.emotion || newFilters.startDate || newFilters.endDate;
 

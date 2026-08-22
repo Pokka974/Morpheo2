@@ -3,26 +3,26 @@ import * as Device from 'expo-device';
 import { supabase } from '../../supabase/client';
 import type { NotificationService } from './NotificationService';
 
-const REMINDER_CHANNEL_ID = 'dream-reminder';
 const REMINDER_IDENTIFIER = 'morpheo-daily-reminder';
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: () =>
+    Promise.resolve({
+      shouldShowAlert: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
 });
 
 export class ExpoNotificationService implements NotificationService {
   async requestPermission(): Promise<boolean> {
     if (!Device.isDevice) return false;
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    if (existingStatus === 'granted') return true;
+    if (existingStatus === Notifications.PermissionStatus.GRANTED) return true;
     const { status } = await Notifications.requestPermissionsAsync();
-    return status === 'granted';
+    return status === Notifications.PermissionStatus.GRANTED;
   }
 
   async scheduleReminder(hour: number, minute: number): Promise<void> {
@@ -51,12 +51,11 @@ export class ExpoNotificationService implements NotificationService {
     if (!hasPermission) return;
 
     const tokenData = await Notifications.getExpoPushTokenAsync();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
-    await supabase
-      .from('profiles')
-      .update({ push_token: tokenData.data })
-      .eq('id', user.id);
+    await supabase.from('profiles').update({ push_token: tokenData.data }).eq('id', user.id);
   }
 }

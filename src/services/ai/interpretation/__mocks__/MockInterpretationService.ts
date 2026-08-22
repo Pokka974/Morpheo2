@@ -17,9 +17,7 @@ const SUCCESS_RESULT: InterpretationResult = {
   overallReading: 'This dream reflects a journey of transformation.',
   keywords: ['water', 'bridge', 'light'],
   emotions: ['curiosity', 'serenity'],
-  culturalReferences: [
-    { symbol: 'water', tradition: 'Jungian', meaning: 'The unconscious mind' },
-  ],
+  culturalReferences: [{ symbol: 'water', tradition: 'Jungian', meaning: 'The unconscious mind' }],
   confidence: 'high',
   isDegraded: false,
   promptVersion: '1.0.0',

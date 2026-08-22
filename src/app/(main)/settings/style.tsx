@@ -7,9 +7,21 @@ import { colors } from '@shared/tokens/colors';
 type Style = 'symbolic' | 'mythological' | 'psychological';
 
 const STYLES: { value: Style; label: string; description: string }[] = [
-  { value: 'symbolic', label: 'Symbolic / Archetypal', description: 'Interprets dream symbols through universal archetypes and collective meaning.' },
-  { value: 'mythological', label: 'Mythological / Cultural', description: 'Grounds symbols in world mythology, folklore, and cultural traditions.' },
-  { value: 'psychological', label: 'Psychological / Jungian', description: 'Explores the unconscious through a Jungian psychological lens.' },
+  {
+    value: 'symbolic',
+    label: 'Symbolic / Archetypal',
+    description: 'Interprets dream symbols through universal archetypes and collective meaning.',
+  },
+  {
+    value: 'mythological',
+    label: 'Mythological / Cultural',
+    description: 'Grounds symbols in world mythology, folklore, and cultural traditions.',
+  },
+  {
+    value: 'psychological',
+    label: 'Psychological / Jungian',
+    description: 'Explores the unconscious through a Jungian psychological lens.',
+  },
 ];
 
 export default function StyleScreen() {
@@ -17,7 +29,7 @@ export default function StyleScreen() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
+    void supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
       const { data } = await supabase
         .from('profiles')
@@ -32,7 +44,9 @@ export default function StyleScreen() {
     setSelected(style);
     setIsSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         await supabase.from('profiles').update({ interpretation_style: style }).eq('id', user.id);
       }
@@ -50,7 +64,9 @@ export default function StyleScreen() {
         <TouchableOpacity
           key={s.value}
           style={[styles.option, selected === s.value && styles.optionSelected]}
-          onPress={() => handleSelect(s.value)}
+          onPress={() => {
+            void handleSelect(s.value);
+          }}
           accessibilityRole="radio"
           accessibilityState={{ selected: selected === s.value }}
         >
@@ -79,19 +95,31 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, color: '#fff', fontWeight: '700' },
   subtitle: { fontSize: 13, color: '#888' },
   option: {
-    backgroundColor: '#1a1a2e', borderRadius: 12, padding: spacing.md,
-    gap: spacing.xs, borderWidth: 2, borderColor: 'transparent',
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: spacing.md,
+    gap: spacing.xs,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   optionSelected: { borderColor: colors.primary },
   optionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   radio: {
-    width: 20, height: 20, borderRadius: 10,
-    borderWidth: 2, borderColor: '#444',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#444',
   },
   radioSelected: { borderColor: colors.primary, backgroundColor: colors.primary },
   optionLabel: { fontSize: 15, color: '#ccc', flex: 1 },
   optionLabelSelected: { color: '#fff', fontWeight: '600' },
   optionDesc: { fontSize: 12, color: '#666', marginLeft: 28 },
-  savingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, justifyContent: 'center' },
+  savingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    justifyContent: 'center',
+  },
   savingText: { color: '#666', fontSize: 13 },
 });

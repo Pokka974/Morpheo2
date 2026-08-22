@@ -10,7 +10,7 @@ let mockDirContents: string[] = [];
 
 jest.mock('expo-file-system', () => ({
   cacheDirectory: 'file://cache/',
-  getInfoAsync: jest.fn(async (path: string, opts?: { size?: boolean }) => {
+  getInfoAsync: jest.fn(async (path: string, _opts?: { size?: boolean }) => {
     if (path.endsWith('morpheo/media/')) {
       return { exists: mockDirExists, isDirectory: true };
     }

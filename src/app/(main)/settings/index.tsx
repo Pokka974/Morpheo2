@@ -3,11 +3,18 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'rea
 import { useRouter } from 'expo-router';
 import { useServices } from '@services/useServices';
 import { spacing } from '@shared/tokens/spacing';
-import { colors } from '@shared/tokens/colors';
 import type { Entitlement } from '@services/entitlement/EntitlementService';
 
-function SettingsRow({ label, onPress, value, destructive }: {
-  label: string; onPress: () => void; value?: string; destructive?: boolean;
+function SettingsRow({
+  label,
+  onPress,
+  value,
+  destructive,
+}: {
+  label: string;
+  onPress: () => void;
+  value?: string;
+  destructive?: boolean;
 }) {
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} accessibilityRole="button">
@@ -29,8 +36,14 @@ export default function SettingsScreen() {
   const [entitlementData, setEntitlementData] = useState<Entitlement | null>(null);
 
   useEffect(() => {
-    storage.getCacheSize().then(setCacheSize).catch(() => {});
-    entitlement.fetchEntitlement().then(setEntitlementData).catch(() => {});
+    storage
+      .getCacheSize()
+      .then(setCacheSize)
+      .catch(() => {});
+    entitlement
+      .fetchEntitlement()
+      .then(setEntitlementData)
+      .catch(() => {});
   }, [storage, entitlement]);
 
   const handleClearCache = () => {
@@ -38,10 +51,12 @@ export default function SettingsScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Clear',
-        onPress: async () => {
-          await storage.clearCache();
-          const newSize = await storage.getCacheSize();
-          setCacheSize(newSize);
+        onPress: () => {
+          void (async () => {
+            await storage.clearCache();
+            const newSize = await storage.getCacheSize();
+            setCacheSize(newSize);
+          })();
         },
       },
     ]);
@@ -59,22 +74,37 @@ export default function SettingsScreen() {
         <SettingsRow
           label="Subscription"
           value={entitlementData?.subscriptionTier === 'premium' ? 'Premium' : 'Free'}
-          onPress={() => entitlement.manageSubscription()}
+          onPress={() => {
+            void entitlement.manageSubscription();
+          }}
         />
         <SettingsRow label="Manage Subscription" onPress={() => router.push('/(main)/paywall')} />
       </View>
 
       <SectionHeader title="Personalization" />
       <View style={styles.section}>
-        <SettingsRow label="Interpretation Style" onPress={() => router.push('/(main)/settings/style')} />
-        <SettingsRow label="Notifications" onPress={() => router.push('/(main)/settings/notifications')} />
+        <SettingsRow
+          label="Interpretation Style"
+          onPress={() => router.push('/(main)/settings/style')}
+        />
+        <SettingsRow
+          label="Notifications"
+          onPress={() => router.push('/(main)/settings/notifications')}
+        />
       </View>
 
       <SectionHeader title="Privacy" />
       <View style={styles.section}>
         <SettingsRow label="AI Consent" onPress={() => router.push('/(main)/settings/privacy')} />
-        <SettingsRow label="Export My Data" onPress={() => router.push('/(main)/settings/export')} />
-        <SettingsRow label="Delete Account" onPress={() => router.push('/(main)/settings/delete-account')} destructive />
+        <SettingsRow
+          label="Export My Data"
+          onPress={() => router.push('/(main)/settings/export')}
+        />
+        <SettingsRow
+          label="Delete Account"
+          onPress={() => router.push('/(main)/settings/delete-account')}
+          destructive
+        />
       </View>
 
       <SectionHeader title="App" />
@@ -94,14 +124,27 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0d0d1a' },
   content: { paddingBottom: spacing.xxl },
   sectionHeader: {
-    fontSize: 12, color: '#555', fontWeight: '600', letterSpacing: 0.5,
-    paddingHorizontal: spacing.md, paddingTop: spacing.lg, paddingBottom: spacing.xs,
+    fontSize: 12,
+    color: '#555',
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xs,
     textTransform: 'uppercase',
   },
-  section: { backgroundColor: '#1a1a2e', marginHorizontal: spacing.md, borderRadius: 12, overflow: 'hidden' },
+  section: {
+    backgroundColor: '#1a1a2e',
+    marginHorizontal: spacing.md,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
   row: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#2a2a3e',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#2a2a3e',
   },
   rowLabel: { flex: 1, fontSize: 15, color: '#ddd' },
   rowLabelDestructive: { color: '#e05c5c' },

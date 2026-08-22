@@ -67,6 +67,11 @@ const styles = StyleSheet.create({
   },
   chipIcon: { fontSize: 14 },
   chipText: { fontSize: 13, color: '#ccc' },
-  badge: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2 },
+  badge: {
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
   badgeText: { fontSize: 11, color: '#fff', fontWeight: '600' },
 });

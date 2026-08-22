@@ -13,17 +13,21 @@ export default function NotificationsScreen() {
   const [showPicker, setShowPicker] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
+    void supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
       const { data } = await supabase
         .from('profiles')
         .select('notification_reminders_enabled, notification_reminder_time')
         .eq('id', user.id)
         .single();
-      if (data) {
-        setEnabled(data.notification_reminders_enabled ?? false);
-        if (data.notification_reminder_time) {
-          const parts = (data.notification_reminder_time as string).split(':').map(Number);
+      const row = data as {
+        notification_reminders_enabled: boolean | null;
+        notification_reminder_time: string | null;
+      } | null;
+      if (row) {
+        setEnabled(row.notification_reminders_enabled ?? false);
+        if (row.notification_reminder_time) {
+          const parts = row.notification_reminder_time.split(':').map(Number);
           const h = parts[0] ?? 8;
           const m = parts[1] ?? 0;
           const d = new Date();
@@ -61,16 +65,24 @@ export default function NotificationsScreen() {
   };
 
   const persistPreferences = async (isEnabled: boolean, time: Date) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
     const timeStr = `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;
-    await supabase.from('profiles').update({
-      notification_reminders_enabled: isEnabled,
-      notification_reminder_time: timeStr,
-    }).eq('id', user.id);
+    await supabase
+      .from('profiles')
+      .update({
+        notification_reminders_enabled: isEnabled,
+        notification_reminder_time: timeStr,
+      })
+      .eq('id', user.id);
   };
 
-  const timeLabel = reminderTime.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const timeLabel = reminderTime.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   return (
     <View style={styles.container}>
@@ -90,7 +102,9 @@ export default function NotificationsScreen() {
       {enabled && (
         <View style={styles.row}>
           <Text style={styles.label}>Reminder Time</Text>
-          <Text style={styles.timeValue} onPress={() => setShowPicker(true)}>{timeLabel}</Text>
+          <Text style={styles.timeValue} onPress={() => setShowPicker(true)}>
+            {timeLabel}
+          </Text>
         </View>
       )}
 
@@ -99,7 +113,9 @@ export default function NotificationsScreen() {
           value={reminderTime}
           mode="time"
           display="spinner"
-          onChange={handleTimeChange}
+          onChange={(event, date) => {
+            void handleTimeChange(event, date);
+          }}
         />
       )}
     </View>
@@ -109,8 +125,12 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0d0d1a', padding: spacing.md, gap: spacing.md },
   row: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#1a1a2e', borderRadius: 12, padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: spacing.md,
   },
   labelBlock: { flex: 1, gap: 2 },
   label: { fontSize: 15, color: '#ddd' },

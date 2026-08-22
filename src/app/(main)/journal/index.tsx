@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { View, TextInput, StyleSheet } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
@@ -8,7 +8,6 @@ import { EmptyState } from '@shared/components/EmptyState';
 import { JournalEntryCard, type JournalEntry } from '@features/journal/JournalEntryCard';
 import { useJournalSearch } from '@features/journal/useJournalSearch';
 import { useJournalFilters } from '@features/journal/useJournalFilters';
-import { colors } from '@shared/tokens/colors';
 import { spacing } from '@shared/tokens/spacing';
 import { useRouter } from 'expo-router';
 
@@ -25,8 +24,13 @@ export default function JournalListScreen() {
   const loadEntries = useCallback(async () => {
     try {
       const rows = await db.getAllAsync<{
-        id: string; description: string; occurred_at: string; sync_status: string; thumbnail_uri: string | null;
-      }>(`
+        id: string;
+        description: string;
+        occurred_at: string;
+        sync_status: string;
+        thumbnail_uri: string | null;
+      }>(
+        `
         SELECT d.id, d.description, d.occurred_at, d.sync_status,
                m.storage_key as thumbnail_uri
         FROM dreams d
@@ -34,15 +38,19 @@ export default function JournalListScreen() {
         WHERE d.is_deleted = 0
         ORDER BY d.occurred_at DESC
         LIMIT ?
-      `, PAGE_SIZE);
+      `,
+        PAGE_SIZE
+      );
 
-      setEntries(rows.map(r => ({
-        id: r.id,
-        description: r.description,
-        occurredAt: r.occurred_at,
-        syncStatus: r.sync_status as JournalEntry['syncStatus'],
-        thumbnailUri: r.thumbnail_uri,
-      })));
+      setEntries(
+        rows.map(r => ({
+          id: r.id,
+          description: r.description,
+          occurredAt: r.occurred_at,
+          syncStatus: r.sync_status as JournalEntry['syncStatus'],
+          thumbnailUri: r.thumbnail_uri,
+        }))
+      );
     } catch {
       // Silently handle — entries stays []
     } finally {
@@ -50,18 +58,22 @@ export default function JournalListScreen() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => {
-    loadEntries();
-  }, [loadEntries]));
+  useFocusEffect(
+    useCallback(() => {
+      void loadEntries();
+    }, [loadEntries])
+  );
 
   const displayEntries: JournalEntry[] = (searchResults ?? filterResults ?? entries).map(r =>
-    'occurredAt' in r ? (r as JournalEntry) : {
-      id: (r as { id: string }).id,
-      description: (r as { description: string }).description,
-      occurredAt: (r as { occurredAt: string }).occurredAt,
-      syncStatus: (r as { syncStatus: string }).syncStatus as JournalEntry['syncStatus'],
-      thumbnailUri: null,
-    }
+    'occurredAt' in r
+      ? (r as JournalEntry)
+      : {
+          id: (r as { id: string }).id,
+          description: (r as { description: string }).description,
+          occurredAt: (r as { occurredAt: string }).occurredAt,
+          syncStatus: (r as { syncStatus: string }).syncStatus as JournalEntry['syncStatus'],
+          thumbnailUri: null,
+        }
   );
 
   const noResults = searchQuery.trim() && displayEntries.length === 0 && !isSearching;
@@ -76,7 +88,7 @@ export default function JournalListScreen() {
         placeholder="Search dreams..."
         placeholderTextColor="#555"
         value={searchQuery}
-        onChangeText={(text) => {
+        onChangeText={text => {
           setSearchQuery(text);
           if (text) search(text);
           else clearSearch();
@@ -99,7 +111,10 @@ export default function JournalListScreen() {
           title="No dreams match this search"
           subtitle="Try different keywords or clear the search."
           ctaLabel="Clear Search"
-          onCta={() => { setSearchQuery(''); clearSearch(); }}
+          onCta={() => {
+            setSearchQuery('');
+            clearSearch();
+          }}
         />
       ) : (
         <FlashList

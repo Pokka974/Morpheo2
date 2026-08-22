@@ -21,7 +21,9 @@ export function JournalEntryCard({ entry }: JournalEntryCardProps) {
   const router = useRouter();
   const snippet = entry.description.slice(0, 80);
   const date = new Date(entry.occurredAt).toLocaleDateString(undefined, {
-    year: 'numeric', month: 'short', day: 'numeric',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
   });
   const isPending = entry.syncStatus === 'sync_pending' || entry.syncStatus === 'local';
 
@@ -36,10 +38,15 @@ export function JournalEntryCard({ entry }: JournalEntryCardProps) {
         <View style={styles.header}>
           <Text style={styles.date}>{date}</Text>
           {isPending && (
-            <Text style={styles.syncBadge} accessibilityLabel="Sync pending">⬆</Text>
+            <Text style={styles.syncBadge} accessibilityLabel="Sync pending">
+              ⬆
+            </Text>
           )}
         </View>
-        <Text style={styles.snippet} numberOfLines={2}>{snippet}{entry.description.length > 80 ? '…' : ''}</Text>
+        <Text style={styles.snippet} numberOfLines={2}>
+          {snippet}
+          {entry.description.length > 80 ? '…' : ''}
+        </Text>
       </View>
       {entry.thumbnailUri ? (
         <Image

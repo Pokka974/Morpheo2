@@ -12,7 +12,10 @@ import { VideoGenerationButton } from '@features/media-generation/VideoGeneratio
 import { useServices } from '@services/useServices';
 import { spacing } from '@shared/tokens/spacing';
 import { colors } from '@shared/tokens/colors';
-import type { InterpretationResult } from '@services/ai/interpretation/InterpretationService';
+import type {
+  CulturalReference,
+  InterpretationResult,
+} from '@services/ai/interpretation/InterpretationService';
 import type { MediaResult } from '@services/ai/image/ImageGenerationService';
 
 interface DreamDetail {
@@ -24,7 +27,7 @@ interface DreamDetail {
 export default function DreamDetailScreen() {
   const { dreamId } = useLocalSearchParams<{ dreamId: string }>();
   const router = useRouter();
-  const { imageGeneration, entitlement } = useServices();
+  const { imageGeneration } = useServices();
 
   const [dream, setDream] = useState<DreamDetail | null>(null);
   const [interpretation, setInterpretation] = useState<InterpretationResult | null>(null);
@@ -37,12 +40,20 @@ export default function DreamDetailScreen() {
   useEffect(() => {
     async function load() {
       try {
-        const dreamRow = await db.getFirstAsync<{ id: string; description: string; occurred_at: string }>(
+        const dreamRow = await db.getFirstAsync<{
+          id: string;
+          description: string;
+          occurred_at: string;
+        }>(
           'SELECT id, description, occurred_at FROM dreams WHERE id = ? AND is_deleted = 0',
           dreamId
         );
         if (!dreamRow) return;
-        setDream({ id: dreamRow.id, description: dreamRow.description, occurredAt: dreamRow.occurred_at });
+        setDream({
+          id: dreamRow.id,
+          description: dreamRow.description,
+          occurredAt: dreamRow.occurred_at,
+        });
 
         const interpRow = await db.getFirstAsync<{
           id: string;
@@ -64,9 +75,11 @@ export default function DreamDetailScreen() {
             id: interpRow.id,
             dreamId,
             overallReading: interpRow.overall_reading,
-            keywords: JSON.parse(interpRow.keywords ?? '[]'),
-            emotions: JSON.parse(interpRow.emotions ?? '[]'),
-            culturalReferences: JSON.parse(interpRow.cultural_references ?? '[]'),
+            keywords: JSON.parse(interpRow.keywords ?? '[]') as string[],
+            emotions: JSON.parse(interpRow.emotions ?? '[]') as string[],
+            culturalReferences: JSON.parse(
+              interpRow.cultural_references ?? '[]'
+            ) as CulturalReference[],
             confidence,
             isDegraded: confidence === 'low',
             promptVersion: interpRow.prompt_version,
@@ -83,7 +96,7 @@ export default function DreamDetailScreen() {
         setIsLoading(false);
       }
     }
-    load();
+    void load();
   }, [dreamId, imageGeneration]);
 
   // Auto-trigger image generation once an interpretation exists and no image
@@ -91,13 +104,20 @@ export default function DreamDetailScreen() {
   useEffect(() => {
     if (!dream || !interpretation || imageMedia || isLoading) return;
     if (imageState.status !== 'idle') return;
-    generate({
+    void generate({
       dreamId: dream.id,
       description: dream.description,
       keywords: interpretation.keywords,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dream, interpretation, imageMedia, isLoading]);
+  }, [dream, interpretation, imageMedia, isLoading, imageState.status, generate]);
+
+  const confirmDelete = async () => {
+    await db.runAsync(
+      "UPDATE dreams SET is_deleted = 1, last_modified_at = datetime('now') WHERE id = ?",
+      dreamId
+    );
+    router.back();
+  };
 
   const handleDelete = () => {
     Alert.alert('Delete Dream', 'This will permanently remove this dream entry.', [
@@ -105,9 +125,8 @@ export default function DreamDetailScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: async () => {
-          await db.runAsync('UPDATE dreams SET is_deleted = 1, last_modified_at = datetime(\'now\') WHERE id = ?', dreamId);
-          router.back();
+        onPress: () => {
+          void confirmDelete();
         },
       },
     ]);
@@ -121,7 +140,12 @@ export default function DreamDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.date}>
-        {new Date(dream.occurredAt).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        {new Date(dream.occurredAt).toLocaleDateString(undefined, {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })}
       </Text>
 
       <Text style={styles.description}>{dream.description}</Text>
@@ -132,7 +156,11 @@ export default function DreamDetailScreen() {
         ) : (
           <TouchableOpacity
             style={styles.interpretButton}
-            onPress={() => router.push(`/(main)/journal/${dream.id}/interpretation?dreamId=${dream.id}&description=${encodeURIComponent(dream.description)}`)}
+            onPress={() =>
+              router.push(
+                `/(main)/journal/${dream.id}/interpretation?dreamId=${dream.id}&description=${encodeURIComponent(dream.description)}`
+              )
+            }
             accessibilityRole="button"
           >
             <Text style={styles.interpretButtonText}>🌙 Get AI Interpretation</Text>
@@ -145,27 +173,33 @@ export default function DreamDetailScreen() {
           media={activeImage}
           isGenerating={imageState.status === 'generating'}
           canRegenerate={true}
-          onGenerate={() => generate({
-            dreamId: dream.id,
-            description: dream.description,
-            keywords: interpretation?.keywords ?? [],
-          })}
-          onRegenerate={() => regenerate({
-            dreamId: dream.id,
-            description: dream.description,
-            keywords: interpretation?.keywords ?? [],
-          })}
+          onGenerate={() => {
+            void generate({
+              dreamId: dream.id,
+              description: dream.description,
+              keywords: interpretation?.keywords ?? [],
+            });
+          }}
+          onRegenerate={() => {
+            void regenerate({
+              dreamId: dream.id,
+              description: dream.description,
+              keywords: interpretation?.keywords ?? [],
+            });
+          }}
         />
       </View>
 
       <View style={styles.section}>
         <VideoGenerationButton
           state={videoState}
-          onSubmit={() => submitVideo({
-            dreamId: dream.id,
-            description: dream.description,
-            keywords: interpretation?.keywords ?? [],
-          })}
+          onSubmit={() => {
+            void submitVideo({
+              dreamId: dream.id,
+              description: dream.description,
+              keywords: interpretation?.keywords ?? [],
+            });
+          }}
           onUpgrade={() => router.push('/(main)/paywall')}
         />
       </View>
@@ -178,7 +212,11 @@ export default function DreamDetailScreen() {
         >
           <Text style={styles.editText}>Edit Dream</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} accessibilityRole="button">
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={handleDelete}
+          accessibilityRole="button"
+        >
           <Text style={styles.deleteText}>Delete</Text>
         </TouchableOpacity>
       </View>
@@ -202,8 +240,21 @@ const styles = StyleSheet.create({
   },
   interpretButtonText: { color: '#e0d0ff', fontSize: 16, fontWeight: '600' },
   actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
-  editButton: { flex: 1, padding: spacing.md, borderWidth: 1, borderColor: colors.primary, borderRadius: 8, alignItems: 'center' },
+  editButton: {
+    flex: 1,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
   editText: { color: colors.primary, fontSize: 15, fontWeight: '600' },
-  deleteButton: { padding: spacing.md, borderWidth: 1, borderColor: '#e05c5c', borderRadius: 8, alignItems: 'center' },
+  deleteButton: {
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#e05c5c',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
   deleteText: { color: '#e05c5c', fontSize: 15, fontWeight: '600' },
 });

@@ -16,11 +16,9 @@ export default function InterpretationScreen() {
   const { entitlement } = useServices();
   const router = useRouter();
   const [showConsent, setShowConsent] = useState(false);
-  const [showPaywall, setShowPaywall] = useState(false);
 
   useEffect(() => {
     if (state.status === 'consent_required') setShowConsent(true);
-    if (state.status === 'paywall' || state.status === 'limit_exceeded') setShowPaywall(true);
   }, [state.status]);
 
   // The Edge Function writes the interpretation to Postgres only — nothing
@@ -31,30 +29,32 @@ export default function InterpretationScreen() {
   useEffect(() => {
     if (state.status !== 'success' && state.status !== 'degraded') return;
     const result = state.result;
-    db.runAsync(
-      `INSERT OR REPLACE INTO interpretations
+    void db
+      .runAsync(
+        `INSERT OR REPLACE INTO interpretations
         (id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        result.id,
-        dreamId,
-        result.overallReading,
-        JSON.stringify(result.keywords),
-        JSON.stringify(result.emotions),
-        JSON.stringify(result.culturalReferences),
-        result.confidence,
-        result.isDegraded ? 1 : 0,
-        result.promptVersion,
-        result.modelUsed,
-        result.createdAt,
-      ]
-    ).then(() => {
-      router.replace(`/(main)/journal/${dreamId}/detail`);
-    });
+        [
+          result.id,
+          dreamId,
+          result.overallReading,
+          JSON.stringify(result.keywords),
+          JSON.stringify(result.emotions),
+          JSON.stringify(result.culturalReferences),
+          result.confidence,
+          result.isDegraded ? 1 : 0,
+          result.promptVersion,
+          result.modelUsed,
+          result.createdAt,
+        ]
+      )
+      .then(() => {
+        router.replace(`/(main)/journal/${dreamId}/detail`);
+      });
   }, [state, dreamId, router]);
 
   const handleInterpret = () => {
-    interpret({ dreamId, description, style: 'symbolic' });
+    void interpret({ dreamId, description, style: 'symbolic' });
   };
 
   const handleRetry = () => {
@@ -87,7 +87,9 @@ export default function InterpretationScreen() {
           title="Monthly limit reached"
           subtitle={`Your free interpretations reset on ${state.resetDate.toLocaleDateString()}.`}
           ctaLabel="Upgrade to Premium"
-          onCta={() => entitlement.purchasePremium()}
+          onCta={() => {
+            void entitlement.purchasePremium();
+          }}
         />
       ) : state.status === 'paywall' ? (
         <EmptyState
@@ -95,7 +97,9 @@ export default function InterpretationScreen() {
           title="Upgrade required"
           subtitle="Unlimited interpretations are available with a premium subscription."
           ctaLabel="View Premium Plans"
-          onCta={() => entitlement.purchasePremium()}
+          onCta={() => {
+            void entitlement.purchasePremium();
+          }}
         />
       ) : null}
 

@@ -11,8 +11,10 @@ export default function ExportScreen() {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const { error } = await supabase.functions.invoke('export-data');
-      if (!error) setExported(true);
+      const response = (await supabase.functions.invoke<unknown>('export-data')) as {
+        error: unknown;
+      };
+      if (!response.error) setExported(true);
     } finally {
       setIsExporting(false);
     }
@@ -22,8 +24,8 @@ export default function ExportScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Export My Data</Text>
       <Text style={styles.description}>
-        Export all your dreams and interpretations as a JSON file.
-        We'll email you a download link when it's ready.
+        Export all your dreams and interpretations as a JSON file. We&apos;ll email you a download
+        link when it&apos;s ready.
       </Text>
       <Text style={styles.description}>
         The export includes: all dream entries, all AI interpretations, and recurrence patterns.
@@ -34,12 +36,16 @@ export default function ExportScreen() {
         <View style={styles.successCard}>
           <Text style={styles.successIcon}>✓</Text>
           <Text style={styles.successTitle}>Export Queued</Text>
-          <Text style={styles.successText}>We'll email you when your data export is ready.</Text>
+          <Text style={styles.successText}>
+            We&apos;ll email you when your data export is ready.
+          </Text>
         </View>
       ) : (
         <TouchableOpacity
           style={[styles.exportButton, isExporting && styles.disabled]}
-          onPress={handleExport}
+          onPress={() => {
+            void handleExport();
+          }}
           disabled={isExporting}
           accessibilityRole="button"
         >
@@ -59,14 +65,19 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, color: '#fff', fontWeight: '700' },
   description: { fontSize: 13, color: '#aaa', lineHeight: 20 },
   exportButton: {
-    backgroundColor: colors.primary, borderRadius: 8,
-    padding: spacing.md, alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    padding: spacing.md,
+    alignItems: 'center',
   },
   disabled: { opacity: 0.6 },
   exportText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   successCard: {
-    backgroundColor: '#1a2e1a', borderRadius: 12,
-    padding: spacing.lg, alignItems: 'center', gap: spacing.sm,
+    backgroundColor: '#1a2e1a',
+    borderRadius: 12,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   successIcon: { fontSize: 32, color: '#6bcb6b' },
   successTitle: { fontSize: 16, color: '#6bcb6b', fontWeight: '700' },

@@ -72,7 +72,7 @@ describe('JournalList performance', () => {
     const JournalEntryCard = require('@features/journal/JournalEntryCard').JournalEntryCard;
 
     const start = Date.now();
-    const { UNSAFE_queryAllByType } = render(
+    render(
       React.createElement(require('react-native').View, null,
         ...entries.slice(0, 15).map((entry) =>
           React.createElement(JournalEntryCard, { key: entry.id, entry })

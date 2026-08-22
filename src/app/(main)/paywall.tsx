@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useServices } from '@services/useServices';
 import { spacing } from '@shared/tokens/spacing';
@@ -64,7 +71,9 @@ export default function PaywallScreen() {
 
       <TouchableOpacity
         style={[styles.purchaseButton, isPurchasing && styles.purchaseButtonDisabled]}
-        onPress={handlePurchase}
+        onPress={() => {
+          void handlePurchase();
+        }}
         disabled={isPurchasing}
         accessibilityRole="button"
       >
@@ -97,11 +106,14 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, color: '#aaa', textAlign: 'center' },
   comparison: { gap: spacing.md },
   tier: {
-    backgroundColor: '#1a1a2e', borderRadius: 12,
-    padding: spacing.md, gap: spacing.sm,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: spacing.md,
+    gap: spacing.sm,
   },
   premiumTier: {
-    borderWidth: 2, borderColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   tierLabel: { fontSize: 16, color: '#fff', fontWeight: '700', marginBottom: spacing.xs },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -110,8 +122,10 @@ const styles = StyleSheet.create({
   premiumCheck: { color: colors.primary, fontSize: 14, width: 16 },
   premiumFeatureText: { color: '#ddd' },
   purchaseButton: {
-    backgroundColor: colors.primary, padding: spacing.md,
-    borderRadius: 12, alignItems: 'center',
+    backgroundColor: colors.primary,
+    padding: spacing.md,
+    borderRadius: 12,
+    alignItems: 'center',
   },
   purchaseButtonDisabled: { opacity: 0.6 },
   purchaseButtonText: { color: '#fff', fontSize: 17, fontWeight: '700' },

@@ -1,7 +1,16 @@
-import type { ImageGenerationService, ImageGenerationRequest, MediaResult } from '../ImageGenerationService';
-import { ContentSafetyError, RegenerationLimitError, ImageLimitError } from '../ImageGenerationService';
+import type {
+  ImageGenerationService,
+  ImageGenerationRequest,
+  MediaResult,
+} from '../ImageGenerationService';
+import {
+  ContentSafetyError,
+  RegenerationLimitError,
+  ImageLimitError,
+} from '../ImageGenerationService';
 
-export type MockMode = 'success' | 'failure' | 'safety_blocked' | 'limit_exceeded' | 'regeneration_limit';
+export type MockMode =
+  'success' | 'failure' | 'safety_blocked' | 'limit_exceeded' | 'regeneration_limit';
 
 const SUCCESS_RESULT: MediaResult = {
   id: 'mock-media-id',
@@ -30,7 +39,12 @@ export class MockImageGenerationService implements ImageGenerationService {
       case 'success':
         return { ...SUCCESS_RESULT, dreamId: request.dreamId };
       case 'failure':
-        return { ...SUCCESS_RESULT, dreamId: request.dreamId, generationStatus: 'failed', errorMessage: 'Provider error' };
+        return {
+          ...SUCCESS_RESULT,
+          dreamId: request.dreamId,
+          generationStatus: 'failed',
+          errorMessage: 'Provider error',
+        };
       case 'safety_blocked':
         throw new ContentSafetyError('input');
       case 'limit_exceeded':

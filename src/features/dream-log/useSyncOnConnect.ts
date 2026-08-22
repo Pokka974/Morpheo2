@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import NetInfo, { NetInfoStateType } from '@react-native-community/netinfo';
+import NetInfo from '@react-native-community/netinfo';
 import { syncPendingDreams, AuthExpiredError } from './syncService';
 import type { AuthService } from '@services/auth/AuthService';
 
@@ -7,7 +7,10 @@ export function useSyncOnConnect(auth: AuthService) {
   const wasOfflineRef = useRef(false);
 
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener(async state => {
+    const handleConnectivityChange = async (state: {
+      isConnected: boolean | null;
+      isInternetReachable: boolean | null;
+    }) => {
       const isConnected = state.isConnected && state.isInternetReachable !== false;
 
       if (!isConnected) {
@@ -30,6 +33,10 @@ export function useSyncOnConnect(auth: AuthService) {
           }
         }
       }
+    };
+
+    const unsubscribe = NetInfo.addEventListener(state => {
+      void handleConnectivityChange(state);
     });
 
     return () => unsubscribe();

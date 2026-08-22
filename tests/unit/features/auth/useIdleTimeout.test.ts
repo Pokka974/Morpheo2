@@ -15,6 +15,13 @@ function getAppStateHandler(): (state: string) => void {
   return changeCalls[changeCalls.length - 1]![1];
 }
 
+// The production listener wraps the async handler in a fire-and-forget `void` call
+// (required so it type-checks against AppState's void-returning listener signature),
+// so calling it no longer yields a promise we can await — flush a macrotask instead.
+function flush(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
 describe('useIdleTimeout', () => {
   let onLockRequired: jest.Mock;
   let localLock: MockLocalLockService;
@@ -38,8 +45,9 @@ describe('useIdleTimeout', () => {
     const handler = getAppStateHandler();
 
     await act(async () => {
-      await handler('background');
-      await handler('active');
+      handler('background');
+      handler('active');
+      await flush();
     });
 
     expect(onLockRequired).not.toHaveBeenCalled();
@@ -51,8 +59,9 @@ describe('useIdleTimeout', () => {
     const handler = getAppStateHandler();
 
     await act(async () => {
-      await handler('inactive');
-      await handler('active');
+      handler('inactive');
+      handler('active');
+      await flush();
     });
 
     expect(onLockRequired).toHaveBeenCalledTimes(1);
@@ -64,8 +73,9 @@ describe('useIdleTimeout', () => {
     const handler = getAppStateHandler();
 
     await act(async () => {
-      await handler('background');
-      await handler('active');
+      handler('background');
+      handler('active');
+      await flush();
     });
 
     expect(onLockRequired).not.toHaveBeenCalled();
@@ -77,8 +87,9 @@ describe('useIdleTimeout', () => {
     const handler = getAppStateHandler();
 
     await act(async () => {
-      await handler('background');
-      await handler('active');
+      handler('background');
+      handler('active');
+      await flush();
     });
 
     expect(onLockRequired).not.toHaveBeenCalled();
@@ -90,8 +101,9 @@ describe('useIdleTimeout', () => {
     const handler = getAppStateHandler();
 
     await act(async () => {
-      await handler('background');
-      await handler('active');
+      handler('background');
+      handler('active');
+      await flush();
     });
 
     expect(onLockRequired).not.toHaveBeenCalled();
@@ -103,7 +115,8 @@ describe('useIdleTimeout', () => {
     const handler = getAppStateHandler();
 
     await act(async () => {
-      await handler('unknown');
+      handler('unknown');
+      await flush();
     });
 
     expect(onLockRequired).not.toHaveBeenCalled();

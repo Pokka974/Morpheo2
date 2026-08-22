@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@shared/components/Button';
 import { ErrorState } from '@shared/components/ErrorState';
@@ -55,7 +62,10 @@ export default function SignInScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <Text style={styles.title}>Welcome back</Text>
       {error ? <ErrorState message={error} /> : null}
       <TextInput
@@ -77,11 +87,31 @@ export default function SignInScreen() {
         secureTextEntry
         autoComplete="current-password"
       />
-      <Button label={loading ? 'Signing in...' : 'Sign In'} onPress={handleSignIn} disabled={loading || !email || !password} />
-      <Button label="Continue with Google" variant="secondary" onPress={handleGoogle} disabled={loading} />
-      <Button label="Continue with Apple" variant="secondary" onPress={handleApple} disabled={loading} />
+      <Button
+        label={loading ? 'Signing in...' : 'Sign In'}
+        onPress={() => {
+          void handleSignIn();
+        }}
+        disabled={loading || !email || !password}
+      />
+      <Button
+        label="Continue with Google"
+        variant="secondary"
+        onPress={() => {
+          void handleGoogle();
+        }}
+        disabled={loading}
+      />
+      <Button
+        label="Continue with Apple"
+        variant="secondary"
+        onPress={() => {
+          void handleApple();
+        }}
+        disabled={loading}
+      />
       <TouchableOpacity onPress={() => router.push('/(auth)/sign-up')}>
-        <Text style={styles.link}>Don't have an account? Create one</Text>
+        <Text style={styles.link}>Don&apos;t have an account? Create one</Text>
       </TouchableOpacity>
     </KeyboardAvoidingView>
   );

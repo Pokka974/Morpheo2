@@ -60,7 +60,11 @@ describe('useAuthSync', () => {
 
     renderHook(() => useAuthSync(auth, notifications));
 
-    await expect(capturedCallback(session)).resolves.toBeUndefined();
+    expect(() => capturedCallback(session)).not.toThrow();
+    // Let the fire-and-forget registerPushToken().catch() settle without an unhandled rejection.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(registerPushToken).toHaveBeenCalledTimes(1);
   });
 
   it('unsubscribes on unmount', () => {

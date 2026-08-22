@@ -13,7 +13,12 @@ export function validateForInterpretation(description: string): void {
   }
 }
 
-export async function saveDream(draft: Omit<NewDream, 'syncStatus' | 'loggedAt' | 'lastModifiedAt' | 'isDeleted' | 'editedSinceInterpretation'>): Promise<Dream> {
+export async function saveDream(
+  draft: Omit<
+    NewDream,
+    'syncStatus' | 'loggedAt' | 'lastModifiedAt' | 'isDeleted' | 'editedSinceInterpretation'
+  >
+): Promise<Dream> {
   const now = new Date().toISOString();
   const newDream: NewDream = {
     ...draft,
@@ -30,14 +35,20 @@ export async function saveDream(draft: Omit<NewDream, 'syncStatus' | 'loggedAt' 
   return result;
 }
 
-export async function updateDream(id: string, changes: Partial<Pick<Dream, 'description' | 'occurredAt'>>): Promise<void> {
+export async function updateDream(
+  id: string,
+  changes: Partial<Pick<Dream, 'description' | 'occurredAt'>>
+): Promise<void> {
   const now = new Date().toISOString();
-  await db.update(dreams).set({
-    ...changes,
-    lastModifiedAt: now,
-    ...(changes.description !== undefined ? { editedSinceInterpretation: true } : {}),
-    syncStatus: 'local',
-  }).where(eq(dreams.id, id));
+  await db
+    .update(dreams)
+    .set({
+      ...changes,
+      lastModifiedAt: now,
+      ...(changes.description !== undefined ? { editedSinceInterpretation: true } : {}),
+      syncStatus: 'local',
+    })
+    .where(eq(dreams.id, id));
 }
 
 export async function deleteDream(id: string): Promise<void> {
@@ -54,7 +65,8 @@ export async function markSynced(id: string): Promise<void> {
 }
 
 export async function getDreams(userId: string): Promise<Dream[]> {
-  return db.select().from(dreams).where(
-    and(eq(dreams.userId, userId), eq(dreams.isDeleted, false))
-  );
+  return db
+    .select()
+    .from(dreams)
+    .where(and(eq(dreams.userId, userId), eq(dreams.isDeleted, false)));
 }

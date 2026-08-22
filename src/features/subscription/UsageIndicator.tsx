@@ -9,14 +9,20 @@ export function UsageIndicator() {
   const [data, setData] = useState<Entitlement | null>(null);
 
   useEffect(() => {
-    entitlement.fetchEntitlement().then(setData).catch(() => {});
+    entitlement
+      .fetchEntitlement()
+      .then(setData)
+      .catch(() => {});
   }, [entitlement]);
 
   if (!data || data.subscriptionTier === 'premium') return null;
 
   const limit = data.monthlyInterpretationLimit ?? 5;
   const used = data.interpretationsUsedThisMonth;
-  const resetMonth = data.resetDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+  const resetMonth = data.resetDate.toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+  });
 
   return (
     <View style={styles.container} accessibilityLiveRegion="polite">

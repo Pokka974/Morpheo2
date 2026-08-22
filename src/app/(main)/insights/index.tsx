@@ -4,7 +4,10 @@ import { useRouter } from 'expo-router';
 import { LoadingState } from '@shared/components/LoadingState';
 import { TopRecurrencesView } from '@features/recurrence/TopRecurrencesView';
 import { RecurrenceAnalyticsView } from '@features/recurrence/RecurrenceAnalyticsView';
-import { getTopRecurrences, type RecurrencePattern } from '@features/recurrence/recurrenceRepository';
+import {
+  getTopRecurrences,
+  type RecurrencePattern,
+} from '@features/recurrence/recurrenceRepository';
 import { useServices } from '@services/useServices';
 import { supabase } from '../../../supabase/client';
 import { spacing } from '@shared/tokens/spacing';
@@ -21,7 +24,9 @@ export default function InsightsScreen() {
 
   useEffect(() => {
     async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
       setUserId(user.id);
 
@@ -38,7 +43,7 @@ export default function InsightsScreen() {
       }
       setIsLoading(false);
     }
-    init();
+    void init();
   }, [entitlement]);
 
   if (isLoading) return <LoadingState message="Loading insights..." />;
@@ -55,7 +60,8 @@ export default function InsightsScreen() {
         <Text style={styles.lockIcon}>🔒</Text>
         <Text style={styles.upgradeTitle}>Full Insights — Premium</Text>
         <Text style={styles.upgradeText}>
-          See complete charts with all recurring symbols and emotions, with 30d / 90d / all-time views.
+          See complete charts with all recurring symbols and emotions, with 30d / 90d / all-time
+          views.
         </Text>
         <TouchableOpacity
           style={styles.upgradeButton}
@@ -72,15 +78,20 @@ export default function InsightsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0d0d1a', padding: spacing.md, gap: spacing.lg },
   upgradeCard: {
-    backgroundColor: '#1a1a2e', borderRadius: 12,
-    padding: spacing.lg, alignItems: 'center', gap: spacing.sm,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   lockIcon: { fontSize: 32 },
   upgradeTitle: { fontSize: 16, color: '#fff', fontWeight: '700' },
   upgradeText: { fontSize: 13, color: '#aaa', textAlign: 'center' },
   upgradeButton: {
-    backgroundColor: colors.primary, paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm, borderRadius: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
   },
   upgradeButtonText: { color: '#fff', fontWeight: '600' },
 });

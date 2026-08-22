@@ -1,9 +1,14 @@
-import type { VideoGenerationService, VideoGenerationRequest, VideoJob } from '../VideoGenerationService';
+import type {
+  VideoGenerationService,
+  VideoGenerationRequest,
+  VideoJob,
+} from '../VideoGenerationService';
 import { PremiumRequiredError } from '../VideoGenerationService';
 import type { MediaResult } from '../../image/ImageGenerationService';
 import { ContentSafetyError, RegenerationLimitError } from '../../image/ImageGenerationService';
 
-export type MockMode = 'success' | 'failure' | 'premium_required' | 'safety_blocked' | 'regeneration_limit';
+export type MockMode =
+  'success' | 'failure' | 'premium_required' | 'safety_blocked' | 'regeneration_limit';
 
 export class MockVideoGenerationService implements VideoGenerationService {
   private mode: MockMode = 'success';
@@ -13,12 +18,22 @@ export class MockVideoGenerationService implements VideoGenerationService {
     return this;
   }
 
-  async submitVideoJob(request: VideoGenerationRequest): Promise<VideoJob> {
+  async submitVideoJob(_request: VideoGenerationRequest): Promise<VideoJob> {
     switch (this.mode) {
       case 'success':
-        return { jobId: 'mock-job-id', mediaId: 'mock-media-id', status: 'queued', estimatedDurationSeconds: 120 };
+        return {
+          jobId: 'mock-job-id',
+          mediaId: 'mock-media-id',
+          status: 'queued',
+          estimatedDurationSeconds: 120,
+        };
       case 'failure':
-        return { jobId: 'mock-job-id', mediaId: 'mock-media-id', status: 'failed', estimatedDurationSeconds: 0 };
+        return {
+          jobId: 'mock-job-id',
+          mediaId: 'mock-media-id',
+          status: 'failed',
+          estimatedDurationSeconds: 0,
+        };
       case 'premium_required':
         throw new PremiumRequiredError();
       case 'safety_blocked':
@@ -29,7 +44,12 @@ export class MockVideoGenerationService implements VideoGenerationService {
   }
 
   async getJobStatus(_jobId: string): Promise<VideoJob> {
-    return { jobId: 'mock-job-id', mediaId: 'mock-media-id', status: this.mode === 'success' ? 'complete' : 'failed', estimatedDurationSeconds: 0 };
+    return {
+      jobId: 'mock-job-id',
+      mediaId: 'mock-media-id',
+      status: this.mode === 'success' ? 'complete' : 'failed',
+      estimatedDurationSeconds: 0,
+    };
   }
 
   async getVideo(dreamId: string): Promise<MediaResult | null> {

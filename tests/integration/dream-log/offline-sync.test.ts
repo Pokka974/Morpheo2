@@ -2,7 +2,6 @@
 // Run with Expo test environment. Validates the offline-first sync flow.
 
 import { syncPendingDreams } from '@features/dream-log/syncService';
-import { saveDream, markSynced, getPendingDreams } from '@features/dream-log/dreamRepository';
 
 jest.mock('../../../src/supabase/client', () => ({
   supabase: {

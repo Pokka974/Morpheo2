@@ -1,7 +1,6 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { MockLocalLockService } from '@services/auth/__mocks__/MockLocalLockService';
-import { MockAuthService } from '@services/auth/__mocks__/MockAuthService';
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
@@ -19,7 +18,6 @@ import OnboardingWelcomeScreen from '@app/(auth)/onboarding/welcome';
 import OnboardingConsentScreen from '@app/(auth)/onboarding/consent';
 
 const mockLockService = new MockLocalLockService();
-const mockAuthService = new MockAuthService();
 
 describe('Onboarding Flow', () => {
   it('welcome screen renders value prop and Get Started button', () => {

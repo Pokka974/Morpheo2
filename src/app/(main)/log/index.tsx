@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,10 +11,11 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import type Voice from '@react-native-voice/voice';
 import { Button } from '@shared/components/Button';
 import { spacing } from '@shared/tokens/spacing';
 import { fontSize } from '@shared/tokens/typography';
-import { saveDream, validateForInterpretation } from '@features/dream-log/dreamRepository';
+import { saveDream } from '@features/dream-log/dreamRepository';
 import { syncPendingDreams } from '@features/dream-log/syncService';
 import { useServices } from '@services/useServices';
 
@@ -23,7 +23,7 @@ const MIN_DESCRIPTION = 20;
 
 function generateId(): string {
   // dreams.id is a Postgres uuid column — must be a valid UUID, not a local-only string.
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
@@ -43,13 +43,14 @@ export default function DreamLogScreen() {
   const startVoice = async () => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const Voice = require('@react-native-voice/voice').default;
-      Voice.onSpeechResults = (e: { value?: string[] }) => {
+      const VoiceModule = (require('@react-native-voice/voice') as { default: typeof Voice })
+        .default;
+      VoiceModule.onSpeechResults = e => {
         if (e.value?.[0]) {
           setDescription(prev => (prev ? prev + ' ' + e.value![0] : e.value![0]!));
         }
       };
-      await Voice.start('en-US');
+      await VoiceModule.start('en-US');
       setIsListening(true);
     } catch {
       setError('Voice dictation is not available on this device.');
@@ -59,8 +60,9 @@ export default function DreamLogScreen() {
   const stopVoice = async () => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const Voice = require('@react-native-voice/voice').default;
-      await Voice.stop();
+      const VoiceModule = (require('@react-native-voice/voice') as { default: typeof Voice })
+        .default;
+      await VoiceModule.stop();
       setIsListening(false);
     } catch {
       setIsListening(false);
@@ -102,7 +104,10 @@ export default function DreamLogScreen() {
   const canInterpret = description.trim().length >= MIN_DESCRIPTION;
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Log a Dream</Text>
 
@@ -138,7 +143,9 @@ export default function DreamLogScreen() {
           />
           <TouchableOpacity
             style={[styles.micButton, isListening && styles.micButtonActive]}
-            onPress={isListening ? stopVoice : startVoice}
+            onPress={() => {
+              void (isListening ? stopVoice() : startVoice());
+            }}
             accessibilityLabel={isListening ? 'Stop voice dictation' : 'Start voice dictation'}
           >
             <Text style={styles.micIcon}>{isListening ? '⏹' : '🎤'}</Text>
@@ -151,13 +158,20 @@ export default function DreamLogScreen() {
 
         {!canInterpret && description.length > 0 ? (
           <Text style={styles.lengthHint}>
-            Add {MIN_DESCRIPTION - description.trim().length} more characters to enable interpretation
+            Add {MIN_DESCRIPTION - description.trim().length} more characters to enable
+            interpretation
           </Text>
         ) : null}
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <Button label={saving ? 'Saving...' : 'Save Dream'} onPress={handleSave} disabled={saving || !description.trim()} />
+        <Button
+          label={saving ? 'Saving...' : 'Save Dream'}
+          onPress={() => {
+            void handleSave();
+          }}
+          disabled={saving || !description.trim()}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );

@@ -20,7 +20,9 @@ export default function ForgotPinScreen() {
   const handleVerifyPassword = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user?.email) throw new Error('No email');
       const { error } = await supabase.auth.signInWithPassword({ email: user.email, password });
       if (error) throw error;
@@ -63,7 +65,13 @@ export default function ForgotPinScreen() {
             secureTextEntry
             autoCapitalize="none"
           />
-          <Button label="Verify" onPress={handleVerifyPassword} disabled={loading || !password} />
+          <Button
+            label="Verify"
+            onPress={() => {
+              void handleVerifyPassword();
+            }}
+            disabled={loading || !password}
+          />
         </>
       ) : (
         <>
@@ -88,7 +96,13 @@ export default function ForgotPinScreen() {
             secureTextEntry
             maxLength={8}
           />
-          <Button label="Reset PIN" onPress={handleResetPin} disabled={loading || newPin.length < 4} />
+          <Button
+            label="Reset PIN"
+            onPress={() => {
+              void handleResetPin();
+            }}
+            disabled={loading || newPin.length < 4}
+          />
         </>
       )}
     </View>

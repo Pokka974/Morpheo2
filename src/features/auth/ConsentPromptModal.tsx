@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@shared/components/Button';
 import { spacing } from '@shared/tokens/spacing';
 import { fontSize } from '@shared/tokens/typography';
@@ -17,12 +17,17 @@ export function ConsentPromptModal({ visible, onGranted, onDismiss }: Props) {
   const handleGrant = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
-        await supabase.from('profiles').update({
-          ai_consent_granted: true,
-          ai_consent_granted_at: new Date().toISOString(),
-        }).eq('id', user.id);
+        await supabase
+          .from('profiles')
+          .update({
+            ai_consent_granted: true,
+            ai_consent_granted_at: new Date().toISOString(),
+          })
+          .eq('id', user.id);
         await supabase.from('consent_records').insert({ user_id: user.id, action: 'granted' });
       }
       onGranted();
@@ -39,10 +44,17 @@ export function ConsentPromptModal({ visible, onGranted, onDismiss }: Props) {
         <View style={styles.card}>
           <Text style={styles.title}>Enable AI Interpretation</Text>
           <Text style={styles.body}>
-            To interpret your dreams, Morpheo sends your dream text to Anthropic Claude (an AI provider).
-            Your dreams are never used to train AI models. Interpretations are symbolic, not clinical advice.
+            To interpret your dreams, Morpheo sends your dream text to Anthropic Claude (an AI
+            provider). Your dreams are never used to train AI models. Interpretations are symbolic,
+            not clinical advice.
           </Text>
-          <Button label={loading ? 'Granting...' : 'Grant Consent'} onPress={handleGrant} disabled={loading} />
+          <Button
+            label={loading ? 'Granting...' : 'Grant Consent'}
+            onPress={() => {
+              void handleGrant();
+            }}
+            disabled={loading}
+          />
           <Button label="Not Now" variant="ghost" onPress={onDismiss} />
         </View>
       </View>

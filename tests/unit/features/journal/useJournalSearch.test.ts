@@ -1,11 +1,11 @@
 import { renderHook, act } from '@testing-library/react-native';
 import { useJournalSearch } from '@features/journal/useJournalSearch';
 
-const mockRun = jest.fn();
+const mockAll = jest.fn();
 
 jest.mock('@db/client', () => ({
   db: {
-    run: (...args: unknown[]) => mockRun(...args),
+    all: (...args: unknown[]) => mockAll(...args),
   },
 }));
 
@@ -22,7 +22,7 @@ describe('useJournalSearch', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    mockRun.mockResolvedValue({ rows: mockRows });
+    mockAll.mockReturnValue(mockRows);
   });
 
   afterEach(() => {
@@ -38,10 +38,10 @@ describe('useJournalSearch', () => {
     const { result } = renderHook(() => useJournalSearch());
 
     act(() => result.current.search('water'));
-    expect(mockRun).not.toHaveBeenCalled();
+    expect(mockAll).not.toHaveBeenCalled();
 
     await act(async () => { jest.advanceTimersByTime(300); });
-    expect(mockRun).toHaveBeenCalledTimes(1);
+    expect(mockAll).toHaveBeenCalledTimes(1);
   });
 
   it('returns search results after debounce', async () => {

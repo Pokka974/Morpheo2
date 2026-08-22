@@ -1,15 +1,24 @@
 import { supabase } from '../../../supabase/client';
-import type { ImageGenerationService, ImageGenerationRequest, MediaResult } from './ImageGenerationService';
-import { ContentSafetyError, RegenerationLimitError, ImageLimitError } from './ImageGenerationService';
+import type {
+  ImageGenerationService,
+  ImageGenerationRequest,
+  MediaResult,
+} from './ImageGenerationService';
+import {
+  ContentSafetyError,
+  RegenerationLimitError,
+  ImageLimitError,
+} from './ImageGenerationService';
 import type { StorageService } from '../../storage/StorageService';
 
 export class DallEImageGenerationService implements ImageGenerationService {
   constructor(private readonly storage: StorageService) {}
 
   async generateImage(request: ImageGenerationRequest): Promise<MediaResult> {
-    const { data, error } = await supabase.functions.invoke('generate-image', {
+    const response = (await supabase.functions.invoke<unknown>('generate-image', {
       body: request,
-    });
+    })) as { data: unknown; error: unknown };
+    const { data, error } = response;
 
     if (error) {
       const status = (error as { status?: number }).status;
@@ -19,7 +28,11 @@ export class DallEImageGenerationService implements ImageGenerationService {
         throw new RegenerationLimitError((body as { max?: number })['max'] ?? 3);
       }
       if (status === 429) {
-        throw new ImageLimitError(new Date((body as { resetDate?: string })?.['resetDate'] ?? Date.now() + 30 * 24 * 60 * 60 * 1000));
+        throw new ImageLimitError(
+          new Date(
+            (body as { resetDate?: string })?.['resetDate'] ?? Date.now() + 30 * 24 * 60 * 60 * 1000
+          )
+        );
       }
       throw error;
     }
@@ -37,23 +50,25 @@ export class DallEImageGenerationService implements ImageGenerationService {
   }
 
   async getImage(dreamId: string): Promise<MediaResult | null> {
-    const { data, error } = await supabase
+    const response = (await supabase
       .from('media')
       .select('*')
       .eq('dream_id', dreamId)
       .eq('media_type', 'image')
       .order('created_at', { ascending: false })
       .limit(1)
-      .single();
+      .single()) as { data: unknown; error: unknown };
+    const { data, error } = response;
 
     if (error || !data) return null;
-    return this.mapRow(data);
+    return this.mapRow(data as Record<string, unknown>);
   }
 
   async getSignedUrl(mediaId: string): Promise<string> {
-    const { data, error } = await supabase.functions.invoke('media-url', {
+    const response = (await supabase.functions.invoke<unknown>('media-url', {
       body: { mediaId },
-    });
+    })) as { data: unknown; error: unknown };
+    const { data, error } = response;
     if (error || !data) throw new Error('Failed to get signed URL');
     return (data as { signedUrl: string }).signedUrl;
   }
@@ -68,7 +83,7 @@ export class DallEImageGenerationService implements ImageGenerationService {
       localCachePath: null,
       regenerationCount: row['regeneration_count'] as number,
       maxRegenerations: row['max_regenerations'] as number,
-      errorMessage: (row['error_message'] as string | null),
+      errorMessage: row['error_message'] as string | null,
       createdAt: row['created_at'] as string,
       updatedAt: row['updated_at'] as string,
     };

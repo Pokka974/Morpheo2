@@ -24,11 +24,11 @@ export function useJournalSearch() {
     }
 
     setIsSearching(true);
-    debounceTimer.current = setTimeout(async () => {
+    debounceTimer.current = setTimeout(() => {
       try {
         const like = `%${query}%`;
         // Search description + interpretation keywords (left join)
-        const rows = await db.run(sql`
+        const rows = db.all(sql`
           SELECT DISTINCT d.id, d.description, d.occurred_at as occurredAt, d.sync_status as syncStatus
           FROM dreams d
           LEFT JOIN interpretations i ON i.dream_id = d.id
@@ -40,7 +40,7 @@ export function useJournalSearch() {
           ORDER BY d.occurred_at DESC
           LIMIT 50
         `);
-        setResults((rows.rows as unknown as SearchResult[]));
+        setResults(rows as unknown as SearchResult[]);
       } catch {
         setResults([]);
       } finally {

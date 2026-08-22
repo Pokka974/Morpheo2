@@ -17,7 +17,7 @@ export default function OnboardingLockSetupScreen() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    lockService.getLockMethod().then(method => {
+    void lockService.getLockMethod().then(method => {
       setBiometricAvailable(method === 'biometric');
     });
   }, []);
@@ -71,7 +71,13 @@ export default function OnboardingLockSetupScreen() {
         maxLength={8}
         accessibilityLabel="Confirm PIN"
       />
-      <Button label="Set Up Protection" onPress={handleSetupPin} disabled={loading || pin.length < 4} />
+      <Button
+        label="Set Up Protection"
+        onPress={() => {
+          void handleSetupPin();
+        }}
+        disabled={loading || pin.length < 4}
+      />
     </View>
   );
 }

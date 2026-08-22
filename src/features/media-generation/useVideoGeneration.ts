@@ -26,54 +26,63 @@ export function useVideoGeneration() {
 
   const cleanupRealtime = useCallback(() => {
     if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
+      void supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
   }, []);
 
   useEffect(() => () => cleanupRealtime(), [cleanupRealtime]);
 
-  const subscribeToJob = useCallback((jobId: string, initialJob: VideoJob) => {
-    cleanupRealtime();
+  const subscribeToJob = useCallback(
+    (jobId: string, initialJob: VideoJob) => {
+      cleanupRealtime();
 
-    const channel = supabase
-      .channel(`generation_jobs:${jobId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'generation_jobs', filter: `id=eq.${jobId}` },
-        (payload) => {
-          const updated = payload.new as { status: VideoJob['status']; id: string };
-          const updatedJob: VideoJob = { ...initialJob, status: updated.status };
-          if (updated.status === 'complete') {
-            setState({ status: 'complete', job: updatedJob });
-            cleanupRealtime();
-          } else if (updated.status === 'failed') {
-            setState({ status: 'failed', message: 'Video generation failed' });
-            cleanupRealtime();
-          } else {
-            setState({ status: 'processing', job: updatedJob });
+      const channel = supabase
+        .channel(`generation_jobs:${jobId}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'generation_jobs', filter: `id=eq.${jobId}` },
+          payload => {
+            const updated = payload.new as { status: VideoJob['status']; id: string };
+            const updatedJob: VideoJob = { ...initialJob, status: updated.status };
+            if (updated.status === 'complete') {
+              setState({ status: 'complete', job: updatedJob });
+              cleanupRealtime();
+            } else if (updated.status === 'failed') {
+              setState({ status: 'failed', message: 'Video generation failed' });
+              cleanupRealtime();
+            } else {
+              setState({ status: 'processing', job: updatedJob });
+            }
           }
+        )
+        .subscribe();
+
+      channelRef.current = channel;
+    },
+    [cleanupRealtime]
+  );
+
+  const submit = useCallback(
+    async (params: SubmitVideoParams) => {
+      setState({ status: 'submitting' });
+      try {
+        const job = await videoGeneration.submitVideoJob(params);
+        setState({ status: 'processing', job });
+        subscribeToJob(job.jobId, job);
+      } catch (err) {
+        if (err instanceof PremiumRequiredError) {
+          setState({ status: 'premium_required' });
+        } else {
+          setState({
+            status: 'failed',
+            message: err instanceof Error ? err.message : 'Failed to submit video job',
+          });
         }
-      )
-      .subscribe();
-
-    channelRef.current = channel;
-  }, [cleanupRealtime]);
-
-  const submit = useCallback(async (params: SubmitVideoParams) => {
-    setState({ status: 'submitting' });
-    try {
-      const job = await videoGeneration.submitVideoJob(params);
-      setState({ status: 'processing', job });
-      subscribeToJob(job.jobId, job);
-    } catch (err) {
-      if (err instanceof PremiumRequiredError) {
-        setState({ status: 'premium_required' });
-      } else {
-        setState({ status: 'failed', message: err instanceof Error ? err.message : 'Failed to submit video job' });
       }
-    }
-  }, [videoGeneration, subscribeToJob]);
+    },
+    [videoGeneration, subscribeToJob]
+  );
 
   const reset = useCallback(() => {
     cleanupRealtime();

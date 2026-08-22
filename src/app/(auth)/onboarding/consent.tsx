@@ -13,7 +13,9 @@ export default function OnboardingConsentScreen() {
   const handleAgree = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         const { error: updateError } = await supabase
           .from('profiles')
@@ -50,7 +52,8 @@ export default function OnboardingConsentScreen() {
       <Text style={styles.title}>A quick note about privacy</Text>
       <View style={styles.card}>
         <Text style={styles.bodyText}>
-          To interpret your dreams, Morpheo sends your dream description to an AI provider (Anthropic Claude).
+          To interpret your dreams, Morpheo sends your dream description to an AI provider
+          (Anthropic Claude).
         </Text>
         <Text style={styles.bodyText}>
           • Your dream text is sent securely and encrypted in transit.
@@ -61,11 +64,15 @@ export default function OnboardingConsentScreen() {
         <Text style={styles.bodyText}>
           • Interpretations are symbolic and cultural — not clinical or therapeutic advice.
         </Text>
-        <Text style={styles.bodyText}>
-          • You can revoke consent at any time in Settings.
-        </Text>
+        <Text style={styles.bodyText}>• You can revoke consent at any time in Settings.</Text>
       </View>
-      <Button label="I Agree" onPress={handleAgree} disabled={loading} />
+      <Button
+        label="I Agree"
+        onPress={() => {
+          void handleAgree();
+        }}
+        disabled={loading}
+      />
       <Button label="No Thanks" variant="ghost" onPress={handleNoThanks} />
     </View>
   );

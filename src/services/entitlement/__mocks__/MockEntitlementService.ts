@@ -22,7 +22,12 @@ export class MockEntitlementService implements EntitlementService {
 
   async fetchEntitlement(): Promise<Entitlement> {
     if (this.mode === 'premium') {
-      return { ...FREE_ENTITLEMENT, subscriptionTier: 'premium', monthlyInterpretationLimit: null, monthlyImageLimit: null };
+      return {
+        ...FREE_ENTITLEMENT,
+        subscriptionTier: 'premium',
+        monthlyInterpretationLimit: null,
+        monthlyImageLimit: null,
+      };
     }
     if (this.mode === 'limit_exceeded') {
       return { ...FREE_ENTITLEMENT, interpretationsUsedThisMonth: 5 };

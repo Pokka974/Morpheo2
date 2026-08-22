@@ -46,9 +46,9 @@ function AppNavigator() {
   const [authState, setAuthState] = useState<AuthState>('loading');
 
   useEffect(() => {
-    const rcKey = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'];
+    const rcKey = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'] as string | undefined;
     if (rcKey) RevenueCatEntitlementService.configure(rcKey);
-    initApp();
+    void initApp();
   }, []);
 
   // Navigate only after the Stack is mounted and authState is resolved
@@ -72,7 +72,9 @@ function AppNavigator() {
       return;
     }
 
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session) {
       setAuthState('unauthenticated');
     } else if (lockService.isLockRequired()) {
