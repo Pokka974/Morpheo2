@@ -1,4 +1,8 @@
-import * as FileSystem from 'expo-file-system';
+// SDK 54 made the class-based File/Directory API the default export of
+// 'expo-file-system' and moved the functional API this file is written against
+// (cacheDirectory, getInfoAsync, downloadAsync, ...) to this legacy subpath. Same
+// behavior, no other code changes required.
+import * as FileSystem from 'expo-file-system/legacy';
 import type { StorageService } from './StorageService';
 
 const CACHE_DIR = `${FileSystem.cacheDirectory}morpheo/media/`;
@@ -46,7 +50,8 @@ export class ExpoStorageService implements StorageService {
 
     for (const name of readdir) {
       const path = `${CACHE_DIR}${name}`;
-      const info = await FileSystem.getInfoAsync(path, { size: true, md5: false });
+      // `size` is always present on the result now; only `md5` remains opt-in.
+      const info = await FileSystem.getInfoAsync(path);
       if (info.exists && !info.isDirectory) {
         files.push({
           path,
@@ -80,7 +85,7 @@ export class ExpoStorageService implements StorageService {
     const files = await FileSystem.readDirectoryAsync(CACHE_DIR);
     let total = 0;
     for (const name of files) {
-      const info = await FileSystem.getInfoAsync(`${CACHE_DIR}${name}`, { size: true });
+      const info = await FileSystem.getInfoAsync(`${CACHE_DIR}${name}`);
       if (info.exists && !info.isDirectory) {
         total += info.size ?? 0;
       }
