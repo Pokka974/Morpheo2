@@ -12,8 +12,13 @@ import { MockNotificationService } from '@services/notifications/__mocks__/MockN
 import type { ServiceRegistry } from '@services/registry';
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: (...args: unknown[]) => mockPush(...args), back: jest.fn(), replace: jest.fn() }),
+  useRouter: () => ({
+    push: (...args: unknown[]) => mockPush(...args),
+    back: jest.fn(),
+    replace: (...args: unknown[]) => mockReplace(...args),
+  }),
 }));
 
 let alertSpy: jest.SpyInstance;
@@ -37,6 +42,7 @@ import SettingsScreen from '@app/(main)/settings/index';
 describe('SettingsScreen', () => {
   beforeEach(() => {
     mockPush.mockClear();
+    mockReplace.mockClear();
     alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
   });
 
@@ -96,6 +102,35 @@ describe('SettingsScreen', () => {
 
     fireEvent.press(getByText('Manage subscription'));
     expect(mockPush).toHaveBeenCalledWith('/(main)/paywall');
+  });
+
+  it('pressing "Sign out" shows a confirm alert, and confirming signs out and navigates to sign-in', async () => {
+    const auth = new MockAuthService();
+    const signOutSpy = jest.spyOn(auth, 'signOut');
+    const registry = buildRegistry({ auth });
+
+    const { getByText } = render(
+      <ServicesProvider services={registry}>
+        <SettingsScreen />
+      </ServicesProvider>
+    );
+    await waitFor(() => expect(getByText('Free')).toBeTruthy());
+
+    fireEvent.press(getByText('Sign out'));
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Sign out?',
+      'You can sign back in at any time. Any unsynced dreams stay on this device.',
+      expect.any(Array)
+    );
+
+    const buttons = alertSpy.mock.calls[0][2] as Array<{ text: string; onPress?: () => void }>;
+    const signOutButton = buttons.find(b => b.text === 'Sign out')!;
+    await act(async () => {
+      await signOutButton.onPress?.();
+    });
+
+    expect(signOutSpy).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith('/(auth)/sign-in');
   });
 
   it('pressing the "Subscription" row calls entitlement.manageSubscription', async () => {

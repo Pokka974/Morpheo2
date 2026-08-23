@@ -148,7 +148,10 @@
     "tierPremium": "Premium",
     "clearCacheAlertTitle": "Clear cache",
     "clearCacheAlertBody": "Remove all locally cached media?",
-    "clear": "Clear"
+    "clear": "Clear",
+    "signOutRow": "Sign out",
+    "signOutAlertTitle": "Sign out?",
+    "signOutAlertBody": "You can sign back in at any time. Any unsynced dreams stay on this device."
   },
   "settingsStyle": {
     "title": "Interpretation style",

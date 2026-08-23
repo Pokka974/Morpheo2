@@ -148,7 +148,10 @@
     "tierPremium": "Premium",
     "clearCacheAlertTitle": "Vider le cache",
     "clearCacheAlertBody": "Supprimer tous les médias mis en cache localement ?",
-    "clear": "Vider"
+    "clear": "Vider",
+    "signOutRow": "Se déconnecter",
+    "signOutAlertTitle": "Se déconnecter ?",
+    "signOutAlertBody": "Vous pourrez vous reconnecter à tout moment. Les rêves non synchronisés restent sur cet appareil."
   },
   "settingsStyle": {
     "title": "Style d'interprétation",

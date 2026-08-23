@@ -15,7 +15,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { storage, entitlement } = useServices();
+  const { storage, entitlement, auth } = useServices();
   const [cacheSize, setCacheSize] = useState<number>(0);
   const [entitlementData, setEntitlementData] = useState<Entitlement | null>(null);
 
@@ -60,6 +60,22 @@ export default function SettingsScreen() {
       ? t('settings.tierPremium')
       : t('settings.tierFree');
 
+  const handleSignOut = () => {
+    Alert.alert(t('settings.signOutAlertTitle'), t('settings.signOutAlertBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('settings.signOutRow'),
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            await auth.signOut();
+            router.replace('/(auth)/sign-in');
+          })();
+        },
+      },
+    ]);
+  };
+
   return (
     <ScrollView
       style={styles.container}
@@ -79,6 +95,7 @@ export default function SettingsScreen() {
           label={t('settings.manageSubscriptionRow')}
           onPress={() => router.push('/(main)/paywall')}
         />
+        <SettingsRow label={t('settings.signOutRow')} onPress={handleSignOut} navigable={false} />
       </SettingsSection>
 
       <SettingsSection title={t('settings.sectionPersonalization')}>
