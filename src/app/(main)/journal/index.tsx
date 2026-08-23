@@ -1,20 +1,26 @@
 import React, { useCallback, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
-import { View, TextInput, StyleSheet } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
+
 import { sqlite as db } from '@db/client';
 import { LoadingState } from '@shared/components/LoadingState';
 import { EmptyState } from '@shared/components/EmptyState';
-import { JournalEntryCard, type JournalEntry } from '@features/journal/JournalEntryCard';
+import { DreamCard, type JournalEntry } from '@features/journal/DreamCard';
 import { useJournalSearch } from '@features/journal/useJournalSearch';
 import { useJournalFilters } from '@features/journal/useJournalFilters';
-import { spacing } from '@shared/tokens/spacing';
-import { useRouter } from 'expo-router';
+import { colors, gradients, radius, spacing, typography } from '@theme/tokens';
 
 const PAGE_SIZE = 20;
 
 export default function JournalListScreen() {
   const router = useRouter();
+  const { t, i18n } = useTranslation();
+  const insets = useSafeAreaInsets();
+
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,12 +35,17 @@ export default function JournalListScreen() {
         occurred_at: string;
         sync_status: string;
         thumbnail_uri: string | null;
+        emotions: string | null;
+        interpretation_id: string | null;
       }>(
         `
         SELECT d.id, d.description, d.occurred_at, d.sync_status,
-               m.storage_key as thumbnail_uri
+               m.storage_key as thumbnail_uri,
+               i.emotions as emotions,
+               i.id as interpretation_id
         FROM dreams d
         LEFT JOIN media m ON m.dream_id = d.id AND m.media_type = 'image' AND m.generation_status = 'complete'
+        LEFT JOIN interpretations i ON i.dream_id = d.id
         WHERE d.is_deleted = 0
         ORDER BY d.occurred_at DESC
         LIMIT ?
@@ -49,10 +60,12 @@ export default function JournalListScreen() {
           occurredAt: r.occurred_at,
           syncStatus: r.sync_status as JournalEntry['syncStatus'],
           thumbnailUri: r.thumbnail_uri,
+          emotions: parseEmotions(r.emotions),
+          hasInterpretation: Boolean(r.interpretation_id),
         }))
       );
-    } catch {
-      // Silently handle — entries stays []
+    } catch (err) {
+      console.error('Failed to load journal entries:', err);
     } finally {
       setIsLoading(false);
     }
@@ -76,41 +89,63 @@ export default function JournalListScreen() {
         }
   );
 
-  const noResults = searchQuery.trim() && displayEntries.length === 0 && !isSearching;
+  const noResults = Boolean(searchQuery.trim()) && displayEntries.length === 0 && !isSearching;
   const noDreams = !searchQuery.trim() && !filterResults && entries.length === 0 && !isLoading;
 
-  if (isLoading) return <LoadingState message="Loading your dreams..." />;
+  const openDream = useCallback(
+    (id: string) => router.push(`/(main)/journal/${id}/detail`),
+    [router]
+  );
+
+  const today = new Date().toLocaleDateString(i18n.language, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+
+  if (isLoading) return <LoadingState message={t('journal.loading')} />;
 
   return (
-    <View style={styles.container}>
-      <TextInput
-        style={styles.searchBar}
-        placeholder="Search dreams..."
-        placeholderTextColor="#555"
-        value={searchQuery}
-        onChangeText={text => {
-          setSearchQuery(text);
-          if (text) search(text);
-          else clearSearch();
-        }}
-        accessibilityLabel="Search dreams"
-        clearButtonMode="while-editing"
-      />
+    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+      <View style={styles.header}>
+        <View style={styles.headerText}>
+          <Text style={styles.headerDate}>{today}</Text>
+          <Text style={styles.headerTitle}>{t('common.appName')}</Text>
+        </View>
+        <View style={styles.avatar}>
+          <View style={styles.moon} />
+        </View>
+      </View>
+
+      <View style={styles.searchField}>
+        <View style={styles.searchGlyph} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder={t('journal.searchPlaceholder')}
+          placeholderTextColor={colors.textMuted}
+          value={searchQuery}
+          onChangeText={text => {
+            setSearchQuery(text);
+            if (text) search(text);
+            else clearSearch();
+          }}
+          accessibilityLabel={t('journal.searchLabel')}
+          clearButtonMode="while-editing"
+        />
+      </View>
 
       {noDreams ? (
         <EmptyState
-          icon="🌙"
-          title="Your dream journal is empty"
-          subtitle="Log your first dream to get started."
-          ctaLabel="Log a Dream"
+          title={t('journal.emptyTitle')}
+          subtitle={t('journal.emptySubtitle')}
+          ctaLabel={t('journal.emptyCta')}
           onCta={() => router.navigate('/(main)/log')}
         />
       ) : noResults ? (
         <EmptyState
-          icon="🔍"
-          title="No dreams match this search"
-          subtitle="Try different keywords or clear the search."
-          ctaLabel="Clear Search"
+          title={t('journal.noResultsTitle')}
+          subtitle={t('journal.noResultsSubtitle')}
+          ctaLabel={t('journal.noResultsCta')}
           onCta={() => {
             setSearchQuery('');
             clearSearch();
@@ -120,29 +155,146 @@ export default function JournalListScreen() {
         <FlashList
           data={displayEntries}
           keyExtractor={item => item.id}
-          renderItem={({ item }) => <JournalEntryCard entry={item} />}
-          estimatedItemSize={88}
+          renderItem={({ item, index }) => (
+            <DreamCard
+              entry={item}
+              // The newest dream leads with the full card; the rest stay compact so
+              // the list scans quickly.
+              variant={index === 0 ? 'full' : 'compact'}
+              onPress={openDream}
+            />
+          )}
+          estimatedItemSize={140}
           contentContainerStyle={styles.list}
+          ItemSeparatorComponent={Separator}
+          ListFooterComponent={displayEntries.length > 0 ? <WeeklyInsight /> : null}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
   );
 }
 
+function Separator() {
+  return <View style={styles.separator} />;
+}
+
+/** The amber-marked takeaway that closes the list in the design. */
+function WeeklyInsight() {
+  const { t } = useTranslation();
+  return (
+    <LinearGradient
+      colors={[...gradients.mystic.colors]}
+      locations={[...gradients.mystic.locations]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.insightCard}
+    >
+      <Text style={styles.insightOverline}>{t('journal.weekInsight')}</Text>
+      <Text style={styles.insightBody}>{t('insights.starHint')}</Text>
+    </LinearGradient>
+  );
+}
+
+function parseEmotions(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((e): e is string => typeof e === 'string') : [];
+  } catch {
+    // Emotions are written by the interpretation Edge Function; a malformed row
+    // should degrade to "no chips", never crash the journal.
+    return [];
+  }
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0d0d1a',
+    backgroundColor: colors.background,
   },
-  searchBar: {
-    margin: spacing.md,
-    padding: spacing.sm,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 8,
-    color: '#fff',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingBottom: 12,
+  },
+  headerText: {
+    gap: spacing.xs,
+  },
+  headerDate: {
+    ...typography.meta,
+  },
+  headerTitle: {
+    ...typography.dreamTitle,
+    fontSize: 30,
+    lineHeight: 34,
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.borderElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moon: {
+    width: 16,
+    height: 16,
+    borderRadius: radius.full,
+    backgroundColor: colors.accentText,
+  },
+  searchField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: spacing.md,
+    marginBottom: 14,
+    paddingHorizontal: 14,
+    borderRadius: radius.chip,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchGlyph: {
+    width: 13,
+    height: 13,
+    borderRadius: radius.full,
+    borderWidth: 1.6,
+    borderColor: colors.textMuted,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    ...typography.body,
     fontSize: 14,
+    color: colors.textPrimary,
   },
   list: {
+    paddingHorizontal: spacing.md,
     paddingBottom: spacing.xl,
+  },
+  separator: {
+    height: 12,
+  },
+  insightCard: {
+    marginTop: 12,
+    padding: spacing.md,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.borderMystic,
+    gap: 7,
+  },
+  insightOverline: {
+    ...typography.overline,
+    color: colors.highlight,
+  },
+  insightBody: {
+    ...typography.dreamBody,
+    fontSize: 15,
+    color: colors.textPrimary,
   },
 });

@@ -3,9 +3,8 @@ import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput } from 'rea
 import { useRouter } from 'expo-router';
 import { Button } from '@shared/components/Button';
 import { ErrorState } from '@shared/components/ErrorState';
-import { spacing } from '@shared/tokens/spacing';
-import { fontSize } from '@shared/tokens/typography';
 import { useServices } from '@services/useServices';
+import { colors, fontSize, spacing } from '@theme/tokens';
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -47,7 +46,7 @@ export default function SignUpScreen() {
       <TextInput
         style={styles.input}
         placeholder="Email"
-        placeholderTextColor="#6b6882"
+        placeholderTextColor={colors.textMuted}
         value={email}
         onChangeText={setEmail}
         keyboardType="email-address"
@@ -57,7 +56,7 @@ export default function SignUpScreen() {
       <TextInput
         style={styles.input}
         placeholder="Password (min 8 characters)"
-        placeholderTextColor="#6b6882"
+        placeholderTextColor={colors.textMuted}
         value={password}
         onChangeText={setPassword}
         secureTextEntry
@@ -66,7 +65,7 @@ export default function SignUpScreen() {
       <TextInput
         style={styles.input}
         placeholder="Confirm password"
-        placeholderTextColor="#6b6882"
+        placeholderTextColor={colors.textMuted}
         value={confirmPassword}
         onChangeText={setConfirmPassword}
         secureTextEntry
@@ -88,23 +87,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xxl,
-    backgroundColor: '#0d0d1a',
+    backgroundColor: colors.background,
     gap: spacing.md,
   },
   title: {
     fontSize: fontSize.xl,
     fontWeight: '700',
-    color: '#f0eeff',
+    color: colors.textPrimary,
     marginBottom: spacing.md,
   },
   input: {
-    backgroundColor: '#1a1a3e',
+    backgroundColor: colors.inputSurface,
     borderRadius: 10,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     fontSize: fontSize.md,
-    color: '#f0eeff',
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: '#3a3a6a',
+    borderColor: colors.borderElevated,
   },
 });

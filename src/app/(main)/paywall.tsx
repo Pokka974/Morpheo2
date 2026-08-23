@@ -9,8 +9,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useServices } from '@services/useServices';
-import { spacing } from '@shared/tokens/spacing';
-import { colors } from '@shared/tokens/colors';
+import { colors, spacing } from '@theme/tokens';
 
 const FREE_FEATURES = [
   '5 AI interpretations per month',
@@ -78,7 +77,7 @@ export default function PaywallScreen() {
         accessibilityRole="button"
       >
         {isPurchasing ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.textPrimary} />
         ) : (
           <Text style={styles.purchaseButtonText}>Start Premium</Text>
         )}
@@ -100,36 +99,41 @@ export default function PaywallScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d1a' },
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
-  title: { fontSize: 24, color: '#fff', fontWeight: '700', textAlign: 'center' },
-  subtitle: { fontSize: 14, color: '#aaa', textAlign: 'center' },
+  title: { fontSize: 24, color: colors.textPrimary, fontWeight: '700', textAlign: 'center' },
+  subtitle: { fontSize: 14, color: colors.textMuted, textAlign: 'center' },
   comparison: { gap: spacing.md },
   tier: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: spacing.md,
     gap: spacing.sm,
   },
   premiumTier: {
     borderWidth: 2,
-    borderColor: colors.primary,
+    borderColor: colors.accent,
   },
-  tierLabel: { fontSize: 16, color: '#fff', fontWeight: '700', marginBottom: spacing.xs },
+  tierLabel: {
+    fontSize: 16,
+    color: colors.textPrimary,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  featureCheck: { color: '#666', fontSize: 14, width: 16 },
-  featureText: { color: '#aaa', fontSize: 13, flex: 1 },
-  premiumCheck: { color: colors.primary, fontSize: 14, width: 16 },
-  premiumFeatureText: { color: '#ddd' },
+  featureCheck: { color: colors.textMuted, fontSize: 14, width: 16 },
+  featureText: { color: colors.textMuted, fontSize: 13, flex: 1 },
+  premiumCheck: { color: colors.accent, fontSize: 14, width: 16 },
+  premiumFeatureText: { color: colors.textSecondary },
   purchaseButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     padding: spacing.md,
     borderRadius: 12,
     alignItems: 'center',
   },
   purchaseButtonDisabled: { opacity: 0.6 },
-  purchaseButtonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  purchaseButtonText: { color: colors.textPrimary, fontSize: 17, fontWeight: '700' },
   laterButton: { alignItems: 'center', padding: spacing.sm },
-  laterText: { color: '#666', fontSize: 14 },
-  legal: { fontSize: 11, color: '#444', textAlign: 'center' },
+  laterText: { color: colors.textMuted, fontSize: 14 },
+  legal: { fontSize: 11, color: colors.textMuted, textAlign: 'center' },
 });

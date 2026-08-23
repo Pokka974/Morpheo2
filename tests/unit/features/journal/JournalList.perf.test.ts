@@ -69,13 +69,13 @@ describe('JournalList performance', () => {
 
   it('renders within 500ms with 500 entries', async () => {
     const entries = generate500Entries();
-    const JournalEntryCard = require('@features/journal/JournalEntryCard').JournalEntryCard;
+    const DreamCard = require('@features/journal/DreamCard').DreamCard;
 
     const start = Date.now();
     render(
       React.createElement(require('react-native').View, null,
         ...entries.slice(0, 15).map((entry) =>
-          React.createElement(JournalEntryCard, { key: entry.id, entry })
+          React.createElement(DreamCard, { key: entry.id, entry, variant: 'compact', onPress: () => {} })
         )
       )
     );

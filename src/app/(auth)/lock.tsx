@@ -2,9 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@shared/components/Button';
-import { spacing } from '@shared/tokens/spacing';
-import { fontSize } from '@shared/tokens/typography';
 import { useServices } from '@services/useServices';
+import { colors, fontSize, spacing } from '@theme/tokens';
 
 export default function LockScreen() {
   const router = useRouter();
@@ -41,7 +40,7 @@ export default function LockScreen() {
       <TextInput
         style={styles.input}
         placeholder="Enter PIN"
-        placeholderTextColor="#6b6882"
+        placeholderTextColor={colors.textMuted}
         value={pin}
         onChangeText={setPin}
         keyboardType="number-pad"
@@ -77,38 +76,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
-    backgroundColor: '#0d0d1a',
+    backgroundColor: colors.background,
     gap: spacing.lg,
   },
   logo: { fontSize: 56 },
   title: {
     fontSize: fontSize.xl,
     fontWeight: '700',
-    color: '#f0eeff',
+    color: colors.textPrimary,
   },
   input: {
     width: '100%',
-    backgroundColor: '#1a1a3e',
+    backgroundColor: colors.inputSurface,
     borderRadius: 10,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     fontSize: fontSize.md,
-    color: '#f0eeff',
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: '#3a3a6a',
+    borderColor: colors.borderElevated,
     textAlign: 'center',
     letterSpacing: 8,
   },
   error: {
-    color: '#f08080',
+    color: colors.error,
     fontSize: fontSize.sm,
   },
   biometricLink: {
-    color: '#b399e0',
+    color: colors.accentText,
     fontSize: fontSize.md,
   },
   forgotLink: {
-    color: '#6b6882',
+    color: colors.textMuted,
     fontSize: fontSize.sm,
   },
 });

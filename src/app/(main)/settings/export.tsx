@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { supabase } from '../../../supabase/client';
-import { spacing } from '@shared/tokens/spacing';
-import { colors } from '@shared/tokens/colors';
+import { colors, spacing } from '@theme/tokens';
 
 export default function ExportScreen() {
   const [isExporting, setIsExporting] = useState(false);
@@ -50,7 +49,7 @@ export default function ExportScreen() {
           accessibilityRole="button"
         >
           {isExporting ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.textPrimary} />
           ) : (
             <Text style={styles.exportText}>Export My Data</Text>
           )}
@@ -61,25 +60,25 @@ export default function ExportScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d1a', padding: spacing.md, gap: spacing.md },
-  title: { fontSize: 18, color: '#fff', fontWeight: '700' },
-  description: { fontSize: 13, color: '#aaa', lineHeight: 20 },
+  container: { flex: 1, backgroundColor: colors.background, padding: spacing.md, gap: spacing.md },
+  title: { fontSize: 18, color: colors.textPrimary, fontWeight: '700' },
+  description: { fontSize: 13, color: colors.textMuted, lineHeight: 20 },
   exportButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     borderRadius: 8,
     padding: spacing.md,
     alignItems: 'center',
   },
   disabled: { opacity: 0.6 },
-  exportText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  exportText: { color: colors.textPrimary, fontWeight: '600', fontSize: 15 },
   successCard: {
-    backgroundColor: '#1a2e1a',
+    backgroundColor: colors.successSurface,
     borderRadius: 12,
     padding: spacing.lg,
     alignItems: 'center',
     gap: spacing.sm,
   },
-  successIcon: { fontSize: 32, color: '#6bcb6b' },
-  successTitle: { fontSize: 16, color: '#6bcb6b', fontWeight: '700' },
-  successText: { fontSize: 13, color: '#aaa', textAlign: 'center' },
+  successIcon: { fontSize: 32, color: colors.success },
+  successTitle: { fontSize: 16, color: colors.success, fontWeight: '700' },
+  successText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
 });

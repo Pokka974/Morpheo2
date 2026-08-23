@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../../supabase/client';
-import { spacing } from '@shared/tokens/spacing';
+import { colors, spacing } from '@theme/tokens';
 
 // Exact confirmation string per contracts/api-endpoints.md (C1 fix)
 const CONFIRMATION_PHRASE = 'DELETE MY ACCOUNT';
@@ -91,7 +91,7 @@ export default function DeleteAccountScreen() {
             value={confirmationText}
             onChangeText={setConfirmationText}
             placeholder={CONFIRMATION_PHRASE}
-            placeholderTextColor="#444"
+            placeholderTextColor={colors.textMuted}
             autoCapitalize="characters"
             accessibilityLabel="Type DELETE MY ACCOUNT to confirm"
           />
@@ -105,7 +105,7 @@ export default function DeleteAccountScreen() {
             accessibilityRole="button"
           >
             {isDeleting ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.textPrimary} />
             ) : (
               <Text style={styles.deleteText}>Confirm Delete</Text>
             )}
@@ -125,59 +125,59 @@ export default function DeleteAccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d1a' },
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl },
-  title: { fontSize: 20, color: '#fff', fontWeight: '700' },
+  title: { fontSize: 20, color: colors.textPrimary, fontWeight: '700' },
   warningCard: {
-    backgroundColor: '#2a1a1a',
+    backgroundColor: colors.destructiveSurface,
     borderRadius: 12,
     padding: spacing.md,
     gap: spacing.sm,
   },
-  warningTitle: { fontSize: 16, color: '#e05c5c', fontWeight: '700' },
-  warningText: { fontSize: 13, color: '#aaa' },
-  bullet: { fontSize: 13, color: '#aaa', marginLeft: spacing.sm },
+  warningTitle: { fontSize: 16, color: colors.error, fontWeight: '700' },
+  warningText: { fontSize: 13, color: colors.textMuted },
+  bullet: { fontSize: 13, color: colors.textMuted, marginLeft: spacing.sm },
   proceedButton: {
-    backgroundColor: '#3a1a1a',
+    backgroundColor: colors.destructiveSurfaceStrong,
     borderWidth: 1,
-    borderColor: '#e05c5c',
+    borderColor: colors.error,
     borderRadius: 8,
     padding: spacing.md,
     alignItems: 'center',
   },
-  proceedText: { color: '#e05c5c', fontWeight: '600' },
+  proceedText: { color: colors.error, fontWeight: '600' },
   cancelButton: { alignItems: 'center', padding: spacing.sm },
-  cancelText: { color: '#555', fontSize: 14 },
-  confirmInstruction: { fontSize: 14, color: '#aaa' },
-  phraseHighlight: { color: '#e05c5c', fontWeight: '700', fontFamily: 'monospace' },
+  cancelText: { color: colors.textMuted, fontSize: 14 },
+  confirmInstruction: { fontSize: 14, color: colors.textMuted },
+  phraseHighlight: { color: colors.error, fontWeight: '700', fontFamily: 'monospace' },
   confirmInput: {
-    backgroundColor: '#1a1a2e',
-    color: '#fff',
+    backgroundColor: colors.surface,
+    color: colors.textPrimary,
     borderRadius: 8,
     padding: spacing.md,
     fontSize: 14,
     borderWidth: 2,
-    borderColor: '#333',
+    borderColor: colors.border,
     fontFamily: 'monospace',
   },
-  confirmInputValid: { borderColor: '#e05c5c' },
+  confirmInputValid: { borderColor: colors.error },
   deleteButton: {
-    backgroundColor: '#e05c5c',
+    backgroundColor: colors.error,
     borderRadius: 8,
     padding: spacing.md,
     alignItems: 'center',
   },
   deleteButtonDisabled: { opacity: 0.4 },
-  deleteText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  deleteText: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
   doneContainer: {
     flex: 1,
-    backgroundColor: '#0d0d1a',
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
     gap: spacing.md,
   },
   doneIcon: { fontSize: 48 },
-  doneTitle: { fontSize: 20, color: '#fff', fontWeight: '700', textAlign: 'center' },
-  doneText: { fontSize: 14, color: '#aaa', textAlign: 'center', lineHeight: 22 },
+  doneTitle: { fontSize: 20, color: colors.textPrimary, fontWeight: '700', textAlign: 'center' },
+  doneText: { fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 22 },
 });

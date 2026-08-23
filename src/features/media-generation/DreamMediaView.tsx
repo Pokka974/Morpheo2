@@ -1,8 +1,7 @@
 import React from 'react';
 import { View, Image, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import type { MediaResult } from '@services/ai/image/ImageGenerationService';
-import { spacing } from '@shared/tokens/spacing';
-import { colors } from '@shared/tokens/colors';
+import { colors, spacing } from '@theme/tokens';
 
 interface DreamMediaViewProps {
   media: MediaResult | null;
@@ -22,7 +21,7 @@ export function DreamMediaView({
   if (isGenerating) {
     return (
       <View style={styles.placeholder}>
-        <ActivityIndicator color={colors.primary} size="large" />
+        <ActivityIndicator color={colors.accent} size="large" />
         <Text style={styles.hint}>Illustrating your dream...</Text>
       </View>
     );
@@ -58,7 +57,7 @@ export function DreamMediaView({
         />
       ) : (
         <View style={styles.placeholder}>
-          <ActivityIndicator color={colors.primary} size="small" />
+          <ActivityIndicator color={colors.accent} size="small" />
         </View>
       )}
 
@@ -81,7 +80,7 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
   },
   image: {
     width: '100%',
@@ -90,14 +89,14 @@ const styles = StyleSheet.create({
   placeholder: {
     width: '100%',
     aspectRatio: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     gap: spacing.sm,
     borderRadius: 12,
   },
   hint: {
-    color: '#888',
+    color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
     paddingHorizontal: spacing.md,
@@ -105,12 +104,12 @@ const styles = StyleSheet.create({
   regenButton: {
     padding: spacing.sm,
     alignItems: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#2a2a3e',
+    borderTopColor: colors.divider,
   },
   regenText: {
-    color: colors.primary,
+    color: colors.accent,
     fontSize: 14,
   },
 });

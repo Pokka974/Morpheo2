@@ -13,11 +13,10 @@ import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import type Voice from '@react-native-voice/voice';
 import { Button } from '@shared/components/Button';
-import { spacing } from '@shared/tokens/spacing';
-import { fontSize } from '@shared/tokens/typography';
 import { saveDream } from '@features/dream-log/dreamRepository';
 import { syncPendingDreams } from '@features/dream-log/syncService';
 import { useServices } from '@services/useServices';
+import { colors, fontSize, spacing } from '@theme/tokens';
 
 const MIN_DESCRIPTION = 20;
 
@@ -136,7 +135,7 @@ export default function DreamLogScreen() {
           <TextInput
             style={styles.textArea}
             placeholder="Describe your dream... (minimum 20 characters for interpretation)"
-            placeholderTextColor="#6b6882"
+            placeholderTextColor={colors.textMuted}
             value={description}
             onChangeText={setDescription}
             multiline
@@ -182,7 +181,7 @@ export default function DreamLogScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0d0d1a',
+    backgroundColor: colors.background,
   },
   scroll: {
     paddingHorizontal: spacing.xl,
@@ -193,32 +192,32 @@ const styles = StyleSheet.create({
   title: {
     fontSize: fontSize.xl,
     fontWeight: '700',
-    color: '#f0eeff',
+    color: colors.textPrimary,
   },
   dateRow: {
     paddingVertical: spacing.sm,
   },
   dateLabel: {
     fontSize: fontSize.md,
-    color: '#6b6882',
+    color: colors.textMuted,
   },
   dateValue: {
-    color: '#b399e0',
+    color: colors.accentText,
     fontWeight: '600',
   },
   textAreaContainer: {
     position: 'relative',
   },
   textArea: {
-    backgroundColor: '#1a1a3e',
+    backgroundColor: colors.inputSurface,
     borderRadius: 10,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.xxl,
     fontSize: fontSize.md,
-    color: '#f0eeff',
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: '#3a3a6a',
+    borderColor: colors.borderElevated,
     minHeight: 200,
   },
   micButton: {
@@ -228,27 +227,27 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#2d2d6b',
+    backgroundColor: colors.borderElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
   micButtonActive: {
-    backgroundColor: '#7c5cbf',
+    backgroundColor: colors.accent,
   },
   micIcon: {
     fontSize: 20,
   },
   listeningIndicator: {
-    color: '#b399e0',
+    color: colors.accentText,
     fontSize: fontSize.sm,
     textAlign: 'center',
   },
   lengthHint: {
-    color: '#6b6882',
+    color: colors.textMuted,
     fontSize: fontSize.sm,
   },
   errorText: {
-    color: '#f08080',
+    color: colors.error,
     fontSize: fontSize.sm,
   },
 });

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, StyleSheet, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -14,6 +14,13 @@ import { RevenueCatEntitlementService } from '@services/subscription/RevenueCatE
 import { ExpoNotificationService } from '@services/notifications/ExpoNotificationService';
 import { ServicesProvider } from '@services/ServicesProvider';
 import type { ServiceRegistry } from '@services/registry';
+import { initI18n } from '@i18n/index';
+import { useAppFonts } from '@theme/useAppFonts';
+import { colors } from '@theme/tokens';
+
+// Resolve the device language before the first render so no screen flashes English
+// on its way to French.
+initI18n();
 
 const lockService = new ExpoLocalLockService();
 const storageService = new ExpoStorageService();
@@ -32,12 +39,28 @@ const services: ServiceRegistry = {
 type AuthState = 'loading' | 'onboarding' | 'unauthenticated' | 'locked' | 'ready';
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useAppFonts();
+
+  // The type scale is metric-tuned to Manrope, so rendering before the faces resolve
+  // shows a system-font flash at the wrong sizes. A font failure must not block the
+  // app, though — fall through to system faces rather than trapping the user.
+  if (!fontsLoaded && !fontError) {
+    return <View style={styles.splash} />;
+  }
+
   return (
     <SafeAreaProvider>
       <AppNavigator />
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  splash: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+});
 
 function AppNavigator() {
   const router = useRouter();

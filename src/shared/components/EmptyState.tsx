@@ -1,9 +1,15 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { spacing } from '../tokens/spacing';
-import { fontSize } from '../tokens/typography';
+import { StyleSheet, Text, View } from 'react-native';
+
+import { Button } from '@shared/components/Button';
+import { colors, radius, spacing, typography } from '@theme/tokens';
 
 interface Props {
+  /**
+   * Optional glyph. The design system uses drawn shapes rather than emoji, so the
+   * default empty state renders a dashed ring; pass this only when a caller has a
+   * specific mark in mind.
+   */
   icon?: string;
   title: string;
   subtitle?: string;
@@ -14,14 +20,10 @@ interface Props {
 export function EmptyState({ icon, title, subtitle, ctaLabel, onCta }: Props) {
   return (
     <View style={styles.container}>
-      {icon ? <Text style={styles.icon}>{icon}</Text> : null}
+      {icon ? <Text style={styles.icon}>{icon}</Text> : <View style={styles.ring} />}
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-      {ctaLabel && onCta ? (
-        <TouchableOpacity style={styles.ctaButton} onPress={onCta} accessibilityRole="button">
-          <Text style={styles.ctaLabel}>{ctaLabel}</Text>
-        </TouchableOpacity>
-      ) : null}
+      {ctaLabel && onCta ? <Button label={ctaLabel} onPress={onCta} style={styles.cta} /> : null}
     </View>
   );
 }
@@ -31,34 +33,29 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
+    gap: spacing.sm + 2,
+    padding: spacing.lg,
   },
   icon: {
-    fontSize: 48,
-    marginBottom: spacing.sm,
+    fontSize: 32,
+  },
+  ring: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.borderElevated,
   },
   title: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: '#0d0d1a',
+    ...typography.cardTitle,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: fontSize.md,
-    color: '#6b6882',
+    ...typography.meta,
     textAlign: 'center',
   },
-  ctaButton: {
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: '#7c5cbf',
-    borderRadius: 8,
-  },
-  ctaLabel: {
-    color: '#ffffff',
-    fontSize: fontSize.md,
-    fontWeight: '600',
+  cta: {
+    marginTop: spacing.xs,
   },
 });

@@ -12,6 +12,8 @@ module.exports = function (api) {
             '@services': './src/services',
             '@shared': './src/shared',
             '@db': './src/db',
+            '@theme': './src/theme',
+            '@i18n': './src/i18n',
           },
         },
       ],
