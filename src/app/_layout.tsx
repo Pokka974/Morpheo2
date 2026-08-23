@@ -125,10 +125,20 @@ function AppNavigator() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { paddingTop: insets.top },
+          // Paint every screen's reserved-but-unrendered area (the notch/status-bar
+          // strip while a screen transitions in, the gap around a modal) in the app's
+          // own background — the native default is white, which read as a jarring
+          // flash/cut at the top of every screen.
+          contentStyle: { backgroundColor: colors.background },
         }}
       >
-        <Stack.Screen name="(auth)" />
+        {/*
+         * (auth) screens don't yet manage their own top inset, so this group alone
+         * gets it applied once, here. (main) screens each call useSafeAreaInsets()
+         * themselves — giving it padding here too would double it, which is exactly
+         * the "cuts the app at the top" bug this replaces.
+         */}
+        <Stack.Screen name="(auth)" options={{ contentStyle: { paddingTop: insets.top } }} />
         <Stack.Screen name="(main)" />
       </Stack>
     </ServicesProvider>

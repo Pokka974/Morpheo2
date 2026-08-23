@@ -6,11 +6,10 @@ import { colors, radius, spacing, typography } from '@theme/tokens';
 
 interface Props {
   /**
-   * Optional glyph. The design system uses drawn shapes rather than emoji, so the
-   * default empty state renders a dashed ring; pass this only when a caller has a
-   * specific mark in mind.
+   * Optional glyph. Pass a drawn icon (see icons.tsx) — the system forbids emoji and
+   * dingbats. With nothing passed, the default empty state renders a dashed ring.
    */
-  icon?: string;
+  icon?: React.ReactNode;
   title: string;
   subtitle?: string;
   ctaLabel?: string;
@@ -20,7 +19,7 @@ interface Props {
 export function EmptyState({ icon, title, subtitle, ctaLabel, onCta }: Props) {
   return (
     <View style={styles.container}>
-      {icon ? <Text style={styles.icon}>{icon}</Text> : <View style={styles.ring} />}
+      {icon ?? <View style={styles.ring} />}
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       {ctaLabel && onCta ? <Button label={ctaLabel} onPress={onCta} style={styles.cta} /> : null}
@@ -35,9 +34,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm + 2,
     padding: spacing.lg,
-  },
-  icon: {
-    fontSize: 32,
   },
   ring: {
     width: 40,

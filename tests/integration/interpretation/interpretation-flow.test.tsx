@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, waitFor, fireEvent } from '@testing-library/react-native';
 import { ServicesProvider } from '@services/ServicesProvider';
 import { MockInterpretationService } from '@services/ai/interpretation/__mocks__/MockInterpretationService';
 import { MockEntitlementService } from '@services/entitlement/__mocks__/MockEntitlementService';
@@ -57,23 +57,25 @@ describe('InterpretationScreen', () => {
     (db.runAsync as jest.Mock).mockClear();
   });
 
-  it('shows empty state (Interpret CTA) initially', () => {
-    const { getByText } = render(
-      <ServicesProvider services={buildRegistry()}>
-        <InterpretationScreen />
-      </ServicesProvider>
-    );
-    expect(getByText('Interpret Dream')).toBeTruthy();
-  });
-
-  it('renders all four interpretation sections on success', async () => {
-    interpretationService.configure('success');
+  it('fires the interpretation request on mount — no CTA to press first', () => {
     const { getByText, queryByText } = render(
       <ServicesProvider services={buildRegistry()}>
         <InterpretationScreen />
       </ServicesProvider>
     );
-    fireEvent.press(getByText('Interpret Dream'));
+    // Loading shows immediately; there is no idle state with a button asking the
+    // user to confirm the same request they already triggered from the detail screen.
+    expect(getByText('Interpreting your dream…')).toBeTruthy();
+    expect(queryByText('Interpret Dream')).toBeNull();
+  });
+
+  it('renders all four interpretation sections on success', async () => {
+    interpretationService.configure('success');
+    const { queryByText } = render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
     await waitFor(() => {
       expect(queryByText('Interpretation')).toBeTruthy();
       expect(queryByText('Symbols')).toBeTruthy();
@@ -88,19 +90,33 @@ describe('InterpretationScreen', () => {
         <InterpretationScreen />
       </ServicesProvider>
     );
-    fireEvent.press(getByText('Interpret Dream'));
     await waitFor(() => {
-      expect(getByText('Try Again')).toBeTruthy();
+      expect(getByText('Try again')).toBeTruthy();
+      expect(getByText('Interpretation unavailable')).toBeTruthy();
     });
   });
 
-  it('persists the interpretation to local SQLite and navigates back to the detail screen on success', async () => {
-    const { getByText } = render(
+  it('pressing retry re-requests the interpretation and can recover into a success state', async () => {
+    interpretationService.configure('failure');
+    const { getByText, queryByText } = render(
       <ServicesProvider services={buildRegistry()}>
         <InterpretationScreen />
       </ServicesProvider>
     );
-    fireEvent.press(getByText('Interpret Dream'));
+    await waitFor(() => expect(getByText('Try again')).toBeTruthy());
+
+    interpretationService.configure('success');
+    fireEvent.press(getByText('Try again'));
+
+    await waitFor(() => expect(queryByText('Interpretation')).toBeTruthy());
+  });
+
+  it('persists the interpretation to local SQLite and navigates back to the detail screen on success', async () => {
+    render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
 
     await waitFor(() => {
       expect(db.runAsync).toHaveBeenCalledWith(
@@ -113,16 +129,63 @@ describe('InterpretationScreen', () => {
     });
   });
 
-  it('shows paywall before service call when limit exceeded', async () => {
+  it('shows the paywall when the client-side entitlement precheck fails, before any service call', async () => {
     entitlementService.configure('limit_exceeded');
     const { getByText } = render(
       <ServicesProvider services={buildRegistry()}>
         <InterpretationScreen />
       </ServicesProvider>
     );
-    fireEvent.press(getByText('Interpret Dream'));
     await waitFor(() => {
-      expect(getByText(/Upgrade/i)).toBeTruthy();
+      expect(getByText('Upgrade required')).toBeTruthy();
+      expect(getByText('View premium plans')).toBeTruthy();
     });
+  });
+
+  it('pressing the paywall CTA starts the purchase flow', async () => {
+    entitlementService.configure('limit_exceeded');
+    const purchaseSpy = jest.spyOn(entitlementService, 'purchasePremium');
+    const { getByText } = render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+    await waitFor(() => expect(getByText('View premium plans')).toBeTruthy());
+
+    fireEvent.press(getByText('View premium plans'));
+    expect(purchaseSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the limit-reached state when the server rejects after the precheck passes', async () => {
+    entitlementService.configure('free');
+    interpretationService.configure('limit_exceeded');
+    const { getByText } = render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+    await waitFor(() => {
+      expect(getByText('Monthly limit reached')).toBeTruthy();
+      expect(getByText(/reset on/)).toBeTruthy();
+    });
+  });
+
+  it('does not double-fire the interpretation request across a re-render', async () => {
+    const interpretSpy = jest.spyOn(interpretationService, 'interpret');
+    const { rerender } = render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(interpretSpy).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+
+    expect(interpretSpy).toHaveBeenCalledTimes(1);
   });
 });

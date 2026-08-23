@@ -54,7 +54,12 @@
     "delete": "Delete",
     "symbols": "Symbols",
     "emotions": "Emotions",
-    "culturalReferences": "Cultural references"
+    "culturalReferences": "Cultural references",
+    "interpreting": "Interpreting your dream…",
+    "limitReachedTitle": "Monthly limit reached",
+    "limitReachedBody": "Your free interpretations reset on {{date}}.",
+    "paywallTitle": "Upgrade required",
+    "paywallBody": "Unlimited interpretations are available with a premium subscription."
   },
   "insights": {
     "title": "Insights",
@@ -91,9 +96,15 @@
   "log": {
     "title": "Tell your dream",
     "placeholder": "Tell your dream…",
-    "minLengthHint": "At least {{min}} characters to unlock interpretation.",
+    "minLengthRemaining": "{{count}} more character to unlock interpretation.",
+    "minLengthRemaining_other": "{{count}} more characters to unlock interpretation.",
     "saveError": "Could not save the dream.",
-    "recording": "Recording"
+    "recording": "Recording",
+    "micStart": "Start voice dictation",
+    "micStop": "Stop voice dictation",
+    "micUnavailable": "Voice dictation is not available on this device.",
+    "dateLabel": "Dream occurred",
+    "interpretCta": "Interpret this dream"
   },
   "states": {
     "emptyTitle": "Nothing here yet",

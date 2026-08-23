@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useServices } from '@services/useServices';
 import { colors, spacing } from '@theme/tokens';
 
@@ -28,6 +29,7 @@ const PREMIUM_FEATURES = [
 
 export default function PaywallScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { entitlement } = useServices();
   const [isPurchasing, setIsPurchasing] = useState(false);
 
@@ -42,7 +44,10 @@ export default function PaywallScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]}
+    >
       <Text style={styles.title}>Unlock Morpheo Premium</Text>
       <Text style={styles.subtitle}>Everything you need for deeper dream insights</Text>
 
