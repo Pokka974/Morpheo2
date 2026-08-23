@@ -8,7 +8,7 @@ const mockDeletedPaths: string[] = [];
 const mockDownloadedFiles: Array<{ url: string; path: string }> = [];
 let mockDirContents: string[] = [];
 
-jest.mock('expo-file-system', () => ({
+jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file://cache/',
   getInfoAsync: jest.fn(async (path: string, _opts?: { size?: boolean }) => {
     if (path.endsWith('morpheo/media/')) {

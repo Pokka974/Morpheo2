@@ -164,7 +164,6 @@ export default function JournalListScreen() {
               onPress={openDream}
             />
           )}
-          estimatedItemSize={140}
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={Separator}
           ListFooterComponent={displayEntries.length > 0 ? <WeeklyInsight /> : null}
