@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Switch, StyleSheet, Alert } from 'react-native';
+import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+
 import { useServices } from '@services/useServices';
 import { supabase } from '../../../supabase/client';
-import { colors, spacing } from '@theme/tokens';
+import { colors, radius, spacing, typography } from '@theme/tokens';
 
 export default function NotificationsScreen() {
+  const { t, i18n } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { notifications } = useServices();
   const [enabled, setEnabled] = useState(false);
   const [reminderTime, setReminderTime] = useState(new Date());
@@ -47,7 +52,10 @@ export default function NotificationsScreen() {
       const granted = await notifications.requestPermission();
       if (!granted) {
         setEnabled(false);
-        Alert.alert('Permission Required', 'Please enable notifications in your device settings.');
+        Alert.alert(
+          t('settingsNotifications.permissionDeniedTitle'),
+          t('settingsNotifications.permissionDeniedBody')
+        );
         return;
       }
       await notifications.scheduleReminder(reminderTime.getHours(), reminderTime.getMinutes());
@@ -82,33 +90,41 @@ export default function NotificationsScreen() {
       .eq('id', user.id);
     if (error) {
       console.error('Failed to save notification preferences:', error);
-      Alert.alert('Could Not Save', 'Your reminder settings were not saved. Please try again.');
+      Alert.alert(
+        t('settingsNotifications.saveErrorTitle'),
+        t('settingsNotifications.saveErrorBody')
+      );
     }
   };
 
-  const timeLabel = reminderTime.toLocaleTimeString(undefined, {
+  const timeLabel = reminderTime.toLocaleTimeString(i18n.language, {
     hour: '2-digit',
     minute: '2-digit',
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+      <Text style={styles.title}>{t('settingsNotifications.title')}</Text>
+
       <View style={styles.row}>
         <View style={styles.labelBlock}>
-          <Text style={styles.label}>Daily Dream Reminder</Text>
-          <Text style={styles.sublabel}>A gentle morning prompt to log your dreams</Text>
+          <Text style={styles.label}>{t('settingsNotifications.dailyReminderLabel')}</Text>
+          <Text style={styles.sublabel}>{t('settingsNotifications.dailyReminderSubtitle')}</Text>
         </View>
         <Switch
           value={enabled}
-          onValueChange={handleToggle}
-          trackColor={{ true: colors.accent }}
-          accessibilityLabel="Enable daily dream reminder"
+          onValueChange={value => {
+            void handleToggle(value);
+          }}
+          trackColor={{ false: colors.surfaceElevated, true: colors.accent }}
+          thumbColor={colors.textPrimary}
+          accessibilityLabel={t('settingsNotifications.dailyReminderA11y')}
         />
       </View>
 
       {enabled && (
         <View style={styles.row}>
-          <Text style={styles.label}>Reminder Time</Text>
+          <Text style={styles.label}>{t('settingsNotifications.reminderTimeLabel')}</Text>
           <Text style={styles.timeValue} onPress={() => setShowPicker(true)}>
             {timeLabel}
           </Text>
@@ -131,16 +147,21 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background, padding: spacing.md, gap: spacing.md },
+  title: { ...typography.screenTitle, fontSize: 22 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: radius.card,
     padding: spacing.md,
   },
   labelBlock: { flex: 1, gap: 2 },
-  label: { fontSize: 15, color: colors.textSecondary },
-  sublabel: { fontSize: 12, color: colors.textMuted },
-  timeValue: { fontSize: 15, color: colors.accent, fontWeight: '600' },
+  label: { ...typography.body, color: colors.textSecondary },
+  sublabel: { ...typography.meta },
+  timeValue: {
+    ...typography.body,
+    color: colors.accentText,
+    fontFamily: typography.cardTitle.fontFamily,
+  },
 });

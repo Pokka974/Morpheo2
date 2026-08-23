@@ -230,8 +230,8 @@ describe('DreamDetailScreen', () => {
     (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(INTERP_ROW);
     const { getByText } = renderScreen();
 
-    await waitFor(() => expect(getByText('Generate Dream Video')).toBeTruthy());
-    fireEvent.press(getByText('Generate Dream Video'));
+    await waitFor(() => expect(getByText('Generate a dream video')).toBeTruthy());
+    fireEvent.press(getByText('Generate a dream video'));
     expect(mockSubmitVideo).toHaveBeenCalledWith({
       dreamId: 'dream-1',
       description: DREAM_ROW.description,
@@ -244,8 +244,8 @@ describe('DreamDetailScreen', () => {
     mockVideoState = { status: 'premium_required' };
     const { getByText } = renderScreen();
 
-    await waitFor(() => expect(getByText('Upgrade to Generate Video')).toBeTruthy());
-    fireEvent.press(getByText('Upgrade to Generate Video'));
+    await waitFor(() => expect(getByText('Upgrade to generate video')).toBeTruthy());
+    fireEvent.press(getByText('Upgrade to generate video'));
     expect(mockPush).toHaveBeenCalledWith('/(main)/paywall');
   });
 });

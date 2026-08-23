@@ -190,7 +190,7 @@ describe('Video generation integration', () => {
       <VideoGenerationButton state={state} onSubmit={() => {}} onUpgrade={onUpgrade} />
     );
 
-    fireEvent.press(getByText(/Upgrade to Generate Video/));
+    fireEvent.press(getByText(/Upgrade to generate video/));
     expect(onUpgrade).toHaveBeenCalled();
   });
 
@@ -213,15 +213,15 @@ describe('Video generation integration', () => {
       <VideoGenerationButton state={{ status: 'idle' }} onSubmit={onSubmit} onUpgrade={() => {}} />
     );
 
-    fireEvent.press(getByText('Generate Dream Video'));
+    fireEvent.press(getByText('Generate a dream video'));
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
-  it('VideoGenerationButton submitting state shows a spinner and "Submitting..." text', () => {
+  it('VideoGenerationButton submitting state shows a spinner and "Submitting…" text', () => {
     const { getByText } = render(
       <VideoGenerationButton state={{ status: 'submitting' }} onSubmit={() => {}} onUpgrade={() => {}} />
     );
-    expect(getByText('Submitting...')).toBeTruthy();
+    expect(getByText('Submitting…')).toBeTruthy();
   });
 
   it('VideoGenerationButton complete state shows "Video ready!"', () => {
@@ -246,7 +246,7 @@ describe('Video generation integration', () => {
     );
 
     expect(getByText('Something broke')).toBeTruthy();
-    fireEvent.press(getByText('Retry'));
+    fireEvent.press(getByText('Try again'));
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 });

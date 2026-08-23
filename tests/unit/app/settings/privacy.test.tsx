@@ -33,9 +33,9 @@ describe('PrivacyScreen', () => {
     });
     const { getByText } = render(<PrivacyScreen />);
 
-    await waitFor(() => expect(getByText('Consent Granted')).toBeTruthy());
+    await waitFor(() => expect(getByText('Consent granted')).toBeTruthy());
     expect(getByText(/Granted \d/)).toBeTruthy();
-    expect(getByText('Withdraw Consent')).toBeTruthy();
+    expect(getByText('Withdraw consent')).toBeTruthy();
   });
 
   it('shows "Consent Withdrawn" and a Grant button when consent is false', async () => {
@@ -44,8 +44,8 @@ describe('PrivacyScreen', () => {
     });
     const { getByText } = render(<PrivacyScreen />);
 
-    await waitFor(() => expect(getByText('Consent Withdrawn')).toBeTruthy());
-    expect(getByText('Grant Consent')).toBeTruthy();
+    await waitFor(() => expect(getByText('Consent withdrawn')).toBeTruthy());
+    expect(getByText('Grant consent')).toBeTruthy();
   });
 
   it('with no profile data at all, renders without crashing and shows no date line', async () => {
@@ -53,7 +53,7 @@ describe('PrivacyScreen', () => {
     const { getByText, queryByText } = render(<PrivacyScreen />);
 
     await waitFor(() => expect(mockGetUser).toHaveBeenCalled());
-    expect(getByText('AI Data Consent')).toBeTruthy();
+    expect(getByText('AI data consent')).toBeTruthy();
     expect(queryByText(/Updated/)).toBeNull();
   });
 
@@ -62,7 +62,7 @@ describe('PrivacyScreen', () => {
     const { getByText } = render(<PrivacyScreen />);
 
     await waitFor(() => expect(mockGetUser).toHaveBeenCalled());
-    expect(getByText('AI Data Consent')).toBeTruthy();
+    expect(getByText('AI data consent')).toBeTruthy();
   });
 
   it('pressing "Withdraw Consent" updates profiles and inserts a consent_records row', async () => {
@@ -70,11 +70,11 @@ describe('PrivacyScreen', () => {
       data: { ai_consent_granted: true, ai_consent_granted_at: '2026-01-15T00:00:00.000Z' },
     });
     const { getByText } = render(<PrivacyScreen />);
-    await waitFor(() => expect(getByText('Withdraw Consent')).toBeTruthy());
+    await waitFor(() => expect(getByText('Withdraw consent')).toBeTruthy());
 
-    fireEvent.press(getByText('Withdraw Consent'));
+    fireEvent.press(getByText('Withdraw consent'));
 
-    await waitFor(() => expect(getByText('Consent Withdrawn')).toBeTruthy());
+    await waitFor(() => expect(getByText('Consent withdrawn')).toBeTruthy());
     expect(mockUpdateEq).toHaveBeenCalled();
     expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ action: 'revoked' }));
   });
@@ -84,11 +84,11 @@ describe('PrivacyScreen', () => {
       data: { ai_consent_granted: false, ai_consent_granted_at: null },
     });
     const { getByText } = render(<PrivacyScreen />);
-    await waitFor(() => expect(getByText('Grant Consent')).toBeTruthy());
+    await waitFor(() => expect(getByText('Grant consent')).toBeTruthy());
 
-    fireEvent.press(getByText('Grant Consent'));
+    fireEvent.press(getByText('Grant consent'));
 
-    await waitFor(() => expect(getByText('Consent Granted')).toBeTruthy());
+    await waitFor(() => expect(getByText('Consent granted')).toBeTruthy());
     expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ action: 'granted' }));
   });
 
@@ -98,12 +98,12 @@ describe('PrivacyScreen', () => {
     mockUpdateEq.mockReturnValue(new Promise(resolve => { resolveEq = resolve; }));
 
     const { getByText, queryByText, UNSAFE_getByType } = render(<PrivacyScreen />);
-    await waitFor(() => expect(getByText('Grant Consent')).toBeTruthy());
+    await waitFor(() => expect(getByText('Grant consent')).toBeTruthy());
 
-    fireEvent.press(getByText('Grant Consent'));
+    fireEvent.press(getByText('Grant consent'));
 
     await waitFor(() => {
-      expect(queryByText('Grant Consent')).toBeNull();
+      expect(queryByText('Grant consent')).toBeNull();
       expect(UNSAFE_getByType(require('react-native').ActivityIndicator)).toBeTruthy();
     });
 
@@ -116,12 +116,12 @@ describe('PrivacyScreen', () => {
   it('updateConsent guards against a missing user mid-flow (isSaving still resets via finally)', async () => {
     mockMaybeSingle.mockResolvedValue({ data: { ai_consent_granted: false, ai_consent_granted_at: null } });
     const { getByText } = render(<PrivacyScreen />);
-    await waitFor(() => expect(getByText('Grant Consent')).toBeTruthy());
+    await waitFor(() => expect(getByText('Grant consent')).toBeTruthy());
 
     mockGetUser.mockResolvedValueOnce({ data: { user: null } });
-    fireEvent.press(getByText('Grant Consent'));
+    fireEvent.press(getByText('Grant consent'));
 
-    await waitFor(() => expect(getByText('Grant Consent')).toBeTruthy());
+    await waitFor(() => expect(getByText('Grant consent')).toBeTruthy());
     expect(mockUpdateEq).not.toHaveBeenCalled();
   });
 });

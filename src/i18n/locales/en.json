@@ -109,5 +109,93 @@
     "logDreamButton": "Log a new dream",
     "emotionChip": "Emotion: {{label}}",
     "keywordChip": "Keyword: {{label}}"
+  },
+  "video": {
+    "generate": "Generate a dream video",
+    "submitting": "Submitting…",
+    "processingEstimate": "Generating your video (~{{minutes}} min)…",
+    "ready": "Video ready!",
+    "upgradeCta": "Upgrade to generate video"
+  },
+  "settings": {
+    "title": "Settings",
+    "sectionAccount": "Account",
+    "sectionPersonalization": "Personalization",
+    "sectionPrivacy": "Privacy",
+    "sectionApp": "App",
+    "subscriptionRow": "Subscription",
+    "manageSubscriptionRow": "Manage subscription",
+    "interpretationStyleRow": "Interpretation style",
+    "notificationsRow": "Notifications",
+    "aiConsentRow": "AI consent",
+    "exportDataRow": "Export my data",
+    "deleteAccountRow": "Delete account",
+    "aboutRow": "About Morpheo",
+    "clearCacheRow": "Clear cache",
+    "cacheUsed": "{{size}} used",
+    "tierFree": "Free",
+    "tierPremium": "Premium",
+    "clearCacheAlertTitle": "Clear cache",
+    "clearCacheAlertBody": "Remove all locally cached media?",
+    "clear": "Clear"
+  },
+  "settingsStyle": {
+    "title": "Interpretation style",
+    "subtitle": "Affects how your dreams are interpreted by the AI.",
+    "saving": "Saving…",
+    "symbolicLabel": "Symbolic / Archetypal",
+    "symbolicDesc": "Interprets dream symbols through universal archetypes and collective meaning.",
+    "mythologicalLabel": "Mythological / Cultural",
+    "mythologicalDesc": "Grounds symbols in world mythology, folklore, and cultural traditions.",
+    "psychologicalLabel": "Psychological / Jungian",
+    "psychologicalDesc": "Explores the unconscious through a Jungian psychological lens."
+  },
+  "settingsNotifications": {
+    "title": "Notifications",
+    "dailyReminderLabel": "Daily dream reminder",
+    "dailyReminderSubtitle": "A gentle morning prompt to log your dreams",
+    "dailyReminderA11y": "Enable daily dream reminder",
+    "reminderTimeLabel": "Reminder time",
+    "permissionDeniedTitle": "Permission required",
+    "permissionDeniedBody": "Please enable notifications in your device settings.",
+    "saveErrorTitle": "Could not save",
+    "saveErrorBody": "Your reminder settings were not saved. Please try again."
+  },
+  "settingsPrivacy": {
+    "title": "AI data consent",
+    "description": "Your dream descriptions are sent to an AI provider to generate interpretations. You can withdraw this consent at any time. Withdrawing consent will block future AI interpretations but will not affect existing ones.",
+    "statusLabel": "Current status",
+    "statusGranted": "Consent granted",
+    "statusWithdrawn": "Consent withdrawn",
+    "statusDate": "Granted {{date}}",
+    "loadError": "Could not load your consent status.",
+    "saveErrorTitle": "Could not save",
+    "saveErrorBody": "Your consent preference was not saved. Please try again.",
+    "withdraw": "Withdraw consent",
+    "grant": "Grant consent"
+  },
+  "settingsExport": {
+    "title": "Export my data",
+    "description1": "Export all your dreams and interpretations as a JSON file. We'll email you a download link when it's ready.",
+    "description2": "The export includes: all dream entries, all AI interpretations, and recurrence patterns. Generated media is not included.",
+    "cta": "Export my data",
+    "queuedTitle": "Export queued",
+    "queuedBody": "We'll email you when your data export is ready."
+  },
+  "settingsDeleteAccount": {
+    "title": "Delete account",
+    "warningTitle": "This cannot be undone",
+    "warningIntro": "Deleting your account will:",
+    "bullet1": "Permanently delete all your dream entries",
+    "bullet2": "Remove all AI interpretations and generated media",
+    "bullet3": "Cancel your premium subscription",
+    "bullet4": "All data is removed within 30 days",
+    "proceed": "I understand — proceed",
+    "confirmInstructionPrefix": "Type",
+    "confirmInstructionSuffix": "to confirm:",
+    "confirmAccessibilityLabel": "Type {{phrase}} to confirm",
+    "confirmDelete": "Confirm delete",
+    "doneTitle": "Account deletion scheduled",
+    "doneBody": "Your account has been signed out. Your data will be fully removed within 30 days."
   }
 }

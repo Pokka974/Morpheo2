@@ -109,5 +109,93 @@
     "logDreamButton": "Noter un nouveau rêve",
     "emotionChip": "Émotion : {{label}}",
     "keywordChip": "Mot-clé : {{label}}"
+  },
+  "video": {
+    "generate": "Générer une vidéo du rêve",
+    "submitting": "Envoi…",
+    "processingEstimate": "Génération de votre vidéo (~{{minutes}} min)…",
+    "ready": "Vidéo prête !",
+    "upgradeCta": "Passez à premium pour générer une vidéo"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "sectionAccount": "Compte",
+    "sectionPersonalization": "Personnalisation",
+    "sectionPrivacy": "Confidentialité",
+    "sectionApp": "Application",
+    "subscriptionRow": "Abonnement",
+    "manageSubscriptionRow": "Gérer l'abonnement",
+    "interpretationStyleRow": "Style d'interprétation",
+    "notificationsRow": "Notifications",
+    "aiConsentRow": "Consentement IA",
+    "exportDataRow": "Exporter mes données",
+    "deleteAccountRow": "Supprimer le compte",
+    "aboutRow": "À propos de Morpheo",
+    "clearCacheRow": "Vider le cache",
+    "cacheUsed": "{{size}} utilisés",
+    "tierFree": "Gratuit",
+    "tierPremium": "Premium",
+    "clearCacheAlertTitle": "Vider le cache",
+    "clearCacheAlertBody": "Supprimer tous les médias mis en cache localement ?",
+    "clear": "Vider"
+  },
+  "settingsStyle": {
+    "title": "Style d'interprétation",
+    "subtitle": "Détermine comment vos rêves sont interprétés par l'IA.",
+    "saving": "Enregistrement…",
+    "symbolicLabel": "Symbolic / Archetypal",
+    "symbolicDesc": "Interprète les symboles du rêve à travers les archétypes universels et le sens collectif.",
+    "mythologicalLabel": "Mythological / Cultural",
+    "mythologicalDesc": "Ancre les symboles dans la mythologie, le folklore et les traditions culturelles du monde.",
+    "psychologicalLabel": "Psychological / Jungian",
+    "psychologicalDesc": "Explore l'inconscient à travers une lecture jungienne."
+  },
+  "settingsNotifications": {
+    "title": "Notifications",
+    "dailyReminderLabel": "Rappel quotidien",
+    "dailyReminderSubtitle": "Une invitation matinale douce à noter vos rêves",
+    "dailyReminderA11y": "Activer le rappel quotidien",
+    "reminderTimeLabel": "Heure du rappel",
+    "permissionDeniedTitle": "Autorisation requise",
+    "permissionDeniedBody": "Veuillez activer les notifications dans les réglages de votre appareil.",
+    "saveErrorTitle": "Échec de l'enregistrement",
+    "saveErrorBody": "Vos réglages de rappel n'ont pas été enregistrés. Veuillez réessayer."
+  },
+  "settingsPrivacy": {
+    "title": "Consentement IA",
+    "description": "Vos descriptions de rêves sont envoyées à un fournisseur d'IA pour générer les interprétations. Vous pouvez retirer ce consentement à tout moment. Le retrait bloque les futures interprétations mais n'affecte pas celles déjà générées.",
+    "statusLabel": "Statut actuel",
+    "statusGranted": "Consentement accordé",
+    "statusWithdrawn": "Consentement retiré",
+    "statusDate": "Accordé le {{date}}",
+    "loadError": "Impossible de charger votre statut de consentement.",
+    "saveErrorTitle": "Échec de l'enregistrement",
+    "saveErrorBody": "Votre préférence de consentement n'a pas été enregistrée. Veuillez réessayer.",
+    "withdraw": "Retirer le consentement",
+    "grant": "Accorder le consentement"
+  },
+  "settingsExport": {
+    "title": "Exporter mes données",
+    "description1": "Exportez tous vos rêves et interprétations sous forme de fichier JSON. Nous vous enverrons un lien de téléchargement par e-mail dès qu'il sera prêt.",
+    "description2": "L'export inclut : toutes les entrées de rêve, toutes les interprétations IA, et les motifs récurrents. Les médias générés ne sont pas inclus.",
+    "cta": "Exporter mes données",
+    "queuedTitle": "Export en attente",
+    "queuedBody": "Nous vous enverrons un e-mail dès que votre export sera prêt."
+  },
+  "settingsDeleteAccount": {
+    "title": "Supprimer le compte",
+    "warningTitle": "Cette action est irréversible",
+    "warningIntro": "Supprimer votre compte va :",
+    "bullet1": "Supprimer définitivement toutes vos entrées de rêve",
+    "bullet2": "Supprimer toutes les interprétations IA et les médias générés",
+    "bullet3": "Annuler votre abonnement premium",
+    "bullet4": "Toutes les données sont supprimées sous 30 jours",
+    "proceed": "Je comprends — continuer",
+    "confirmInstructionPrefix": "Tapez",
+    "confirmInstructionSuffix": "pour confirmer :",
+    "confirmAccessibilityLabel": "Tapez {{phrase}} pour confirmer",
+    "confirmDelete": "Confirmer la suppression",
+    "doneTitle": "Suppression du compte programmée",
+    "doneBody": "Vous avez été déconnecté. Vos données seront entièrement supprimées sous 30 jours."
   }
 }

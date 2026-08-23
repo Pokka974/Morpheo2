@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+
 import { supabase } from '../../../supabase/client';
-import { colors, spacing } from '@theme/tokens';
+import { Button } from '@shared/components/Button';
+import { CheckIcon } from '@shared/components/icons';
+import { colors, radius, spacing, typography } from '@theme/tokens';
 
 export default function ExportScreen() {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [isExporting, setIsExporting] = useState(false);
   const [exported, setExported] = useState(false);
 
@@ -20,40 +27,26 @@ export default function ExportScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Export My Data</Text>
-      <Text style={styles.description}>
-        Export all your dreams and interpretations as a JSON file. We&apos;ll email you a download
-        link when it&apos;s ready.
-      </Text>
-      <Text style={styles.description}>
-        The export includes: all dream entries, all AI interpretations, and recurrence patterns.
-        Generated media is not included.
-      </Text>
+    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+      <Text style={styles.title}>{t('settingsExport.title')}</Text>
+      <Text style={styles.description}>{t('settingsExport.description1')}</Text>
+      <Text style={styles.description}>{t('settingsExport.description2')}</Text>
 
       {exported ? (
         <View style={styles.successCard}>
-          <Text style={styles.successIcon}>✓</Text>
-          <Text style={styles.successTitle}>Export Queued</Text>
-          <Text style={styles.successText}>
-            We&apos;ll email you when your data export is ready.
-          </Text>
+          <CheckIcon />
+          <Text style={styles.successTitle}>{t('settingsExport.queuedTitle')}</Text>
+          <Text style={styles.successText}>{t('settingsExport.queuedBody')}</Text>
         </View>
       ) : (
-        <TouchableOpacity
-          style={[styles.exportButton, isExporting && styles.disabled]}
+        <Button
+          label={t('settingsExport.cta')}
           onPress={() => {
             void handleExport();
           }}
-          disabled={isExporting}
-          accessibilityRole="button"
-        >
-          {isExporting ? (
-            <ActivityIndicator color={colors.textPrimary} />
-          ) : (
-            <Text style={styles.exportText}>Export My Data</Text>
-          )}
-        </TouchableOpacity>
+          loading={isExporting}
+          fullWidth
+        />
       )}
     </View>
   );
@@ -61,24 +54,15 @@ export default function ExportScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background, padding: spacing.md, gap: spacing.md },
-  title: { fontSize: 18, color: colors.textPrimary, fontWeight: '700' },
-  description: { fontSize: 13, color: colors.textMuted, lineHeight: 20 },
-  exportButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 8,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  disabled: { opacity: 0.6 },
-  exportText: { color: colors.textPrimary, fontWeight: '600', fontSize: 15 },
+  title: { ...typography.screenTitle, fontSize: 22 },
+  description: { ...typography.meta, fontSize: 13, lineHeight: 20 },
   successCard: {
     backgroundColor: colors.successSurface,
-    borderRadius: 12,
+    borderRadius: radius.card,
     padding: spacing.lg,
     alignItems: 'center',
     gap: spacing.sm,
   },
-  successIcon: { fontSize: 32, color: colors.success },
-  successTitle: { fontSize: 16, color: colors.success, fontWeight: '700' },
-  successText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
+  successTitle: { ...typography.cardTitle, color: colors.success },
+  successText: { ...typography.meta, textAlign: 'center' },
 });

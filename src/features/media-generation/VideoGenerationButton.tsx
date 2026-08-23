@@ -1,26 +1,33 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { colors, spacing } from '@theme/tokens';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+
+import { Button } from '@shared/components/Button';
+import { colors, spacing, typography } from '@theme/tokens';
+
 interface VideoGenerationButtonProps {
   state: ReturnType<typeof import('./useVideoGeneration').useVideoGeneration>['state'];
   onSubmit: () => void;
   onUpgrade: () => void;
 }
 
+/**
+ * The video-generation control on the dream detail screen. One component covers all
+ * six states the job can be in, each rendered through the shared Button and token
+ * type scale rather than one-off styles.
+ */
 export function VideoGenerationButton({ state, onSubmit, onUpgrade }: VideoGenerationButtonProps) {
+  const { t } = useTranslation();
+
   if (state.status === 'idle') {
-    return (
-      <TouchableOpacity style={styles.button} onPress={onSubmit} accessibilityRole="button">
-        <Text style={styles.buttonText}>Generate Dream Video</Text>
-      </TouchableOpacity>
-    );
+    return <Button label={t('video.generate')} onPress={onSubmit} fullWidth />;
   }
 
   if (state.status === 'submitting') {
     return (
       <View style={styles.statusRow}>
         <ActivityIndicator color={colors.accent} size="small" />
-        <Text style={styles.statusText}>Submitting...</Text>
+        <Text style={styles.statusText}>{t('video.submitting')}</Text>
       </View>
     );
   }
@@ -30,7 +37,9 @@ export function VideoGenerationButton({ state, onSubmit, onUpgrade }: VideoGener
       <View style={styles.statusRow}>
         <ActivityIndicator color={colors.accent} size="small" />
         <Text style={styles.statusText}>
-          Generating video (~{Math.ceil(state.job.estimatedDurationSeconds / 60)} min)...
+          {t('video.processingEstimate', {
+            minutes: Math.ceil(state.job.estimatedDurationSeconds / 60),
+          })}
         </Text>
       </View>
     );
@@ -39,26 +48,22 @@ export function VideoGenerationButton({ state, onSubmit, onUpgrade }: VideoGener
   if (state.status === 'complete') {
     return (
       <View style={styles.statusRow}>
-        <Text style={styles.successText}>Video ready!</Text>
+        <Text style={styles.successText}>{t('video.ready')}</Text>
       </View>
     );
   }
 
   if (state.status === 'premium_required') {
     return (
-      <TouchableOpacity style={styles.upgradeButton} onPress={onUpgrade} accessibilityRole="button">
-        <Text style={styles.upgradeText}>Upgrade to Generate Video</Text>
-      </TouchableOpacity>
+      <Button label={t('video.upgradeCta')} variant="secondary" onPress={onUpgrade} fullWidth />
     );
   }
 
   if (state.status === 'failed') {
     return (
-      <View style={styles.statusRow}>
+      <View style={styles.failedRow}>
         <Text style={styles.errorText}>{state.message}</Text>
-        <TouchableOpacity onPress={onSubmit} accessibilityRole="button">
-          <Text style={styles.retryText}>Retry</Text>
-        </TouchableOpacity>
+        <Button label={t('common.retry')} variant="ghost" onPress={onSubmit} />
       </View>
     );
   }
@@ -67,50 +72,31 @@ export function VideoGenerationButton({ state, onSubmit, onUpgrade }: VideoGener
 }
 
 const styles = StyleSheet.create({
-  button: {
-    backgroundColor: colors.accent,
-    padding: spacing.md,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  upgradeButton: {
-    backgroundColor: colors.surfaceElevated,
-    padding: spacing.md,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  upgradeText: {
-    color: colors.accentText,
-    fontSize: 16,
-    fontWeight: '600',
-  },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    padding: spacing.sm,
+    paddingVertical: spacing.sm,
   },
   statusText: {
-    color: colors.textMuted,
+    ...typography.meta,
     fontSize: 14,
+    color: colors.textSecondary,
   },
   successText: {
-    color: colors.success,
+    ...typography.chip,
     fontSize: 14,
-    fontWeight: '600',
+    color: colors.success,
+  },
+  failedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   errorText: {
+    ...typography.meta,
+    fontSize: 14,
     color: colors.error,
-    fontSize: 14,
     flex: 1,
-  },
-  retryText: {
-    color: colors.accent,
-    fontSize: 14,
   },
 });
