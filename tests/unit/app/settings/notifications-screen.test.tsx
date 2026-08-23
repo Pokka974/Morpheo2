@@ -74,7 +74,7 @@ describe('NotificationsScreen', () => {
 
     await waitFor(() => expect(mockGetUser).toHaveBeenCalled());
     expect(getByLabelText('Enable daily dream reminder').props.value).toBe(false);
-    expect(queryByText('Reminder Time')).toBeNull();
+    expect(queryByText('Reminder time')).toBeNull();
   });
 
   it('loads with enabled=true but no saved reminder time: falls back to the default time and still shows the row', async () => {
@@ -86,7 +86,7 @@ describe('NotificationsScreen', () => {
     );
 
     await waitFor(() => expect(getByLabelText('Enable daily dream reminder').props.value).toBe(true));
-    expect(getByText('Reminder Time')).toBeTruthy();
+    expect(getByText('Reminder time')).toBeTruthy();
   });
 
   it('toggling on with permission granted schedules a reminder and persists the preference', async () => {
@@ -124,7 +124,7 @@ describe('NotificationsScreen', () => {
     });
 
     await waitFor(() => expect(alertSpy).toHaveBeenCalledWith(
-      'Permission Required',
+      'Permission required',
       expect.any(String)
     ));
     expect(scheduleSpy).not.toHaveBeenCalled();
@@ -159,7 +159,7 @@ describe('NotificationsScreen', () => {
         <NotificationsScreen />
       </ServicesProvider>
     );
-    await waitFor(() => expect(getByText('Reminder Time')).toBeTruthy());
+    await waitFor(() => expect(getByText('Reminder time')).toBeTruthy());
 
     expect(UNSAFE_queryByProps({ mode: 'time' })).toBeNull();
 
@@ -177,7 +177,7 @@ describe('NotificationsScreen', () => {
         <NotificationsScreen />
       </ServicesProvider>
     );
-    await waitFor(() => expect(getByText('Reminder Time')).toBeTruthy());
+    await waitFor(() => expect(getByText('Reminder time')).toBeTruthy());
     fireEvent.press(getByText(/\d{1,2}:\d{2}/));
 
     scheduleSpy.mockClear();
@@ -202,7 +202,7 @@ describe('NotificationsScreen', () => {
         <NotificationsScreen />
       </ServicesProvider>
     );
-    await waitFor(() => expect(getByText('Reminder Time')).toBeTruthy());
+    await waitFor(() => expect(getByText('Reminder time')).toBeTruthy());
     fireEvent.press(getByText(/\d{1,2}:\d{2}/));
 
     scheduleSpy.mockClear();

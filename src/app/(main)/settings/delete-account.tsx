@@ -1,22 +1,22 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { supabase } from '../../../supabase/client';
-import { colors, spacing } from '@theme/tokens';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
-// Exact confirmation string per contracts/api-endpoints.md (C1 fix)
+import { supabase } from '../../../supabase/client';
+import { Button } from '@shared/components/Button';
+import { TrashIcon, WarningIcon } from '@shared/components/icons';
+import { colors, radius, spacing, typography } from '@theme/tokens';
+
+// Exact confirmation string per contracts/api-endpoints.md (C1 fix). Never translated —
+// the Edge Function matches this literal string regardless of the device's language.
 const CONFIRMATION_PHRASE = 'DELETE MY ACCOUNT';
 
 export default function DeleteAccountScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState<1 | 2>(1);
   const [confirmationText, setConfirmationText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -40,51 +40,51 @@ export default function DeleteAccountScreen() {
 
   if (deleted) {
     return (
-      <View style={styles.doneContainer}>
-        <Text style={styles.doneIcon}>🗑</Text>
-        <Text style={styles.doneTitle}>Account Deletion Scheduled</Text>
-        <Text style={styles.doneText}>
-          Your account has been signed out. Your data will be fully removed within 30 days.
-        </Text>
+      <View style={[styles.doneContainer, { paddingTop: insets.top }]}>
+        <TrashIcon size={40} />
+        <Text style={styles.doneTitle}>{t('settingsDeleteAccount.doneTitle')}</Text>
+        <Text style={styles.doneText}>{t('settingsDeleteAccount.doneBody')}</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Delete Account</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.sm }]}
+    >
+      <Text style={styles.title}>{t('settingsDeleteAccount.title')}</Text>
 
       {step === 1 ? (
         <>
           <View style={styles.warningCard}>
-            <Text style={styles.warningTitle}>⚠️ This cannot be undone</Text>
-            <Text style={styles.warningText}>Deleting your account will:</Text>
-            <Text style={styles.bullet}>• Permanently delete all your dream entries</Text>
-            <Text style={styles.bullet}>• Remove all AI interpretations and generated media</Text>
-            <Text style={styles.bullet}>• Cancel your premium subscription</Text>
-            <Text style={styles.bullet}>• All data is removed within 30 days</Text>
+            <View style={styles.warningHeader}>
+              <WarningIcon size={20} />
+              <Text style={styles.warningTitle}>{t('settingsDeleteAccount.warningTitle')}</Text>
+            </View>
+            <Text style={styles.warningText}>{t('settingsDeleteAccount.warningIntro')}</Text>
+            <Text style={styles.bullet}>• {t('settingsDeleteAccount.bullet1')}</Text>
+            <Text style={styles.bullet}>• {t('settingsDeleteAccount.bullet2')}</Text>
+            <Text style={styles.bullet}>• {t('settingsDeleteAccount.bullet3')}</Text>
+            <Text style={styles.bullet}>• {t('settingsDeleteAccount.bullet4')}</Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.proceedButton}
+          <Button
+            label={t('settingsDeleteAccount.proceed')}
+            variant="secondary"
             onPress={() => setStep(2)}
-            accessibilityRole="button"
-          >
-            <Text style={styles.proceedText}>I Understand — Proceed</Text>
-          </TouchableOpacity>
+            style={styles.proceedButton}
+            fullWidth
+          />
 
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => router.back()}
-            accessibilityRole="button"
-          >
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
+          <Button label={t('common.cancel')} variant="ghost" onPress={() => router.back()} />
         </>
       ) : (
         <>
           <Text style={styles.confirmInstruction}>
-            Type <Text style={styles.phraseHighlight}>{CONFIRMATION_PHRASE}</Text> to confirm:
+            {t('settingsDeleteAccount.confirmInstructionPrefix')}{' '}
+            <Text style={styles.phraseHighlight}>{CONFIRMATION_PHRASE}</Text>{' '}
+            {t('settingsDeleteAccount.confirmInstructionSuffix')}
           </Text>
           <TextInput
             style={[styles.confirmInput, isConfirmed && styles.confirmInputValid]}
@@ -93,31 +93,23 @@ export default function DeleteAccountScreen() {
             placeholder={CONFIRMATION_PHRASE}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="characters"
-            accessibilityLabel="Type DELETE MY ACCOUNT to confirm"
+            accessibilityLabel={t('settingsDeleteAccount.confirmAccessibilityLabel', {
+              phrase: CONFIRMATION_PHRASE,
+            })}
           />
 
-          <TouchableOpacity
-            style={[styles.deleteButton, !isConfirmed && styles.deleteButtonDisabled]}
+          <Button
+            label={t('settingsDeleteAccount.confirmDelete')}
             onPress={() => {
               void handleConfirmDelete();
             }}
-            disabled={!isConfirmed || isDeleting}
-            accessibilityRole="button"
-          >
-            {isDeleting ? (
-              <ActivityIndicator color={colors.textPrimary} />
-            ) : (
-              <Text style={styles.deleteText}>Confirm Delete</Text>
-            )}
-          </TouchableOpacity>
+            disabled={!isConfirmed}
+            loading={isDeleting}
+            style={styles.deleteButton}
+            fullWidth
+          />
 
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => setStep(1)}
-            accessibilityRole="button"
-          >
-            <Text style={styles.cancelText}>Back</Text>
-          </TouchableOpacity>
+          <Button label={t('common.back')} variant="ghost" onPress={() => setStep(1)} />
         </>
       )}
     </ScrollView>
@@ -127,33 +119,35 @@ export default function DeleteAccountScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xxl },
-  title: { fontSize: 20, color: colors.textPrimary, fontWeight: '700' },
+  title: { ...typography.screenTitle },
   warningCard: {
     backgroundColor: colors.destructiveSurface,
-    borderRadius: 12,
+    borderRadius: radius.card,
     padding: spacing.md,
     gap: spacing.sm,
   },
-  warningTitle: { fontSize: 16, color: colors.error, fontWeight: '700' },
-  warningText: { fontSize: 13, color: colors.textMuted },
-  bullet: { fontSize: 13, color: colors.textMuted, marginLeft: spacing.sm },
+  warningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  warningTitle: { ...typography.cardTitle, fontSize: 16, color: colors.error },
+  warningText: { ...typography.meta, fontSize: 13 },
+  bullet: { ...typography.meta, fontSize: 13, marginLeft: spacing.sm },
   proceedButton: {
     backgroundColor: colors.destructiveSurfaceStrong,
-    borderWidth: 1,
     borderColor: colors.error,
-    borderRadius: 8,
-    padding: spacing.md,
-    alignItems: 'center',
   },
-  proceedText: { color: colors.error, fontWeight: '600' },
-  cancelButton: { alignItems: 'center', padding: spacing.sm },
-  cancelText: { color: colors.textMuted, fontSize: 14 },
-  confirmInstruction: { fontSize: 14, color: colors.textMuted },
-  phraseHighlight: { color: colors.error, fontWeight: '700', fontFamily: 'monospace' },
+  confirmInstruction: { ...typography.meta, fontSize: 14 },
+  phraseHighlight: {
+    color: colors.error,
+    fontFamily: 'monospace',
+    fontWeight: '700',
+  },
   confirmInput: {
     backgroundColor: colors.surface,
     color: colors.textPrimary,
-    borderRadius: 8,
+    borderRadius: radius.button,
     padding: spacing.md,
     fontSize: 14,
     borderWidth: 2,
@@ -163,12 +157,7 @@ const styles = StyleSheet.create({
   confirmInputValid: { borderColor: colors.error },
   deleteButton: {
     backgroundColor: colors.error,
-    borderRadius: 8,
-    padding: spacing.md,
-    alignItems: 'center',
   },
-  deleteButtonDisabled: { opacity: 0.4 },
-  deleteText: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
   doneContainer: {
     flex: 1,
     backgroundColor: colors.background,
@@ -177,7 +166,6 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.md,
   },
-  doneIcon: { fontSize: 48 },
-  doneTitle: { fontSize: 20, color: colors.textPrimary, fontWeight: '700', textAlign: 'center' },
-  doneText: { fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 22 },
+  doneTitle: { ...typography.screenTitle, fontSize: 20, textAlign: 'center' },
+  doneText: { ...typography.meta, fontSize: 14, textAlign: 'center', lineHeight: 22 },
 });

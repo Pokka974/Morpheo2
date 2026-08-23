@@ -1,36 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+
 import { useServices } from '@services/useServices';
 import type { Entitlement } from '@services/entitlement/EntitlementService';
-import { colors, spacing } from '@theme/tokens';
+import { SettingsRow, SettingsSection } from '@shared/components/SettingsRow';
+import { colors, spacing, typography } from '@theme/tokens';
 
-function SettingsRow({
-  label,
-  onPress,
-  value,
-  destructive,
-}: {
-  label: string;
-  onPress: () => void;
-  value?: string;
-  destructive?: boolean;
-}) {
-  return (
-    <TouchableOpacity style={styles.row} onPress={onPress} accessibilityRole="button">
-      <Text style={[styles.rowLabel, destructive && styles.rowLabelDestructive]}>{label}</Text>
-      {value && <Text style={styles.rowValue}>{value}</Text>}
-      <Text style={styles.chevron}>›</Text>
-    </TouchableOpacity>
-  );
-}
-
-function SectionHeader({ title }: { title: string }) {
-  return <Text style={styles.sectionHeader}>{title}</Text>;
-}
+const APP_VERSION = 'v1.0.0';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { storage, entitlement } = useServices();
   const [cacheSize, setCacheSize] = useState<number>(0);
   const [entitlementData, setEntitlementData] = useState<Entitlement | null>(null);
@@ -51,10 +35,10 @@ export default function SettingsScreen() {
   }, [storage, entitlement]);
 
   const handleClearCache = () => {
-    Alert.alert('Clear Cache', 'Remove all locally cached media?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('settings.clearCacheAlertTitle'), t('settings.clearCacheAlertBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Clear',
+        text: t('settings.clear'),
         onPress: () => {
           void (async () => {
             await storage.clearCache();
@@ -71,87 +55,83 @@ export default function SettingsScreen() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const tierLabel =
+    entitlementData?.subscriptionTier === 'premium'
+      ? t('settings.tierPremium')
+      : t('settings.tierFree');
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <SectionHeader title="Account" />
-      <View style={styles.section}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.sm }]}
+    >
+      <Text style={styles.title}>{t('settings.title')}</Text>
+
+      <SettingsSection title={t('settings.sectionAccount')}>
         <SettingsRow
-          label="Subscription"
-          value={entitlementData?.subscriptionTier === 'premium' ? 'Premium' : 'Free'}
+          label={t('settings.subscriptionRow')}
+          value={tierLabel}
           onPress={() => {
             void entitlement.manageSubscription();
           }}
         />
-        <SettingsRow label="Manage Subscription" onPress={() => router.push('/(main)/paywall')} />
-      </View>
-
-      <SectionHeader title="Personalization" />
-      <View style={styles.section}>
         <SettingsRow
-          label="Interpretation Style"
+          label={t('settings.manageSubscriptionRow')}
+          onPress={() => router.push('/(main)/paywall')}
+        />
+      </SettingsSection>
+
+      <SettingsSection title={t('settings.sectionPersonalization')}>
+        <SettingsRow
+          label={t('settings.interpretationStyleRow')}
           onPress={() => router.push('/(main)/settings/style')}
         />
         <SettingsRow
-          label="Notifications"
+          label={t('settings.notificationsRow')}
           onPress={() => router.push('/(main)/settings/notifications')}
         />
-      </View>
+      </SettingsSection>
 
-      <SectionHeader title="Privacy" />
-      <View style={styles.section}>
-        <SettingsRow label="AI Consent" onPress={() => router.push('/(main)/settings/privacy')} />
+      <SettingsSection title={t('settings.sectionPrivacy')}>
         <SettingsRow
-          label="Export My Data"
+          label={t('settings.aiConsentRow')}
+          onPress={() => router.push('/(main)/settings/privacy')}
+        />
+        <SettingsRow
+          label={t('settings.exportDataRow')}
           onPress={() => router.push('/(main)/settings/export')}
         />
         <SettingsRow
-          label="Delete Account"
+          label={t('settings.deleteAccountRow')}
           onPress={() => router.push('/(main)/settings/delete-account')}
           destructive
         />
-      </View>
+      </SettingsSection>
 
-      <SectionHeader title="App" />
-      <View style={styles.section}>
-        <SettingsRow label="About Morpheo" onPress={() => {}} value="v1.0.0" />
+      <SettingsSection title={t('settings.sectionApp')}>
+        <SettingsRow label={t('settings.aboutRow')} value={APP_VERSION} navigable={false} />
         <SettingsRow
-          label="Clear Cache"
-          value={`${formatBytes(cacheSize)} used`}
+          label={t('settings.clearCacheRow')}
+          value={t('settings.cacheUsed', { size: formatBytes(cacheSize) })}
           onPress={handleClearCache}
+          navigable={false}
         />
-      </View>
+      </SettingsSection>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { paddingBottom: spacing.xxl },
-  sectionHeader: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  content: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  title: {
+    ...typography.screenTitle,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xs,
-    textTransform: 'uppercase',
   },
-  section: {
-    backgroundColor: colors.surface,
-    marginHorizontal: spacing.md,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
-  },
-  rowLabel: { flex: 1, fontSize: 15, color: colors.textSecondary },
-  rowLabelDestructive: { color: colors.error },
-  rowValue: { fontSize: 14, color: colors.textMuted, marginRight: spacing.xs },
-  chevron: { color: colors.textMuted, fontSize: 18 },
 });

@@ -54,7 +54,9 @@ export function VideoGenerationButton({ state, onSubmit, onUpgrade }: VideoGener
   }
 
   if (state.status === 'premium_required') {
-    return <Button label={t('video.upgradeCta')} variant="secondary" onPress={onUpgrade} fullWidth />;
+    return (
+      <Button label={t('video.upgradeCta')} variant="secondary" onPress={onUpgrade} fullWidth />
+    );
   }
 
   if (state.status === 'failed') {

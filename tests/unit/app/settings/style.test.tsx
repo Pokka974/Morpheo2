@@ -1,15 +1,18 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { colors } from '@theme/tokens';
+
+type QueryResult = ReturnType<ReturnType<typeof render>['getByText']>;
 
 const mockGetUser = jest.fn();
-const mockSingle = jest.fn();
+const mockMaybeSingle = jest.fn();
 const mockUpdateEq = jest.fn();
 
 jest.mock('@services/../supabase/client', () => ({
   supabase: {
     auth: { getUser: (...args: unknown[]) => mockGetUser(...args) },
     from: jest.fn(() => ({
-      select: jest.fn(() => ({ eq: jest.fn(() => ({ single: mockSingle })) })),
+      select: jest.fn(() => ({ eq: jest.fn(() => ({ maybeSingle: mockMaybeSingle })) })),
       update: jest.fn(() => ({ eq: mockUpdateEq })),
     })),
   },
@@ -17,32 +20,32 @@ jest.mock('@services/../supabase/client', () => ({
 
 import StyleScreen from '@app/(main)/settings/style';
 
+/** The selected option is the only one styled in the primary text colour. */
+function expectSelected(node: QueryResult) {
+  expect(node.props.style).toEqual(
+    expect.arrayContaining([expect.objectContaining({ color: colors.textPrimary })])
+  );
+}
+
 describe('StyleScreen', () => {
   beforeEach(() => {
     mockGetUser.mockReset().mockResolvedValue({ data: { user: { id: 'user-1' } } });
-    mockSingle.mockReset().mockResolvedValue({ data: null });
-    mockUpdateEq.mockReset().mockResolvedValue({});
+    mockMaybeSingle.mockReset().mockResolvedValue({ data: null, error: null });
+    mockUpdateEq.mockReset().mockResolvedValue({ error: null });
   });
 
   it('defaults to Symbolic / Archetypal selected before load resolves / when no style is saved', async () => {
     const { getByText } = render(<StyleScreen />);
     await waitFor(() => expect(mockGetUser).toHaveBeenCalled());
 
-    expect(getByText('Symbolic / Archetypal').props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ fontWeight: '600' })])
-    );
+    expectSelected(getByText('Symbolic / Archetypal'));
   });
 
   it('reflects the loaded interpretation_style as selected', async () => {
-    mockSingle.mockResolvedValue({ data: { interpretation_style: 'mythological' } });
+    mockMaybeSingle.mockResolvedValue({ data: { interpretation_style: 'mythological' }, error: null });
     const { getByText } = render(<StyleScreen />);
 
-    await waitFor(() => {
-      const option = getByText('Mythological / Cultural');
-      expect(option.props.style).toEqual(
-        expect.arrayContaining([expect.objectContaining({ fontWeight: '600' })])
-      );
-    });
+    await waitFor(() => expectSelected(getByText('Mythological / Cultural')));
   });
 
   it('with no authenticated user, stays at the default without crashing', async () => {
@@ -50,8 +53,23 @@ describe('StyleScreen', () => {
     const { getByText } = render(<StyleScreen />);
 
     await waitFor(() => expect(mockGetUser).toHaveBeenCalled());
-    expect(getByText('Interpretation Style')).toBeTruthy();
-    expect(mockSingle).not.toHaveBeenCalled();
+    expect(getByText('Interpretation style')).toBeTruthy();
+    expect(mockMaybeSingle).not.toHaveBeenCalled();
+  });
+
+  it('logs and continues when the style query errors', async () => {
+    mockMaybeSingle.mockResolvedValue({ data: null, error: { message: 'boom' } });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { getByText } = render(<StyleScreen />);
+    await waitFor(() => expect(mockMaybeSingle).toHaveBeenCalled());
+
+    // Falls back to the default selection rather than crashing.
+    expectSelected(getByText('Symbolic / Archetypal'));
+    expect(errorSpy).toHaveBeenCalledWith('Failed to load interpretation style:', {
+      message: 'boom',
+    });
+    errorSpy.mockRestore();
   });
 
   it('pressing an option optimistically selects it and persists to profiles', async () => {
@@ -61,12 +79,10 @@ describe('StyleScreen', () => {
     fireEvent.press(getByText('Psychological / Jungian'));
 
     await waitFor(() => expect(mockUpdateEq).toHaveBeenCalled());
-    expect(getByText('Psychological / Jungian').props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ fontWeight: '600' })])
-    );
+    expectSelected(getByText('Psychological / Jungian'));
   });
 
-  it('shows a "Saving..." row while the update is in flight', async () => {
+  it('shows a "Saving…" row while the update is in flight', async () => {
     let resolveEq: (v: unknown) => void = () => {};
     mockUpdateEq.mockReturnValue(new Promise(resolve => { resolveEq = resolve; }));
 
@@ -75,10 +91,10 @@ describe('StyleScreen', () => {
 
     fireEvent.press(getByText('Mythological / Cultural'));
 
-    await waitFor(() => expect(queryByText('Saving...')).toBeTruthy());
+    await waitFor(() => expect(queryByText('Saving…')).toBeTruthy());
 
     await act(async () => {
-      resolveEq({});
+      resolveEq({ error: null });
       await Promise.resolve();
     });
   });
@@ -90,11 +106,7 @@ describe('StyleScreen', () => {
     mockGetUser.mockResolvedValueOnce({ data: { user: null } });
     fireEvent.press(getByText('Mythological / Cultural'));
 
-    await waitFor(() => {
-      expect(getByText('Mythological / Cultural').props.style).toEqual(
-        expect.arrayContaining([expect.objectContaining({ fontWeight: '600' })])
-      );
-    });
+    await waitFor(() => expectSelected(getByText('Mythological / Cultural')));
     expect(mockUpdateEq).not.toHaveBeenCalled();
   });
 });

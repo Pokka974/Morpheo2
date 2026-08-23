@@ -31,7 +31,7 @@ describe('DeleteAccountScreen', () => {
     expect(getByText('This cannot be undone', { exact: false })).toBeTruthy();
     expect(queryByLabelText('Type DELETE MY ACCOUNT to confirm')).toBeNull();
 
-    fireEvent.press(getByText('I Understand — Proceed'));
+    fireEvent.press(getByText('I understand — proceed'));
 
     expect(getByText('Type DELETE MY ACCOUNT to confirm', { exact: false })).toBeTruthy();
   });
@@ -44,33 +44,33 @@ describe('DeleteAccountScreen', () => {
 
   it('step 2: Confirm Delete is disabled until the exact phrase is typed (case-sensitive)', async () => {
     const { getByText, getByLabelText } = render(<DeleteAccountScreen />);
-    fireEvent.press(getByText('I Understand — Proceed'));
+    fireEvent.press(getByText('I understand — proceed'));
 
     const input = getByLabelText('Type DELETE MY ACCOUNT to confirm');
 
     fireEvent.changeText(input, 'delete my account');
-    fireEvent.press(getByText('Confirm Delete'));
+    fireEvent.press(getByText('Confirm delete'));
     expect(mockInvoke).not.toHaveBeenCalled();
 
     fireEvent.changeText(input, 'DELETE MY ACCOUNT');
-    fireEvent.press(getByText('Confirm Delete'));
+    fireEvent.press(getByText('Confirm delete'));
 
     await waitFor(() => expect(mockInvoke).toHaveBeenCalledTimes(1));
   });
 
   it('step 2: confirming with the exact phrase invokes account-delete, signs out, and shows the success view', async () => {
     const { getByText, getByLabelText, queryByText } = render(<DeleteAccountScreen />);
-    fireEvent.press(getByText('I Understand — Proceed'));
+    fireEvent.press(getByText('I understand — proceed'));
     fireEvent.changeText(getByLabelText('Type DELETE MY ACCOUNT to confirm'), 'DELETE MY ACCOUNT');
-    fireEvent.press(getByText('Confirm Delete'));
+    fireEvent.press(getByText('Confirm delete'));
 
     await waitFor(() => expect(mockSignOut).toHaveBeenCalledTimes(1));
     expect(mockInvoke).toHaveBeenCalledWith('account-delete', {
       body: { confirmation: 'DELETE MY ACCOUNT' },
     });
 
-    await waitFor(() => expect(getByText('Account Deletion Scheduled')).toBeTruthy());
-    expect(queryByText('Confirm Delete')).toBeNull();
+    await waitFor(() => expect(getByText('Account deletion scheduled')).toBeTruthy());
+    expect(queryByText('Confirm delete')).toBeNull();
   });
 
   it('step 2: shows a spinner while deleting is in flight', async () => {
@@ -78,12 +78,12 @@ describe('DeleteAccountScreen', () => {
     mockInvoke.mockReturnValueOnce(new Promise(resolve => { resolveInvoke = resolve; }));
 
     const { getByText, getByLabelText, queryByText, UNSAFE_getByType } = render(<DeleteAccountScreen />);
-    fireEvent.press(getByText('I Understand — Proceed'));
+    fireEvent.press(getByText('I understand — proceed'));
     fireEvent.changeText(getByLabelText('Type DELETE MY ACCOUNT to confirm'), 'DELETE MY ACCOUNT');
-    fireEvent.press(getByText('Confirm Delete'));
+    fireEvent.press(getByText('Confirm delete'));
 
     await waitFor(() => {
-      expect(queryByText('Confirm Delete')).toBeNull();
+      expect(queryByText('Confirm delete')).toBeNull();
       expect(UNSAFE_getByType(require('react-native').ActivityIndicator)).toBeTruthy();
     });
 
@@ -95,7 +95,7 @@ describe('DeleteAccountScreen', () => {
 
   it('step 2: pressing Back returns to step 1', () => {
     const { getByText, queryByLabelText } = render(<DeleteAccountScreen />);
-    fireEvent.press(getByText('I Understand — Proceed'));
+    fireEvent.press(getByText('I understand — proceed'));
     fireEvent.press(getByText('Back'));
 
     expect(queryByLabelText('Type DELETE MY ACCOUNT to confirm')).toBeNull();

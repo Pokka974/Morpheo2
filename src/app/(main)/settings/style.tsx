@@ -1,40 +1,45 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+
 import { supabase } from '../../../supabase/client';
-import { colors, spacing } from '@theme/tokens';
+import { colors, radius, spacing, typography } from '@theme/tokens';
 
 type Style = 'symbolic' | 'mythological' | 'psychological';
 
-const STYLES: { value: Style; label: string; description: string }[] = [
-  {
-    value: 'symbolic',
-    label: 'Symbolic / Archetypal',
-    description: 'Interprets dream symbols through universal archetypes and collective meaning.',
+const STYLE_KEYS: Record<Style, { label: string; desc: string }> = {
+  symbolic: { label: 'settingsStyle.symbolicLabel', desc: 'settingsStyle.symbolicDesc' },
+  mythological: {
+    label: 'settingsStyle.mythologicalLabel',
+    desc: 'settingsStyle.mythologicalDesc',
   },
-  {
-    value: 'mythological',
-    label: 'Mythological / Cultural',
-    description: 'Grounds symbols in world mythology, folklore, and cultural traditions.',
+  psychological: {
+    label: 'settingsStyle.psychologicalLabel',
+    desc: 'settingsStyle.psychologicalDesc',
   },
-  {
-    value: 'psychological',
-    label: 'Psychological / Jungian',
-    description: 'Explores the unconscious through a Jungian psychological lens.',
-  },
-];
+};
+
+const STYLE_ORDER: Style[] = ['symbolic', 'mythological', 'psychological'];
 
 export default function StyleScreen() {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<Style>('symbolic');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     void supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('interpretation_style')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
+      if (error) {
+        console.error('Failed to load interpretation style:', error);
+        return;
+      }
       if (data?.interpretation_style) setSelected(data.interpretation_style as Style);
     });
   }, []);
@@ -47,7 +52,11 @@ export default function StyleScreen() {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        await supabase.from('profiles').update({ interpretation_style: style }).eq('id', user.id);
+        const { error } = await supabase
+          .from('profiles')
+          .update({ interpretation_style: style })
+          .eq('id', user.id);
+        if (error) console.error('Failed to save interpretation style:', error);
       }
     } finally {
       setIsSaving(false);
@@ -55,34 +64,37 @@ export default function StyleScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Interpretation Style</Text>
-      <Text style={styles.subtitle}>Affects how your dreams are interpreted by the AI.</Text>
+    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+      <Text style={styles.title}>{t('settingsStyle.title')}</Text>
+      <Text style={styles.subtitle}>{t('settingsStyle.subtitle')}</Text>
 
-      {STYLES.map(s => (
-        <TouchableOpacity
-          key={s.value}
-          style={[styles.option, selected === s.value && styles.optionSelected]}
-          onPress={() => {
-            void handleSelect(s.value);
-          }}
-          accessibilityRole="radio"
-          accessibilityState={{ selected: selected === s.value }}
-        >
-          <View style={styles.optionHeader}>
-            <View style={[styles.radio, selected === s.value && styles.radioSelected]} />
-            <Text style={[styles.optionLabel, selected === s.value && styles.optionLabelSelected]}>
-              {s.label}
-            </Text>
-          </View>
-          <Text style={styles.optionDesc}>{s.description}</Text>
-        </TouchableOpacity>
-      ))}
+      {STYLE_ORDER.map(value => {
+        const isSelected = selected === value;
+        return (
+          <Pressable
+            key={value}
+            style={[styles.option, isSelected && styles.optionSelected]}
+            onPress={() => {
+              void handleSelect(value);
+            }}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: isSelected }}
+          >
+            <View style={styles.optionHeader}>
+              <View style={[styles.radio, isSelected && styles.radioSelected]} />
+              <Text style={[styles.optionLabel, isSelected && styles.optionLabelSelected]}>
+                {t(STYLE_KEYS[value].label)}
+              </Text>
+            </View>
+            <Text style={styles.optionDesc}>{t(STYLE_KEYS[value].desc)}</Text>
+          </Pressable>
+        );
+      })}
 
       {isSaving && (
         <View style={styles.savingRow}>
           <ActivityIndicator size="small" color={colors.accent} />
-          <Text style={styles.savingText}>Saving...</Text>
+          <Text style={styles.savingText}>{t('settingsStyle.saving')}</Text>
         </View>
       )}
     </View>
@@ -91,11 +103,11 @@ export default function StyleScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background, padding: spacing.md, gap: spacing.md },
-  title: { fontSize: 18, color: colors.textPrimary, fontWeight: '700' },
-  subtitle: { fontSize: 13, color: colors.textMuted },
+  title: { ...typography.screenTitle, fontSize: 22 },
+  subtitle: { ...typography.meta },
   option: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: radius.card,
     padding: spacing.md,
     gap: spacing.xs,
     borderWidth: 2,
@@ -106,19 +118,19 @@ const styles = StyleSheet.create({
   radio: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: radius.full,
     borderWidth: 2,
     borderColor: colors.textMuted,
   },
   radioSelected: { borderColor: colors.accent, backgroundColor: colors.accent },
-  optionLabel: { fontSize: 15, color: colors.textSecondary, flex: 1 },
-  optionLabelSelected: { color: colors.textPrimary, fontWeight: '600' },
-  optionDesc: { fontSize: 12, color: colors.textMuted, marginLeft: 28 },
+  optionLabel: { ...typography.body, color: colors.textSecondary, flex: 1 },
+  optionLabelSelected: { color: colors.textPrimary, fontFamily: typography.cardTitle.fontFamily },
+  optionDesc: { ...typography.meta, marginLeft: 28 },
   savingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     justifyContent: 'center',
   },
-  savingText: { color: colors.textMuted, fontSize: 13 },
+  savingText: { ...typography.meta },
 });

@@ -168,7 +168,7 @@ supabase functions serve  # Serve Edge Functions locally
 | `src/theme/tokens.ts` | **Design tokens — the only place raw values live** |
 | `src/theme/useAppFonts.ts` | Manrope + Fraunces loading gate |
 | `src/i18n/locales/{en,fr}.json` | All user-facing copy |
-| `src/shared/components/` | Button, Chip, Card, TabBar, state components |
+| `src/shared/components/` | Button, Chip, Card, TabBar, SettingsRow/Section, icons, state components |
 | `src/features/recurrence/ConstellationChart.tsx` | Theme co-occurrence graph (react-native-svg) |
 | `src/features/recurrence/EmotionRibbon.tsx` | Night emotional arc (react-native-svg) |
 | `tests/unit/theme/contrast.test.ts` | WCAG AA gate on every token pairing |

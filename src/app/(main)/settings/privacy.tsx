@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+
 import { supabase } from '../../../supabase/client';
-import { colors, spacing } from '@theme/tokens';
+import { Button } from '@shared/components/Button';
+import { colors, radius, spacing, typography } from '@theme/tokens';
 
 interface ConsentState {
   granted: boolean;
@@ -9,6 +13,8 @@ interface ConsentState {
 }
 
 export default function PrivacyScreen() {
+  const { t, i18n } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [consent, setConsent] = useState<ConsentState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -29,7 +35,7 @@ export default function PrivacyScreen() {
       .maybeSingle();
     if (error) {
       console.error('Failed to load consent state:', error);
-      setLoadError('Could not load your consent status.');
+      setLoadError(t('settingsPrivacy.loadError'));
       return;
     }
     const row = data as {
@@ -63,7 +69,7 @@ export default function PrivacyScreen() {
         .eq('id', user.id);
       if (profileError) {
         console.error('Failed to update consent:', profileError);
-        Alert.alert('Could Not Save', 'Your consent preference was not saved. Please try again.');
+        Alert.alert(t('settingsPrivacy.saveErrorTitle'), t('settingsPrivacy.saveErrorBody'));
         return;
       }
       const { error: auditError } = await supabase.from('consent_records').insert({
@@ -82,28 +88,32 @@ export default function PrivacyScreen() {
     }
   };
 
-  const dateLabel = consent?.updatedAt ? new Date(consent.updatedAt).toLocaleDateString() : null;
+  const dateLabel = consent?.updatedAt
+    ? new Date(consent.updatedAt).toLocaleDateString(i18n.language)
+    : null;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>AI Data Consent</Text>
-      <Text style={styles.description}>
-        Your dream descriptions are sent to an AI provider to generate interpretations. You can
-        withdraw this consent at any time. Withdrawing consent will block future AI interpretations
-        but will not affect existing ones.
-      </Text>
+    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+      <Text style={styles.title}>{t('settingsPrivacy.title')}</Text>
+      <Text style={styles.description}>{t('settingsPrivacy.description')}</Text>
 
       <View style={styles.statusCard}>
-        <Text style={styles.statusLabel}>Current Status</Text>
+        <Text style={styles.statusLabel}>{t('settingsPrivacy.statusLabel')}</Text>
         <Text
           style={[
             styles.statusValue,
             consent?.granted ? styles.statusGranted : styles.statusWithdrawn,
           ]}
         >
-          {consent?.granted ? 'Consent Granted' : 'Consent Withdrawn'}
+          {consent?.granted
+            ? t('settingsPrivacy.statusGranted')
+            : t('settingsPrivacy.statusWithdrawn')}
         </Text>
-        {dateLabel && <Text style={styles.statusDate}>Granted {dateLabel}</Text>}
+        {dateLabel && (
+          <Text style={styles.statusDate}>
+            {t('settingsPrivacy.statusDate', { date: dateLabel })}
+          </Text>
+        )}
       </View>
 
       {loadError && <Text style={styles.loadError}>{loadError}</Text>}
@@ -111,25 +121,21 @@ export default function PrivacyScreen() {
       {isSaving ? (
         <ActivityIndicator color={colors.accent} />
       ) : consent?.granted ? (
-        <TouchableOpacity
-          style={styles.withdrawButton}
+        <Button
+          label={t('settingsPrivacy.withdraw')}
+          variant="secondary"
           onPress={() => {
             void updateConsent(false);
           }}
-          accessibilityRole="button"
-        >
-          <Text style={styles.withdrawText}>Withdraw Consent</Text>
-        </TouchableOpacity>
+          style={styles.withdrawButton}
+        />
       ) : (
-        <TouchableOpacity
-          style={styles.grantButton}
+        <Button
+          label={t('settingsPrivacy.grant')}
           onPress={() => {
             void updateConsent(true);
           }}
-          accessibilityRole="button"
-        >
-          <Text style={styles.grantText}>Grant Consent</Text>
-        </TouchableOpacity>
+        />
       )}
     </View>
   );
@@ -137,39 +143,23 @@ export default function PrivacyScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background, padding: spacing.md, gap: spacing.md },
-  title: { fontSize: 18, color: colors.textPrimary, fontWeight: '700' },
-  description: { fontSize: 13, color: colors.textMuted, lineHeight: 20 },
+  title: { ...typography.screenTitle, fontSize: 22 },
+  description: { ...typography.meta, fontSize: 13, lineHeight: 20 },
   statusCard: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: radius.card,
     padding: spacing.md,
     gap: spacing.xs,
   },
   statusLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    ...typography.overline,
   },
-  statusValue: { fontSize: 16, fontWeight: '700' },
+  statusValue: { ...typography.cardTitle, fontSize: 16 },
   statusGranted: { color: colors.success },
   statusWithdrawn: { color: colors.error },
-  statusDate: { fontSize: 12, color: colors.textMuted },
-  loadError: { fontSize: 13, color: colors.error, marginBottom: spacing.md },
+  statusDate: { ...typography.meta },
+  loadError: { ...typography.meta, color: colors.error, marginBottom: spacing.md },
   withdrawButton: {
-    backgroundColor: colors.destructiveSurface,
-    borderWidth: 1,
     borderColor: colors.error,
-    borderRadius: 8,
-    padding: spacing.md,
-    alignItems: 'center',
   },
-  withdrawText: { color: colors.error, fontWeight: '600' },
-  grantButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 8,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  grantText: { color: colors.textPrimary, fontWeight: '600' },
 });

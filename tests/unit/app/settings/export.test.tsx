@@ -18,42 +18,47 @@ describe('ExportScreen', () => {
 
   it('renders the title and description copy', () => {
     mockInvoke.mockResolvedValue({ data: null, error: null });
-    const { getAllByText, getByText, getByRole } = render(<ExportScreen />);
-    expect(getAllByText('Export My Data').length).toBeGreaterThan(0);
-    expect(getByRole('button', { name: 'Export My Data' })).toBeTruthy();
-    expect(getByText(/all your dreams and interpretations/i)).toBeTruthy();
+    const { getAllByText, getByRole } = render(<ExportScreen />);
+    expect(getAllByText('Export my data').length).toBeGreaterThan(0);
+    expect(getByRole('button', { name: 'Export my data' })).toBeTruthy();
+    expect(getAllByText(/all your dreams and interpretations/i).length).toBeGreaterThan(0);
   });
 
-  it('on success, invokes export-data and shows the "Export Queued" success card', async () => {
+  it('on success, invokes export-data and shows the "Export queued" success card', async () => {
     mockInvoke.mockResolvedValue({ data: null, error: null });
     const { getByText, getByRole, queryByRole } = render(<ExportScreen />);
 
-    fireEvent.press(getByRole('button', { name: 'Export My Data' }));
+    fireEvent.press(getByRole('button', { name: 'Export my data' }));
 
-    await waitFor(() => expect(getByText('Export Queued')).toBeTruthy());
+    await waitFor(() => expect(getByText('Export queued')).toBeTruthy());
     expect(mockInvoke).toHaveBeenCalledWith('export-data');
-    expect(queryByRole('button', { name: 'Export My Data' })).toBeNull();
+    // The button is replaced by the success card once the export is queued.
+    expect(queryByRole('button', { name: 'Export my data' })).toBeNull();
   });
 
-  it('on an error response, does not show the success card and the button reappears', async () => {
+  it('on an error response, does not show the success card and the button stays usable', async () => {
     mockInvoke.mockResolvedValue({ data: null, error: { message: 'boom' } });
     const { getByRole, queryByText } = render(<ExportScreen />);
 
-    fireEvent.press(getByRole('button', { name: 'Export My Data' }));
+    fireEvent.press(getByRole('button', { name: 'Export my data' }));
 
-    await waitFor(() => expect(queryByText('Export Queued')).toBeNull());
-    expect(getByRole('button', { name: 'Export My Data' })).toBeTruthy();
+    await waitFor(() => expect(queryByText('Export queued')).toBeNull());
+    const button = getByRole('button', { name: 'Export my data' });
+    expect(button).toBeTruthy();
+    expect(button.props.accessibilityState?.disabled).toBeFalsy();
   });
 
-  it('shows a spinner and disables the button while exporting is in flight', async () => {
+  it('shows a spinner and marks the button busy/disabled while exporting is in flight', async () => {
     let resolveInvoke: (v: unknown) => void = () => {};
     mockInvoke.mockReturnValue(new Promise(resolve => { resolveInvoke = resolve; }));
 
-    const { getByRole, queryByRole, UNSAFE_getByType } = render(<ExportScreen />);
-    fireEvent.press(getByRole('button', { name: 'Export My Data' }));
+    const { getByRole, UNSAFE_getByType } = render(<ExportScreen />);
+    const button = getByRole('button', { name: 'Export my data' });
+    fireEvent.press(button);
 
     await waitFor(() => {
-      expect(queryByRole('button', { name: 'Export My Data' })).toBeNull();
+      expect(button.props.accessibilityState?.busy).toBe(true);
+      expect(button.props.accessibilityState?.disabled).toBe(true);
       expect(UNSAFE_getByType(require('react-native').ActivityIndicator)).toBeTruthy();
     });
 

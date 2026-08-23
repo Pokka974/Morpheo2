@@ -94,7 +94,7 @@ describe('SettingsScreen', () => {
     );
     await waitFor(() => expect(getByText('Free')).toBeTruthy());
 
-    fireEvent.press(getByText('Manage Subscription'));
+    fireEvent.press(getByText('Manage subscription'));
     expect(mockPush).toHaveBeenCalledWith('/(main)/paywall');
   });
 
@@ -123,19 +123,19 @@ describe('SettingsScreen', () => {
     );
     await waitFor(() => expect(getByText('Free')).toBeTruthy());
 
-    fireEvent.press(getByText('Interpretation Style'));
+    fireEvent.press(getByText('Interpretation style'));
     expect(mockPush).toHaveBeenCalledWith('/(main)/settings/style');
 
     fireEvent.press(getByText('Notifications'));
     expect(mockPush).toHaveBeenCalledWith('/(main)/settings/notifications');
 
-    fireEvent.press(getByText('AI Consent'));
+    fireEvent.press(getByText('AI consent'));
     expect(mockPush).toHaveBeenCalledWith('/(main)/settings/privacy');
 
-    fireEvent.press(getByText('Export My Data'));
+    fireEvent.press(getByText('Export my data'));
     expect(mockPush).toHaveBeenCalledWith('/(main)/settings/export');
 
-    fireEvent.press(getByText('Delete Account'));
+    fireEvent.press(getByText('Delete account'));
     expect(mockPush).toHaveBeenCalledWith('/(main)/settings/delete-account');
   });
 
@@ -168,7 +168,7 @@ describe('SettingsScreen', () => {
 
     fireEvent.press(getByText('1.0 MB used'));
     expect(alertSpy).toHaveBeenCalledWith(
-      'Clear Cache',
+      'Clear cache',
       'Remove all locally cached media?',
       expect.any(Array)
     );
