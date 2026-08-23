@@ -1,22 +1,47 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+
 import { sqlite as db } from '@db/client';
 import { LoadingState } from '@shared/components/LoadingState';
 import { ErrorState } from '@shared/components/ErrorState';
 import { EmptyState } from '@shared/components/EmptyState';
+import { LockIcon } from '@shared/components/icons';
 import { InterpretationResultView } from '@features/interpretation/InterpretationResultView';
 import { ConsentPromptModal } from '@features/auth/ConsentPromptModal';
 import { useInterpretation } from '@features/interpretation/useInterpretation';
 import { useServices } from '@services/useServices';
 import { colors } from '@theme/tokens';
 
+/**
+ * Fires the interpretation request as soon as this screen mounts — no second
+ * "Interpret" button. The only manual action in this flow is the one press on the
+ * dream detail screen that navigated here; this screen exists to show loading,
+ * result, and failure states, not to ask the user to confirm the same thing twice.
+ */
 export default function InterpretationScreen() {
   const { dreamId, description } = useLocalSearchParams<{ dreamId: string; description: string }>();
+  const { t } = useTranslation();
   const { state, interpret, retry } = useInterpretation();
   const { entitlement } = useServices();
   const router = useRouter();
   const [showConsent, setShowConsent] = useState(false);
+  const firedRef = useRef(false);
+
+  const handleInterpret = () => {
+    void interpret({ dreamId, description, style: 'symbolic' });
+  };
+
+  // Runs exactly once on mount, deliberately: handleInterpret is recreated every
+  // render from the same dreamId/description route params, and firedRef guards
+  // against StrictMode's double-invoke, so an empty dependency array is correct here
+  // rather than a lint workaround.
+  useEffect(() => {
+    if (firedRef.current) return;
+    firedRef.current = true;
+    handleInterpret();
+  }, []);
 
   useEffect(() => {
     if (state.status === 'consent_required') setShowConsent(true);
@@ -54,50 +79,40 @@ export default function InterpretationScreen() {
       });
   }, [state, dreamId, router]);
 
-  const handleInterpret = () => {
-    void interpret({ dreamId, description, style: 'symbolic' });
-  };
-
   const handleRetry = () => {
     retry({ dreamId, description, style: 'symbolic' });
   };
 
   return (
     <View style={styles.container}>
-      {state.status === 'idle' ? (
-        <EmptyState
-          icon="🌙"
-          title="Ready to interpret"
-          subtitle="Tap below to receive an AI interpretation of this dream."
-          ctaLabel="Interpret Dream"
-          onCta={handleInterpret}
-        />
-      ) : state.status === 'loading' ? (
-        <LoadingState message="Interpreting your dream..." />
+      {state.status === 'idle' || state.status === 'loading' ? (
+        <LoadingState message={t('dream.interpreting')} />
       ) : state.status === 'success' || state.status === 'degraded' ? (
         <InterpretationResultView result={state.result} />
       ) : state.status === 'error' ? (
         <ErrorState
-          message="The interpretation service is temporarily unavailable."
+          message={t('dream.interpretationUnavailableBody')}
+          title={t('dream.interpretationUnavailableTitle')}
           onRetry={handleRetry}
-          retryLabel="Try Again"
         />
       ) : state.status === 'limit_exceeded' ? (
         <EmptyState
-          icon="🔒"
-          title="Monthly limit reached"
-          subtitle={`Your free interpretations reset on ${state.resetDate.toLocaleDateString()}.`}
-          ctaLabel="Upgrade to Premium"
+          icon={<LockIcon />}
+          title={t('dream.limitReachedTitle')}
+          subtitle={t('dream.limitReachedBody', {
+            date: state.resetDate.toLocaleDateString(),
+          })}
+          ctaLabel={t('insights.upgradeCta')}
           onCta={() => {
             void entitlement.purchasePremium();
           }}
         />
       ) : state.status === 'paywall' ? (
         <EmptyState
-          icon="⭐"
-          title="Upgrade required"
-          subtitle="Unlimited interpretations are available with a premium subscription."
-          ctaLabel="View Premium Plans"
+          icon={<LockIcon />}
+          title={t('dream.paywallTitle')}
+          subtitle={t('dream.paywallBody')}
+          ctaLabel={t('insights.upgradeCta')}
           onCta={() => {
             void entitlement.purchasePremium();
           }}

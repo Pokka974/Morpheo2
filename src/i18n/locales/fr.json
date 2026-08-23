@@ -54,7 +54,12 @@
     "delete": "Supprimer",
     "symbols": "Symboles",
     "emotions": "Émotions",
-    "culturalReferences": "Références culturelles"
+    "culturalReferences": "Références culturelles",
+    "interpreting": "Interprétation de votre rêve…",
+    "limitReachedTitle": "Limite mensuelle atteinte",
+    "limitReachedBody": "Vos interprétations gratuites se renouvellent le {{date}}.",
+    "paywallTitle": "Passage premium requis",
+    "paywallBody": "Les interprétations illimitées sont réservées à l’abonnement premium."
   },
   "insights": {
     "title": "Insights",
@@ -91,9 +96,15 @@
   "log": {
     "title": "Racontez votre rêve",
     "placeholder": "Racontez votre rêve…",
-    "minLengthHint": "Au moins {{min}} caractères pour débloquer l'interprétation.",
+    "minLengthRemaining": "{{count}} caractère de plus pour débloquer l’interprétation.",
+    "minLengthRemaining_other": "{{count}} caractères de plus pour débloquer l’interprétation.",
     "saveError": "Impossible d'enregistrer le rêve.",
-    "recording": "Enregistrement"
+    "recording": "Enregistrement",
+    "micStart": "Démarrer la dictée vocale",
+    "micStop": "Arrêter la dictée vocale",
+    "micUnavailable": "La dictée vocale n’est pas disponible sur cet appareil.",
+    "dateLabel": "Rêve survenu le",
+    "interpretCta": "Interpréter ce rêve"
   },
   "states": {
     "emptyTitle": "Rien pour l'instant",

@@ -1,22 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useTranslation } from 'react-i18next';
 import type Voice from '@react-native-voice/voice';
+
 import { Button } from '@shared/components/Button';
+import { MicIcon, StopIcon } from '@shared/components/icons';
 import { saveDream } from '@features/dream-log/dreamRepository';
 import { syncPendingDreams } from '@features/dream-log/syncService';
 import { useServices } from '@services/useServices';
-import { colors, fontSize, spacing } from '@theme/tokens';
+import { colors, glow, radius, spacing, typography } from '@theme/tokens';
 
 const MIN_DESCRIPTION = 20;
 
@@ -29,15 +33,34 @@ function generateId(): string {
   });
 }
 
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+type Busy = 'interpret' | 'draft' | null;
+
 export default function DreamLogScreen() {
   const router = useRouter();
+  const { t, i18n } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { auth } = useServices();
   const [description, setDescription] = useState('');
   const [occurredAt, setOccurredAt] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
+  const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (elapsedTimer.current) clearInterval(elapsedTimer.current);
+    };
+  }, []);
 
   const startVoice = async () => {
     try {
@@ -51,32 +74,73 @@ export default function DreamLogScreen() {
       };
       await VoiceModule.start('en-US');
       setIsListening(true);
+      setElapsed(0);
+      elapsedTimer.current = setInterval(() => setElapsed(s => s + 1), 1000);
     } catch {
-      setError('Voice dictation is not available on this device.');
+      setError(t('log.micUnavailable'));
     }
   };
 
   const stopVoice = async () => {
+    if (elapsedTimer.current) {
+      clearInterval(elapsedTimer.current);
+      elapsedTimer.current = null;
+    }
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const VoiceModule = (require('@react-native-voice/voice') as { default: typeof Voice })
         .default;
       await VoiceModule.stop();
-      setIsListening(false);
-    } catch {
+    } finally {
       setIsListening(false);
     }
   };
 
-  const handleSave = async () => {
-    setSaving(true);
+  const requireSession = async () => {
+    const session = await auth.getSession();
+    if (!session) {
+      router.replace('/(auth)/sign-in');
+      return null;
+    }
+    return session;
+  };
+
+  const handleInterpretNow = async () => {
+    if (!canInterpret) return;
+    setBusy('interpret');
     setError(null);
     try {
-      const session = await auth.getSession();
-      if (!session) {
-        router.replace('/(auth)/sign-in');
-        return;
-      }
+      const session = await requireSession();
+      if (!session) return;
+      const id = generateId();
+      const trimmed = description.trim();
+      await saveDream({
+        id,
+        userId: session.user.id,
+        description: trimmed,
+        occurredAt: occurredAt.toISOString().slice(0, 10),
+      });
+      // Awaited, unlike the draft path below: the interpret Edge Function inserts
+      // against a server-side FK on dreams.id, so the row must exist there — not
+      // just locally — before the interpretation screen fires its request.
+      await syncPendingDreams();
+      setDescription('');
+      router.push(
+        `/(main)/journal/${id}/interpretation?dreamId=${id}&description=${encodeURIComponent(trimmed)}`
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('log.saveError'));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    setBusy('draft');
+    setError(null);
+    try {
+      const session = await requireSession();
+      if (!session) return;
       await saveDream({
         id: generateId(),
         userId: session.user.id,
@@ -84,17 +148,16 @@ export default function DreamLogScreen() {
         occurredAt: occurredAt.toISOString().slice(0, 10),
       });
       setDescription('');
-      // Best-effort immediate sync so the dream exists server-side before the
-      // user requests an interpretation (interpretations.dream_id has an FK
-      // to dreams.id). Offline saves still queue via useSyncOnConnect.
+      // Best-effort — the offline-first sync queue drains this on next reconnect
+      // regardless, and a draft save shouldn't block on network.
       syncPendingDreams().catch((err: unknown) => {
         console.error('Immediate post-save sync failed; dream stays queued:', err);
       });
       router.navigate('/(main)/journal');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save dream.');
+      setError(e instanceof Error ? e.message : t('log.saveError'));
     } finally {
-      setSaving(false);
+      setBusy(null);
     }
   };
 
@@ -102,21 +165,32 @@ export default function DreamLogScreen() {
   const minDate = new Date();
   minDate.setFullYear(minDate.getFullYear() - 1);
 
-  const canInterpret = description.trim().length >= MIN_DESCRIPTION;
+  const trimmedLength = description.trim().length;
+  const canInterpret = trimmedLength >= MIN_DESCRIPTION;
+  const canSaveDraft = trimmedLength > 0;
+  const isBusy = busy !== null;
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Log a Dream</Text>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.lg }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.title}>{t('log.title')}</Text>
 
-        <TouchableOpacity style={styles.dateRow} onPress={() => setShowDatePicker(true)}>
+        <Pressable
+          style={styles.dateRow}
+          onPress={() => setShowDatePicker(true)}
+          accessibilityRole="button"
+        >
           <Text style={styles.dateLabel}>
-            Dream occurred: <Text style={styles.dateValue}>{occurredAt.toLocaleDateString()}</Text>
+            {t('log.dateLabel')}:{' '}
+            <Text style={styles.dateValue}>{occurredAt.toLocaleDateString(i18n.language)}</Text>
           </Text>
-        </TouchableOpacity>
+        </Pressable>
 
         {showDatePicker ? (
           <DateTimePicker
@@ -131,48 +205,79 @@ export default function DreamLogScreen() {
           />
         ) : null}
 
-        <View style={styles.textAreaContainer}>
-          <TextInput
-            style={styles.textArea}
-            placeholder="Describe your dream... (minimum 20 characters for interpretation)"
-            placeholderTextColor={colors.textMuted}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            textAlignVertical="top"
-            accessibilityLabel="Dream description"
-          />
-          <TouchableOpacity
-            style={[styles.micButton, isListening && styles.micButtonActive]}
-            onPress={() => {
-              void (isListening ? stopVoice() : startVoice());
-            }}
-            accessibilityLabel={isListening ? 'Stop voice dictation' : 'Start voice dictation'}
-          >
-            <Text style={styles.micIcon}>{isListening ? '⏹' : '🎤'}</Text>
-          </TouchableOpacity>
-        </View>
+        <TextInput
+          style={[styles.textArea, isFocused && styles.textAreaFocused]}
+          placeholder={t('log.placeholder')}
+          placeholderTextColor={colors.textMuted}
+          value={description}
+          onChangeText={setDescription}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          multiline
+          textAlignVertical="top"
+          accessibilityLabel="Dream description"
+        />
 
         {isListening ? (
-          <Text style={styles.listeningIndicator}>Listening... Tap ⏹ to stop</Text>
-        ) : null}
+          <View style={styles.recordingBar}>
+            <View style={styles.recordingDot} />
+            <Text style={styles.recordingLabel}>
+              {t('log.recording')} · {formatElapsed(elapsed)}
+            </Text>
+            <Pressable
+              onPress={() => {
+                void stopVoice();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={t('log.micStop')}
+              hitSlop={8}
+            >
+              <StopIcon />
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            style={styles.micRow}
+            onPress={() => {
+              void startVoice();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={t('log.micStart')}
+          >
+            <MicIcon size={18} />
+            <Text style={styles.micLabel}>{t('log.micStart')}</Text>
+          </Pressable>
+        )}
 
-        {!canInterpret && description.length > 0 ? (
+        {!canInterpret && trimmedLength > 0 ? (
           <Text style={styles.lengthHint}>
-            Add {MIN_DESCRIPTION - description.trim().length} more characters to enable
-            interpretation
+            {t('log.minLengthRemaining', { count: MIN_DESCRIPTION - trimmedLength })}
           </Text>
         ) : null}
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <Button
-          label={saving ? 'Saving...' : 'Save Dream'}
-          onPress={() => {
-            void handleSave();
-          }}
-          disabled={saving || !description.trim()}
-        />
+        <View style={styles.actions}>
+          <Button
+            label={t('log.interpretCta')}
+            onPress={() => {
+              void handleInterpretNow();
+            }}
+            disabled={!canInterpret || isBusy}
+            loading={busy === 'interpret'}
+            fullWidth
+          />
+          <Button
+            label={t('dream.saveDraft')}
+            variant="secondary"
+            onPress={() => {
+              void handleSaveDraft();
+            }}
+            disabled={!canSaveDraft || isBusy}
+            loading={busy === 'draft'}
+            fullWidth
+          />
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -184,70 +289,80 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scroll: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
+    paddingHorizontal: spacing.md,
     paddingBottom: spacing.xxl,
-    gap: spacing.lg,
+    gap: spacing.md,
   },
   title: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.textPrimary,
+    ...typography.screenTitle,
   },
   dateRow: {
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   dateLabel: {
-    fontSize: fontSize.md,
-    color: colors.textMuted,
+    ...typography.meta,
   },
   dateValue: {
+    ...typography.chip,
     color: colors.accentText,
-    fontWeight: '600',
-  },
-  textAreaContainer: {
-    position: 'relative',
   },
   textArea: {
     backgroundColor: colors.inputSurface,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xxl,
-    fontSize: fontSize.md,
-    color: colors.textPrimary,
-    borderWidth: 1,
-    borderColor: colors.borderElevated,
+    borderRadius: radius.card,
+    padding: spacing.md,
     minHeight: 200,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    ...typography.dreamBody,
+    fontSize: 16,
+    lineHeight: 26,
+    color: colors.textPrimary,
   },
-  micButton: {
-    position: 'absolute',
-    bottom: spacing.sm,
-    right: spacing.sm,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.borderElevated,
+  textAreaFocused: {
+    borderColor: colors.accent,
+    ...glow.soft,
+  },
+  micRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.sm,
+    alignSelf: 'flex-start',
+    paddingVertical: spacing.xs,
   },
-  micButtonActive: {
-    backgroundColor: colors.accent,
-  },
-  micIcon: {
-    fontSize: 20,
-  },
-  listeningIndicator: {
+  micLabel: {
+    ...typography.chip,
     color: colors.accentText,
-    fontSize: fontSize.sm,
-    textAlign: 'center',
+  },
+  recordingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 4,
+    padding: spacing.md,
+    borderRadius: radius.card,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.borderMystic,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: radius.full,
+    backgroundColor: colors.error,
+  },
+  recordingLabel: {
+    ...typography.body,
+    flex: 1,
+    color: colors.textSecondary,
   },
   lengthHint: {
-    color: colors.textMuted,
-    fontSize: fontSize.sm,
+    ...typography.meta,
   },
   errorText: {
+    ...typography.meta,
     color: colors.error,
-    fontSize: fontSize.sm,
+  },
+  actions: {
+    gap: spacing.sm,
+    marginTop: spacing.xs,
   },
 });
