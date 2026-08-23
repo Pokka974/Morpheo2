@@ -148,7 +148,12 @@
     "tierPremium": "Premium",
     "clearCacheAlertTitle": "Vider le cache",
     "clearCacheAlertBody": "Supprimer tous les médias mis en cache localement ?",
-    "clear": "Vider"
+    "clear": "Vider",
+    "sectionDeveloper": "Développeur",
+    "seedDreamsRow": "Ajouter des rêves d'exemple",
+    "seedDreamsSuccessTitle": "Rêves d'exemple ajoutés",
+    "seedDreamsSuccessBody": "{{count}} rêves ajoutés. Ouvrez Insights pour voir la constellation et le ruban d'émotions.",
+    "seedDreamsErrorTitle": "Impossible d'ajouter les rêves d'exemple"
   },
   "settingsStyle": {
     "title": "Style d'interprétation",

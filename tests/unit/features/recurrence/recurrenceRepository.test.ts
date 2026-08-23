@@ -1,4 +1,8 @@
-import { getTopRecurrences, getRecurrencesForDream } from '@features/recurrence/recurrenceRepository';
+import {
+  getTopRecurrences,
+  getRecurrencesForDream,
+  recordRecurrence,
+} from '@features/recurrence/recurrenceRepository';
 
 const mockExecuteSync = jest.fn();
 const mockPrepareSync = jest.fn().mockReturnValue({ executeSync: mockExecuteSync });
@@ -79,6 +83,74 @@ describe('recurrenceRepository', () => {
       const query = mockPrepareSync.mock.calls[0][0] as string;
       expect(query).toContain('occurrence_count > 1');
       expect(query).toContain('dream_ids LIKE ?');
+    });
+  });
+
+  describe('recordRecurrence', () => {
+    let selectResult: unknown[] = [];
+
+    beforeEach(() => {
+      selectResult = [];
+      mockPrepareSync.mockImplementation((sql: string) => ({
+        executeSync: (params: unknown[]) => {
+          mockExecuteSync(sql, params);
+          return sql.trim().startsWith('SELECT') ? selectResult : [];
+        },
+      }));
+    });
+
+    it('inserts a new row for a term that has not been seen before', async () => {
+      await recordRecurrence('user-1', 'dream-1', 'keyword', ['water'], '2026-08-20T00:00:00.000Z');
+
+      const insertCall = mockExecuteSync.mock.calls.find(([sql]) => (sql as string).includes('INSERT'));
+      expect(insertCall).toBeTruthy();
+      const params = insertCall![1] as unknown[];
+      expect(params).toEqual(
+        expect.arrayContaining([
+          'user-1',
+          'water',
+          'keyword',
+          JSON.stringify(['dream-1']),
+          '2026-08-20T00:00:00.000Z',
+        ])
+      );
+    });
+
+    it('normalizes term casing and surrounding whitespace before storing', async () => {
+      await recordRecurrence('user-1', 'dream-1', 'keyword', ['  Water  ']);
+
+      const insertCall = mockExecuteSync.mock.calls.find(([sql]) => (sql as string).includes('INSERT'));
+      expect(insertCall![1]).toContain('water');
+    });
+
+    it('skips blank or whitespace-only terms without touching the database', async () => {
+      await recordRecurrence('user-1', 'dream-1', 'keyword', ['   ', '']);
+
+      expect(mockPrepareSync).not.toHaveBeenCalled();
+    });
+
+    it('increments occurrence_count and appends the dreamId when the term exists but this dream is new to it', async () => {
+      selectResult = [{ id: 'rp-1', occurrence_count: 2, dream_ids: JSON.stringify(['dream-0']) }];
+
+      await recordRecurrence('user-1', 'dream-1', 'keyword', ['water'], '2026-08-20T00:00:00.000Z');
+
+      const updateCall = mockExecuteSync.mock.calls.find(
+        ([sql]) => (sql as string).includes('UPDATE') && (sql as string).includes('occurrence_count = ?')
+      );
+      expect(updateCall![1]).toEqual([3, JSON.stringify(['dream-0', 'dream-1']), '2026-08-20T00:00:00.000Z', 'rp-1']);
+    });
+
+    it('does not double-count when the dream was already recorded for this term (idempotent re-interpretation)', async () => {
+      selectResult = [{ id: 'rp-1', occurrence_count: 2, dream_ids: JSON.stringify(['dream-1']) }];
+
+      await recordRecurrence('user-1', 'dream-1', 'keyword', ['water']);
+
+      const insertCall = mockExecuteSync.mock.calls.find(([sql]) => (sql as string).includes('INSERT'));
+      expect(insertCall).toBeUndefined();
+      const countingUpdate = mockExecuteSync.mock.calls.find(
+        ([sql]) => (sql as string).includes('occurrence_count = ?')
+      );
+      expect(countingUpdate).toBeUndefined();
     });
   });
 });

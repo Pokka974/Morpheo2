@@ -16,6 +16,14 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: (...args: unknown[]) => mockPush(...args), back: jest.fn(), replace: jest.fn() }),
 }));
 
+// seedSampleDreams transitively imports syncPendingDreams -> the real Supabase client,
+// which throws at import time without EXPO_PUBLIC_SUPABASE_URL/ANON_KEY. This suite
+// doesn't exercise dev-seeding, so keep it out of the module graph entirely.
+const mockSeedSampleDreams = jest.fn().mockResolvedValue({ count: 6 });
+jest.mock('@features/dev/seedSampleDreams', () => ({
+  seedSampleDreams: (...args: unknown[]) => mockSeedSampleDreams(...args),
+}));
+
 let alertSpy: jest.SpyInstance;
 
 function buildRegistry(overrides: Partial<ServiceRegistry> = {}): ServiceRegistry {
@@ -196,6 +204,24 @@ describe('SettingsScreen', () => {
 
     await waitFor(() => expect(getByText('Free')).toBeTruthy());
     expect(getByText('0.0 KB used')).toBeTruthy();
+  });
+
+  it('shows a Developer section (this test build always runs with __DEV__ true) and seeds sample dreams on press', async () => {
+    const registry = buildRegistry();
+    const { getByText } = render(
+      <ServicesProvider services={registry}>
+        <SettingsScreen />
+      </ServicesProvider>
+    );
+    await waitFor(() => expect(getByText('Free')).toBeTruthy());
+
+    fireEvent.press(getByText('Seed sample dreams'));
+
+    await waitFor(() => expect(mockSeedSampleDreams).toHaveBeenCalledWith('mock-user-id'));
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Sample dreams added',
+      '6 dreams added. Open Insights to see the constellation and emotion ribbon.'
+    );
   });
 
   it('does not crash when entitlement.fetchEntitlement() rejects (covers the catch branch)', async () => {

@@ -62,11 +62,24 @@ sqlite.execSync(`
     symbol TEXT NOT NULL,
     pattern_type TEXT NOT NULL CHECK(pattern_type IN ('keyword','emotion','cultural_reference')),
     occurrence_count INTEGER NOT NULL DEFAULT 0,
+    dream_ids TEXT NOT NULL DEFAULT '[]',
     first_seen_at TEXT NOT NULL,
     last_seen_at TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+
+// `CREATE TABLE IF NOT EXISTS` above is a no-op on a device that already has this table
+// from before dream_ids existed — add it explicitly so recurrenceRepository's queries
+// (which select dream_ids) don't fail with "no such column" on already-installed apps.
+const recurrencePatternsColumns = sqlite.getAllSync<{ name: string }>(
+  `PRAGMA table_info(recurrence_patterns);`
+);
+if (!recurrencePatternsColumns.some(col => col.name === 'dream_ids')) {
+  sqlite.execSync(
+    `ALTER TABLE recurrence_patterns ADD COLUMN dream_ids TEXT NOT NULL DEFAULT '[]';`
+  );
+}
 
 sqlite.execSync(`
   CREATE INDEX IF NOT EXISTS idx_dreams_user_id ON dreams(user_id);
