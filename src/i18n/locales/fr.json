@@ -109,5 +109,12 @@
     "logDreamButton": "Noter un nouveau rêve",
     "emotionChip": "Émotion : {{label}}",
     "keywordChip": "Mot-clé : {{label}}"
+  },
+  "video": {
+    "generate": "Générer une vidéo du rêve",
+    "submitting": "Envoi…",
+    "processingEstimate": "Génération de votre vidéo (~{{minutes}} min)…",
+    "ready": "Vidéo prête !",
+    "upgradeCta": "Passez à premium pour générer une vidéo"
   }
 }

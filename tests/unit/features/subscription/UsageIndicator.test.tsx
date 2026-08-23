@@ -38,7 +38,28 @@ describe('UsageIndicator', () => {
     expect(toJSON()).toBeNull();
   });
 
-  it('renders the usage summary for a free subscriber', async () => {
+  it('renders the remaining-interpretations count for a free subscriber', async () => {
+    const entitlement = new MockEntitlementService().configure('free');
+    const { getByText } = render(
+      <ServicesProvider services={buildRegistry(entitlement)}>
+        <UsageIndicator />
+      </ServicesProvider>
+    );
+    // 0 used of 5 -> 5 remaining.
+    await waitFor(() => expect(getByText('5 interpretations left this month')).toBeTruthy());
+  });
+
+  it('shows the premium nudge badge', async () => {
+    const entitlement = new MockEntitlementService().configure('free');
+    const { getByText } = render(
+      <ServicesProvider services={buildRegistry(entitlement)}>
+        <UsageIndicator />
+      </ServicesProvider>
+    );
+    await waitFor(() => expect(getByText('Premium')).toBeTruthy());
+  });
+
+  it('shows the reset date alongside the raw used/limit count', async () => {
     const entitlement = new MockEntitlementService().configure('free');
     const { getByText } = render(
       <ServicesProvider services={buildRegistry(entitlement)}>
@@ -46,6 +67,36 @@ describe('UsageIndicator', () => {
       </ServicesProvider>
     );
     await waitFor(() => expect(getByText(/0 of 5 interpretations used/)).toBeTruthy());
+  });
+
+  it('uses singular phrasing when exactly one interpretation remains', async () => {
+    const entitlement = new MockEntitlementService();
+    jest.spyOn(entitlement, 'fetchEntitlement').mockResolvedValue({
+      subscriptionTier: 'free',
+      interpretationsUsedThisMonth: 4,
+      monthlyInterpretationLimit: 5,
+      imagesUsedThisMonth: 0,
+      monthlyImageLimit: 5,
+      resetDate: new Date(),
+      subscriptionExpiresAt: null,
+    });
+    const { getByText } = render(
+      <ServicesProvider services={buildRegistry(entitlement)}>
+        <UsageIndicator />
+      </ServicesProvider>
+    );
+    await waitFor(() => expect(getByText('1 interpretation left this month')).toBeTruthy());
+  });
+
+  it('never shows a negative remaining count once the limit is exceeded', async () => {
+    const entitlement = new MockEntitlementService().configure('limit_exceeded');
+    const { getByText, queryByText } = render(
+      <ServicesProvider services={buildRegistry(entitlement)}>
+        <UsageIndicator />
+      </ServicesProvider>
+    );
+    await waitFor(() => expect(getByText('0 interpretations left this month')).toBeTruthy());
+    expect(queryByText(/-\d/)).toBeNull();
   });
 
   it('renders nothing before the fetch resolves', () => {

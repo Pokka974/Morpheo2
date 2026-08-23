@@ -109,5 +109,12 @@
     "logDreamButton": "Log a new dream",
     "emotionChip": "Emotion: {{label}}",
     "keywordChip": "Keyword: {{label}}"
+  },
+  "video": {
+    "generate": "Generate a dream video",
+    "submitting": "Submitting…",
+    "processingEstimate": "Generating your video (~{{minutes}} min)…",
+    "ready": "Video ready!",
+    "upgradeCta": "Upgrade to generate video"
   }
 }

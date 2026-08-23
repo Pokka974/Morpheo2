@@ -150,6 +150,9 @@ export const colors = {
   chipNeutralFill: palette.night900,
   chipNeutralBorder: '#3a3a6a',
 
+  /** Border on the amber-toned premium/quota nudge card. */
+  highlightBorder: '#e0a85c3d',
+
   /** Explicit no-fill, so outlined and ghost surfaces still go through the tokens. */
   transparent: 'transparent',
 } as const;
@@ -188,6 +191,11 @@ export const gradients = {
   /** Centre action button. */
   fab: {
     colors: [palette.purpleLight, palette.purple] as const,
+    locations: [0, 1] as const,
+  },
+  /** The free-tier quota nudge card — a shade deeper than `mystic`. */
+  premiumQuota: {
+    colors: [palette.indigoLight, palette.surface] as const,
     locations: [0, 1] as const,
   },
   /** Scrim over a generated visual so text stays legible on any image. */
