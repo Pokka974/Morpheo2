@@ -71,6 +71,7 @@ export const recurrencePatterns = sqliteTable('recurrence_patterns', {
     enum: ['keyword', 'emotion', 'cultural_reference'],
   }).notNull(),
   occurrenceCount: integer('occurrence_count').notNull().default(0),
+  dreamIds: text('dream_ids').notNull().default('[]'),
   firstSeenAt: text('first_seen_at').notNull(),
   lastSeenAt: text('last_seen_at').notNull(),
   updatedAt: text('updated_at')
