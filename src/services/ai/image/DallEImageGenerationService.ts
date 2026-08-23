@@ -57,7 +57,7 @@ export class DallEImageGenerationService implements ImageGenerationService {
       .eq('media_type', 'image')
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()) as { data: unknown; error: unknown };
+      .maybeSingle()) as { data: unknown; error: unknown };
     const { data, error } = response;
 
     if (error || !data) return null;

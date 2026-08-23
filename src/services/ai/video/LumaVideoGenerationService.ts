@@ -50,7 +50,7 @@ export class LumaVideoGenerationService implements VideoGenerationService {
       .eq('media_type', 'video')
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()) as { data: unknown; error: unknown };
+      .maybeSingle()) as { data: unknown; error: unknown };
     const { data, error } = response;
 
     if (error || !data) return null;

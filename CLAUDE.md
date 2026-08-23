@@ -66,6 +66,23 @@ npm run typecheck         # TypeScript check
 npm run lint              # ESLint
 ```
 
+## Definition of Done
+
+Every code change must satisfy all of the following before it's considered complete:
+
+- **Lint** — `npm run lint` passes with no new errors/warnings
+- **Typecheck** — `npm run typecheck` passes (TypeScript strict mode)
+- **Error handling** — failure paths are handled explicitly: no silently
+  swallowed errors, no `.single()` where a zero-row result is valid (use
+  `.maybeSingle()` instead), no unhandled promise rejections
+- **Unit tests** — new or changed behavior has a corresponding test in
+  `tests/unit/`, and `npm test` passes
+- **Constraint compliance** — re-check the Critical Constraints table
+  (C1-C3, H1-H4) whenever a change touches related code
+- **Service adapter pattern** — new or changed external integrations stay
+  behind a `src/services/` interface, consumed only via `useServices()`,
+  never by importing a concrete class directly
+
 ## Environment Variables
 
 Copy `.env.example` to `.env.local`:

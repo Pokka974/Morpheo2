@@ -42,7 +42,7 @@ export class ClaudeInterpretationService implements InterpretationService {
       .eq('dream_id', dreamId)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()) as { data: unknown; error: unknown };
+      .maybeSingle()) as { data: unknown; error: unknown };
     const { data, error } = response;
 
     if (error || !data) return null;

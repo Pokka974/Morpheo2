@@ -111,7 +111,7 @@ describe('ClaudeInterpretationService (real class, mocked supabase)', () => {
   });
 
   it('getInterpretation maps a row to an InterpretationResult, defaulting missing arrays', async () => {
-    const single = jest.fn().mockResolvedValue({
+    const maybeSingle = jest.fn().mockResolvedValue({
       data: {
         id: 'interp-1',
         dream_id: 'dream-001',
@@ -127,7 +127,7 @@ describe('ClaudeInterpretationService (real class, mocked supabase)', () => {
       },
       error: null,
     });
-    const limit = jest.fn(() => ({ single }));
+    const limit = jest.fn(() => ({ maybeSingle }));
     const order = jest.fn(() => ({ limit }));
     const eq = jest.fn(() => ({ order }));
     const select = jest.fn(() => ({ eq }));
@@ -146,8 +146,8 @@ describe('ClaudeInterpretationService (real class, mocked supabase)', () => {
   });
 
   it('getInterpretation returns null when the query errors', async () => {
-    const single = jest.fn().mockResolvedValue({ data: null, error: { message: 'not found' } });
-    const limit = jest.fn(() => ({ single }));
+    const maybeSingle = jest.fn().mockResolvedValue({ data: null, error: { message: 'not found' } });
+    const limit = jest.fn(() => ({ maybeSingle }));
     const order = jest.fn(() => ({ limit }));
     const eq = jest.fn(() => ({ order }));
     const select = jest.fn(() => ({ eq }));
@@ -157,16 +157,17 @@ describe('ClaudeInterpretationService (real class, mocked supabase)', () => {
     expect(result).toBeNull();
   });
 
-  it('getInterpretation returns null when there is no row', async () => {
-    const single = jest.fn().mockResolvedValue({ data: null, error: null });
-    const limit = jest.fn(() => ({ single }));
+  it('getInterpretation returns null (not a thrown PGRST116 error) when the dream has no interpretation yet', async () => {
+    // maybeSingle() resolves 0 rows as { data: null, error: null }, unlike single()
+    // which would surface a PGRST116 error — this is the regression this test guards.
+    const maybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
+    const limit = jest.fn(() => ({ maybeSingle }));
     const order = jest.fn(() => ({ limit }));
     const eq = jest.fn(() => ({ order }));
     const select = jest.fn(() => ({ eq }));
     mockFrom.mockReturnValueOnce({ select });
 
-    const result = await service.getInterpretation('dream-001');
-    expect(result).toBeNull();
+    await expect(service.getInterpretation('dream-001')).resolves.toBeNull();
   });
 });
 

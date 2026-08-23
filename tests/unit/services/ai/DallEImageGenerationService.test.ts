@@ -117,7 +117,7 @@ describe('DallEImageGenerationService', () => {
       const mockEq = jest.fn().mockReturnThis();
       const mockOrder = jest.fn().mockReturnThis();
       const mockLimit = jest.fn().mockReturnThis();
-      const mockSingle = jest.fn().mockResolvedValue({
+      const mockMaybeSingle = jest.fn().mockResolvedValue({
         data: {
           id: 'media-001', dream_id: 'dream-001', media_type: 'image', generation_status: 'complete',
           regeneration_count: 0, max_regenerations: 3, error_message: null,
@@ -125,11 +125,11 @@ describe('DallEImageGenerationService', () => {
         },
         error: null,
       });
-      mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq, order: mockOrder, limit: mockLimit, single: mockSingle });
+      mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq, order: mockOrder, limit: mockLimit, maybeSingle: mockMaybeSingle });
       mockSelect.mockReturnValue({ eq: mockEq });
       mockEq.mockReturnValue({ eq: mockEq, order: mockOrder });
       mockOrder.mockReturnValue({ limit: mockLimit });
-      mockLimit.mockReturnValue({ single: mockSingle });
+      mockLimit.mockReturnValue({ maybeSingle: mockMaybeSingle });
 
       const result = await service.getImage('dream-001');
       expect(result).toEqual(
@@ -137,20 +137,21 @@ describe('DallEImageGenerationService', () => {
       );
     });
 
-    it('returns null when no row is found', async () => {
+    it('returns null (not a thrown PGRST116 error) when the dream has no image media yet', async () => {
       const mockSelect = jest.fn().mockReturnThis();
       const mockEq = jest.fn().mockReturnThis();
       const mockOrder = jest.fn().mockReturnThis();
       const mockLimit = jest.fn().mockReturnThis();
-      const mockSingle = jest.fn().mockResolvedValue({ data: null, error: null });
-      mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq, order: mockOrder, limit: mockLimit, single: mockSingle });
+      // maybeSingle() resolves 0 rows as { data: null, error: null }, unlike single()
+      // which would surface a PGRST116 error — this is the regression this test guards.
+      const mockMaybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
+      mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq, order: mockOrder, limit: mockLimit, maybeSingle: mockMaybeSingle });
       mockSelect.mockReturnValue({ eq: mockEq });
       mockEq.mockReturnValue({ eq: mockEq, order: mockOrder });
       mockOrder.mockReturnValue({ limit: mockLimit });
-      mockLimit.mockReturnValue({ single: mockSingle });
+      mockLimit.mockReturnValue({ maybeSingle: mockMaybeSingle });
 
-      const result = await service.getImage('dream-001');
-      expect(result).toBeNull();
+      await expect(service.getImage('dream-001')).resolves.toBeNull();
     });
   });
 
