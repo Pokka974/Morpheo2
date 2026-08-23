@@ -45,6 +45,23 @@ describe('useJournalFilters', () => {
     expect(result.current.results).toHaveLength(1);
   });
 
+  it('matches the dreamer\'s own emotions as well as the AI\'s reading', async () => {
+    mockExecuteSync.mockReturnValue(emotionRows);
+    const { result } = renderHook(() => useJournalFilters());
+
+    await act(async () => {
+      result.current.applyFilters({ emotion: 'fear' });
+    });
+
+    const query = mockPrepareSync.mock.calls[0][0] as string;
+    // A dream the dreamer tagged as frightening must surface even before it has an
+    // interpretation, so both lists are searched.
+    expect(query).toContain('json_each(i.emotions)');
+    expect(query).toContain('json_each(d.emotions)');
+    // Both subqueries are bound, in order.
+    expect(mockExecuteSync).toHaveBeenCalledWith(['fear', 'fear']);
+  });
+
   it('filters by date range', async () => {
     mockExecuteSync.mockReturnValue(dateRows);
     const { result } = renderHook(() => useJournalFilters());

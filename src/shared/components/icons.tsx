@@ -138,3 +138,53 @@ export function CheckIcon({ size = 28, color = colors.success, strokeWidth = 2.2
     </Svg>
   );
 }
+
+/**
+ * The back affordance on a modal flow. The design draws it as a "‹" glyph; the
+ * system's own rule — icons are drawn, never typed — makes it a stroke instead.
+ */
+export function ChevronLeftIcon({
+  size = 16,
+  color = colors.textSecondary,
+  strokeWidth = 1.8,
+}: IconProps) {
+  return (
+    <Svg width={size} height={size * 1.14} viewBox="0 0 14 16" fill="none">
+      <Path
+        d="M9 1l-7 7 7 7"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** Dismiss — the "×" of the wait screen, drawn as two strokes. */
+export function CloseIcon({
+  size = 16,
+  color = colors.textSecondary,
+  strokeWidth = 1.8,
+}: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M5 5l14 14" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Path d="M19 5L5 19" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Writing mode in the dream-log segmented control. */
+export function PenIcon({ size = 16, color = colors.textMuted, strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 20l1-4.5L15.5 5a2.1 2.1 0 0 1 3 3L8 18.5z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}

@@ -35,7 +35,7 @@ interface DreamCardProps {
 }
 
 /** First sentence, or a clipped opening, standing in until a title is generated. */
-function deriveTitle(description: string): string {
+export function deriveTitle(description: string): string {
   const firstSentence = description.split(/(?<=[.!?])\s/)[0] ?? description;
   return firstSentence.length > 60 ? `${firstSentence.slice(0, 57).trimEnd()}…` : firstSentence;
 }

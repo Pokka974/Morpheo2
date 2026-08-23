@@ -18,7 +18,7 @@ jest.mock('expo-router', () => ({
     dreamId: 'test-dream-id',
     description: 'I was walking through a misty forest and found a glowing door.',
   }),
-  useRouter: () => ({ replace: mockRouterReplace }),
+  useRouter: () => ({ replace: mockRouterReplace, back: jest.fn() }),
 }));
 
 jest.mock('@services/../supabase/client', () => ({
@@ -30,6 +30,27 @@ jest.mock('@services/../supabase/client', () => ({
     }),
   },
 }));
+
+// Every route into this screen converges on the pre-interpretation sync, so it is
+// mocked here rather than left to drain a mocked SQLite queue.
+const mockSyncDreamForInterpretation = jest.fn().mockResolvedValue(undefined);
+jest.mock('@features/dream-log/syncService', () => {
+  class DreamNotSyncedError extends Error {
+    constructor(id: string) {
+      super(`Dream ${id} did not reach the server`);
+      this.name = 'DreamNotSyncedError';
+    }
+  }
+  return {
+    syncDreamForInterpretation: (...args: unknown[]) => mockSyncDreamForInterpretation(...args),
+    syncPendingDreams: jest.fn().mockResolvedValue({ syncedIds: [], failures: [] }),
+    DreamNotSyncedError,
+  };
+});
+
+const { DreamNotSyncedError } = jest.requireMock<{
+  DreamNotSyncedError: new (dreamId: string) => Error;
+}>('@features/dream-log/syncService');
 
 const interpretationService = new MockInterpretationService();
 const entitlementService = new MockEntitlementService();
@@ -54,21 +75,51 @@ describe('InterpretationScreen', () => {
     interpretationService.configure('success');
     entitlementService.configure('free');
     mockRouterReplace.mockClear();
+    mockSyncDreamForInterpretation.mockReset().mockResolvedValue(undefined);
     (db.runAsync as jest.Mock).mockClear();
     (db.prepareSync as jest.Mock).mockClear();
-    (db.getFirstAsync as jest.Mock).mockClear();
+    (db.getFirstAsync as jest.Mock).mockReset();
+    // The screen makes two different getFirstAsync calls — the dream-count for the
+    // wait screen's copy, and the owner lookup before recording recurrence — so the
+    // mock dispatches on the SQL rather than on call order.
+    (db.getFirstAsync as jest.Mock).mockImplementation((sql: string) =>
+      Promise.resolve(sql.includes('COUNT(*)') ? { count: 12 } : null)
+    );
   });
 
+  /** Makes the owner lookup succeed, leaving the dream-count call answered as usual. */
+  function withDreamOwner(userId: string | null) {
+    (db.getFirstAsync as jest.Mock).mockImplementation((sql: string) =>
+      Promise.resolve(sql.includes('COUNT(*)') ? { count: 12 } : userId ? { user_id: userId } : null)
+    );
+  }
+
   it('fires the interpretation request on mount — no CTA to press first', () => {
-    const { getByText, queryByText } = render(
+    const { getByLabelText, getByText, queryByText } = render(
       <ServicesProvider services={buildRegistry()}>
         <InterpretationScreen />
       </ServicesProvider>
     );
-    // Loading shows immediately; there is no idle state with a button asking the
-    // user to confirm the same request they already triggered from the detail screen.
-    expect(getByText('Interpreting your dream…')).toBeTruthy();
+    // The wait screen shows immediately; there is no idle state with a button asking
+    // the user to confirm the same request they already triggered from the detail screen.
+    expect(getByLabelText('Interpreting your dream…')).toBeTruthy();
+    expect(getByText('Interpretation in progress')).toBeTruthy();
     expect(queryByText('Interpret Dream')).toBeNull();
+  });
+
+  it('names the dream being read and the pipeline stages, instead of a bare spinner', () => {
+    const { getByText } = render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+
+    // The title is the account's first sentence, clipped — the same derivation the
+    // journal card uses, so the dream is named the same way in both places.
+    expect(getByText('I was walking through a misty forest and found a glowing…')).toBeTruthy();
+    expect(getByText('Account read')).toBeTruthy();
+    expect(getByText('Spotting the symbols')).toBeTruthy();
+    expect(getByText('Crossing with your recurring themes')).toBeTruthy();
   });
 
   it('renders all four interpretation sections on success', async () => {
@@ -132,7 +183,7 @@ describe('InterpretationScreen', () => {
   });
 
   it('records recurrence patterns for the keywords and emotions once the interpretation is persisted', async () => {
-    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce({ user_id: 'user-id' });
+    withDreamOwner('user-id');
 
     render(
       <ServicesProvider services={buildRegistry()}>
@@ -149,7 +200,7 @@ describe('InterpretationScreen', () => {
   });
 
   it('does not blow up when the dream row cannot be found locally — recurrence is skipped, navigation still happens', async () => {
-    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(null);
+    withDreamOwner(null);
 
     render(
       <ServicesProvider services={buildRegistry()}>
@@ -224,5 +275,93 @@ describe('InterpretationScreen', () => {
     );
 
     expect(interpretSpy).toHaveBeenCalledTimes(1);
+  });
+
+  describe('dreams that have not reached the server', () => {
+    // `interpretationService` is shared across this file and an earlier test leaves its
+    // spy installed, so a fresh spyOn here would inherit that call count. Taking the
+    // spy in beforeEach and clearing it makes each case start from zero either way.
+    let interpretSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      interpretSpy = jest.spyOn(interpretationService, 'interpret');
+      interpretSpy.mockClear();
+    });
+
+    afterEach(() => {
+      interpretSpy.mockRestore();
+    });
+
+    it('pushes the dream to Postgres before asking the Edge Function to interpret it', async () => {
+      render(
+        <ServicesProvider services={buildRegistry()}>
+          <InterpretationScreen />
+        </ServicesProvider>
+      );
+
+      await waitFor(() =>
+        expect(mockSyncDreamForInterpretation).toHaveBeenCalledWith('test-dream-id')
+      );
+      // The Edge Function inserts against a FK on dreams.id, so the order matters:
+      // sync first, interpret second.
+      await waitFor(() => expect(interpretSpy).toHaveBeenCalledTimes(1));
+      expect(mockSyncDreamForInterpretation.mock.invocationCallOrder[0]).toBeLessThan(
+        interpretSpy.mock.invocationCallOrder[0]!
+      );
+    });
+
+    it('never calls the Edge Function when the dream is still local-only', async () => {
+      mockSyncDreamForInterpretation.mockRejectedValueOnce(
+        new DreamNotSyncedError('test-dream-id')
+      );
+
+      const { findByText } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <InterpretationScreen />
+        </ServicesProvider>
+      );
+
+      expect(await findByText('This dream is still on your device')).toBeTruthy();
+      // Calling it anyway is what produced the foreign-key violation in the logs.
+      expect(interpretSpy).not.toHaveBeenCalled();
+    });
+
+    it('retries the sync as well as the request, since the network is what fixed itself', async () => {
+      mockSyncDreamForInterpretation.mockRejectedValueOnce(
+        new DreamNotSyncedError('test-dream-id')
+      );
+
+      const { findByText, getByText } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <InterpretationScreen />
+        </ServicesProvider>
+      );
+
+      expect(await findByText('This dream is still on your device')).toBeTruthy();
+      expect(mockSyncDreamForInterpretation).toHaveBeenCalledTimes(1);
+
+      fireEvent.press(getByText('Try again'));
+
+      await waitFor(() => expect(mockSyncDreamForInterpretation).toHaveBeenCalledTimes(2));
+      await waitFor(() =>
+        expect(mockRouterReplace).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail')
+      );
+    });
+
+    it('falls through to the normal request when the sync fails for some other reason', async () => {
+      // An expired session mid-drain is not this screen's to classify — the interpret
+      // call runs and reports whatever it hits, rather than blaming the sync.
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockSyncDreamForInterpretation.mockRejectedValueOnce(new Error('session expired'));
+
+      render(
+        <ServicesProvider services={buildRegistry()}>
+          <InterpretationScreen />
+        </ServicesProvider>
+      );
+
+      await waitFor(() => expect(interpretSpy).toHaveBeenCalledTimes(1));
+      consoleError.mockRestore();
+    });
   });
 });

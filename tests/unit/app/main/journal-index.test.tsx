@@ -116,6 +116,43 @@ describe('JournalListScreen', () => {
     });
   });
 
+  it("shows the dreamer's own emotions in preference to the AI's reading", async () => {
+    (db.getAllAsync as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'dream-1',
+        description: 'I was flying over a forest.',
+        occurred_at: '2026-01-01T00:00:00.000Z',
+        sync_status: 'synced',
+        thumbnail_uri: null,
+        dream_emotions: '["freedom"]',
+        emotions: '["anxiety"]',
+        interpretation_id: 'interp-1',
+      },
+    ]);
+    const { getByText, queryByText } = render(<JournalListScreen />);
+
+    await waitFor(() => expect(getByText('freedom')).toBeTruthy());
+    expect(queryByText('anxiety')).toBeNull();
+  });
+
+  it("falls back to the AI's emotions for a dream logged before the picker existed", async () => {
+    (db.getAllAsync as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'dream-1',
+        description: 'I was flying over a forest.',
+        occurred_at: '2026-01-01T00:00:00.000Z',
+        sync_status: 'synced',
+        thumbnail_uri: null,
+        dream_emotions: '[]',
+        emotions: '["anxiety"]',
+        interpretation_id: 'interp-1',
+      },
+    ]);
+    const { getByText } = render(<JournalListScreen />);
+
+    await waitFor(() => expect(getByText('anxiety')).toBeTruthy());
+  });
+
   it('silently handles a rejected query, leaving entries empty', async () => {
     (db.getAllAsync as jest.Mock).mockRejectedValueOnce(new Error('disk error'));
     const { getByText } = render(<JournalListScreen />);

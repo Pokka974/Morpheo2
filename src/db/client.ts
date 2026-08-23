@@ -15,6 +15,8 @@ sqlite.execSync(`
     user_id TEXT NOT NULL,
     description TEXT NOT NULL,
     occurred_at TEXT NOT NULL,
+    emotions TEXT NOT NULL DEFAULT '[]',
+    is_lucid INTEGER NOT NULL DEFAULT 0,
     logged_at TEXT NOT NULL DEFAULT (datetime('now')),
     last_modified_at TEXT NOT NULL DEFAULT (datetime('now')),
     is_deleted INTEGER NOT NULL DEFAULT 0,
@@ -79,6 +81,17 @@ if (!recurrencePatternsColumns.some(col => col.name === 'dream_ids')) {
   sqlite.execSync(
     `ALTER TABLE recurrence_patterns ADD COLUMN dream_ids TEXT NOT NULL DEFAULT '[]';`
   );
+}
+
+// Same story as dream_ids below: `CREATE TABLE IF NOT EXISTS` is a no-op on a device
+// installed before the log screen captured emotions and the lucid marker, so the two
+// columns have to be added explicitly or every dream query fails with "no such column".
+const dreamsColumns = sqlite.getAllSync<{ name: string }>(`PRAGMA table_info(dreams);`);
+if (!dreamsColumns.some(col => col.name === 'emotions')) {
+  sqlite.execSync(`ALTER TABLE dreams ADD COLUMN emotions TEXT NOT NULL DEFAULT '[]';`);
+}
+if (!dreamsColumns.some(col => col.name === 'is_lucid')) {
+  sqlite.execSync(`ALTER TABLE dreams ADD COLUMN is_lucid INTEGER NOT NULL DEFAULT 0;`);
 }
 
 sqlite.execSync(`

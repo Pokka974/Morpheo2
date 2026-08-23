@@ -6,6 +6,9 @@ export const dreams = sqliteTable('dreams', {
   userId: text('user_id').notNull(),
   description: text('description').notNull(),
   occurredAt: text('occurred_at').notNull(),
+  /** JSON array of emotion keys the dreamer selected — see `emotionColors` in the tokens. */
+  emotions: text('emotions').notNull().default('[]'),
+  isLucid: integer('is_lucid', { mode: 'boolean' }).notNull().default(false),
   loggedAt: text('logged_at')
     .notNull()
     .default(sql`(datetime('now'))`),

@@ -35,12 +35,14 @@ export default function JournalListScreen() {
         occurred_at: string;
         sync_status: string;
         thumbnail_uri: string | null;
+        dream_emotions: string | null;
         emotions: string | null;
         interpretation_id: string | null;
       }>(
         `
         SELECT d.id, d.description, d.occurred_at, d.sync_status,
                m.storage_key as thumbnail_uri,
+               d.emotions as dream_emotions,
                i.emotions as emotions,
                i.id as interpretation_id
         FROM dreams d
@@ -60,7 +62,10 @@ export default function JournalListScreen() {
           occurredAt: r.occurred_at,
           syncStatus: r.sync_status as JournalEntry['syncStatus'],
           thumbnailUri: r.thumbnail_uri,
-          emotions: parseEmotions(r.emotions),
+          // What the dreamer said they felt outranks what the AI read: they were
+          // there. The interpretation's emotions stand in only until the dream has
+          // its own — which is every dream logged before the log screen collected them.
+          emotions: pickEmotions(r.dream_emotions, r.emotions),
           hasInterpretation: Boolean(r.interpretation_id),
         }))
       );
@@ -201,10 +206,16 @@ function parseEmotions(raw: string | null): string[] {
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.filter((e): e is string => typeof e === 'string') : [];
   } catch {
-    // Emotions are written by the interpretation Edge Function; a malformed row
-    // should degrade to "no chips", never crash the journal.
+    // Emotions are written by the interpretation Edge Function and by the log screen;
+    // a malformed row should degrade to "no chips", never crash the journal.
     return [];
   }
+}
+
+/** The dreamer's own emotions where there are any, the AI's reading otherwise. */
+function pickEmotions(dreamEmotions: string | null, interpretationEmotions: string | null): string[] {
+  const own = parseEmotions(dreamEmotions);
+  return own.length > 0 ? own : parseEmotions(interpretationEmotions);
 }
 
 const styles = StyleSheet.create({

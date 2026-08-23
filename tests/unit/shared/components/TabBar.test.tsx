@@ -27,6 +27,17 @@ describe('<TabBar />', () => {
     expect(getByText('Profile')).toBeTruthy();
   });
 
+  it('steps out of the way entirely while the dream-log flow is open', () => {
+    // Logging is a modal flow with its own back chevron; a tab bar underneath would
+    // offer a second, competing way out mid-telling.
+    const { queryByText, queryByTestId } = render(<TabBar {...buildProps(2)} />);
+
+    expect(queryByText('Journal')).toBeNull();
+    expect(queryByText('Insights')).toBeNull();
+    expect(queryByText('Profile')).toBeNull();
+    expect(queryByTestId('tab-log-dream')).toBeNull();
+  });
+
   it('does not render the centre route as a tab', () => {
     const { queryByText } = render(<TabBar {...buildProps()} />);
     // `log` is reached through the centre action, never as a labelled tab.

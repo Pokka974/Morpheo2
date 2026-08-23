@@ -35,12 +35,15 @@ export function useJournalFilters() {
       const bindings: (string | number | null)[] = [];
 
       if (newFilters.emotion) {
-        // SQLite json_each subquery for JSON array emotion filtering (H2 fix)
-        conditions.push(`EXISTS (
-          SELECT 1 FROM json_each(i.emotions) je
-          WHERE je.value = ?
+        // SQLite json_each subquery for JSON array emotion filtering (H2 fix).
+        // Matches either list: the dreamer's own emotions from the log screen, or the
+        // AI's reading — filtering on "fear" must not skip a dream the dreamer
+        // themselves tagged as frightening just because it has no interpretation yet.
+        conditions.push(`(
+          EXISTS (SELECT 1 FROM json_each(i.emotions) je WHERE je.value = ?)
+          OR EXISTS (SELECT 1 FROM json_each(d.emotions) de WHERE de.value = ?)
         )`);
-        bindings.push(newFilters.emotion);
+        bindings.push(newFilters.emotion, newFilters.emotion);
       }
 
       if (newFilters.startDate) {

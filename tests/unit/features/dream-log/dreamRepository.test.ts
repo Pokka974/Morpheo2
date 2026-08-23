@@ -38,6 +38,8 @@ const baseDream: Dream = {
   userId: 'user-1',
   description: 'A long enough dream description for testing purposes.',
   occurredAt: '2026-08-01T00:00:00.000Z',
+  emotions: '[]',
+  isLucid: false,
   loggedAt: '2026-08-01T00:00:00.000Z',
   lastModifiedAt: '2026-08-01T00:00:00.000Z',
   isDeleted: false,

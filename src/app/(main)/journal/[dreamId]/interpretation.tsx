@@ -4,34 +4,88 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { sqlite as db } from '@db/client';
-import { LoadingState } from '@shared/components/LoadingState';
 import { ErrorState } from '@shared/components/ErrorState';
 import { EmptyState } from '@shared/components/EmptyState';
 import { LockIcon } from '@shared/components/icons';
 import { InterpretationResultView } from '@features/interpretation/InterpretationResultView';
+import { InterpretationWaitingView } from '@features/interpretation/InterpretationWaitingView';
+import { deriveTitle } from '@features/journal/DreamCard';
 import { ConsentPromptModal } from '@features/auth/ConsentPromptModal';
 import { useInterpretation } from '@features/interpretation/useInterpretation';
 import { recordRecurrence } from '@features/recurrence/recurrenceRepository';
+import {
+  DreamNotSyncedError,
+  syncDreamForInterpretation,
+} from '@features/dream-log/syncService';
 import { useServices } from '@services/useServices';
 import { colors } from '@theme/tokens';
+
+/**
+ * The model the interpret Edge Function calls. Shown in the wait screen's footer so
+ * the user can see what is reading their dream; it must track
+ * `supabase/functions/interpret/index.ts`.
+ */
+const INTERPRETATION_MODEL = 'claude-sonnet-4-6';
 
 /**
  * Fires the interpretation request as soon as this screen mounts — no second
  * "Interpret" button. The only manual action in this flow is the one press on the
  * dream detail screen that navigated here; this screen exists to show loading,
  * result, and failure states, not to ask the user to confirm the same thing twice.
+ *
+ * Every route into interpretation converges here — the log screen after saving, both
+ * buttons on the dream detail screen, and the retry below — so this is where the dream
+ * is made to exist server-side. The Edge Function inserts an `interpretations` row
+ * against a FK on `dreams.id`; a dream that is still local-only (logged offline, or
+ * queued behind a failed sync) fails that constraint deep inside the function and
+ * surfaces to the user as a generic "interpretation unavailable".
  */
 export default function InterpretationScreen() {
   const { dreamId, description } = useLocalSearchParams<{ dreamId: string; description: string }>();
   const { t } = useTranslation();
-  const { state, interpret, retry } = useInterpretation();
+  // `retry` from the hook is skipped deliberately: it re-fires the request alone,
+  // which cannot fix the most common reason this screen fails.
+  const { state, interpret } = useInterpretation();
   const { entitlement } = useServices();
   const router = useRouter();
   const [showConsent, setShowConsent] = useState(false);
+  const [previousDreamCount, setPreviousDreamCount] = useState(0);
+  const [isDreamUnsynced, setIsDreamUnsynced] = useState(false);
   const firedRef = useRef(false);
 
+  // The wait screen says the reading is being crossed with the dreams already logged,
+  // so the number has to be real. Counting locally keeps it off the critical path —
+  // a failure here costs the sentence its number, not the interpretation.
+  useEffect(() => {
+    void db
+      .getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) AS count FROM dreams WHERE is_deleted = 0 AND id != ?`,
+        [dreamId]
+      )
+      .then(row => setPreviousDreamCount(row?.count ?? 0))
+      .catch((err: unknown) => {
+        console.error('Failed to count previous dreams for the wait screen:', err);
+      });
+  }, [dreamId]);
+
+  const dreamTitle = description ? deriveTitle(description) : undefined;
+
   const handleInterpret = () => {
-    void interpret({ dreamId, description, style: 'symbolic' });
+    void (async () => {
+      setIsDreamUnsynced(false);
+      try {
+        await syncDreamForInterpretation(dreamId);
+      } catch (err) {
+        if (err instanceof DreamNotSyncedError) {
+          setIsDreamUnsynced(true);
+          return;
+        }
+        // Anything else (an expired session mid-drain) is not this screen's to
+        // classify — let the interpret call run and report it in the usual way.
+        console.error('Pre-interpretation sync failed unexpectedly:', err);
+      }
+      await interpret({ dreamId, description, style: 'symbolic' });
+    })();
   };
 
   // Runs exactly once on mount, deliberately: handleInterpret is recreated every
@@ -88,14 +142,27 @@ export default function InterpretationScreen() {
       });
   }, [state, dreamId, router]);
 
-  const handleRetry = () => {
-    retry({ dreamId, description, style: 'symbolic' });
-  };
+  // Retrying re-runs the sync too: the usual reason a retry succeeds is that the
+  // network came back, which is also what was keeping the dream off the server.
+  const handleRetry = handleInterpret;
 
   return (
     <View style={styles.container}>
-      {state.status === 'idle' || state.status === 'loading' ? (
-        <LoadingState message={t('dream.interpreting')} />
+      {isDreamUnsynced ? (
+        <ErrorState
+          message={t('dream.dreamNotSyncedBody')}
+          title={t('dream.dreamNotSyncedTitle')}
+          onRetry={handleRetry}
+          fullScreen
+        />
+      ) : state.status === 'idle' || state.status === 'loading' ? (
+        <InterpretationWaitingView
+          dreamTitle={dreamTitle}
+          previousDreamCount={previousDreamCount}
+          modelLabel={INTERPRETATION_MODEL}
+          onContinueInBackground={() => router.replace('/(main)/journal')}
+          onCancel={() => router.back()}
+        />
       ) : state.status === 'success' || state.status === 'degraded' ? (
         <InterpretationResultView result={state.result} />
       ) : state.status === 'error' ? (
@@ -103,6 +170,7 @@ export default function InterpretationScreen() {
           message={t('dream.interpretationUnavailableBody')}
           title={t('dream.interpretationUnavailableTitle')}
           onRetry={handleRetry}
+          fullScreen
         />
       ) : state.status === 'limit_exceeded' ? (
         <EmptyState
