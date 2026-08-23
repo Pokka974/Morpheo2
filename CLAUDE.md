@@ -28,7 +28,7 @@ src/
   supabase/      # Supabase client + secure store adapter
 supabase/
   functions/     # Edge Functions (Deno)
-  migrations/    # SQL migrations (001–007)
+  migrations/    # SQL migrations (001–012)
   seed/          # system_prompts.sql
 tests/
   unit/          # Jest unit tests
@@ -75,6 +75,11 @@ Every code change must satisfy all of the following before it's considered compl
 - **Error handling** — failure paths are handled explicitly: no silently
   swallowed errors, no `.single()` where a zero-row result is valid (use
   `.maybeSingle()` instead), no unhandled promise rejections
+- **Schema contract** — every column named in a `.select()`, `.eq()`,
+  `.insert()` or `.update()` must exist in `supabase/migrations/`. Prefer an
+  explicit column list over `select('*')`, since `*` plus bracket access hides
+  name drift from `tests/integration/schema-contract.test.ts`. A PostgREST
+  query naming a missing column fails at runtime but passes every mocked test
 - **Unit tests** — new or changed behavior has a corresponding test in
   `tests/unit/`, and `npm test` passes
 - **Constraint compliance** — re-check the Critical Constraints table
@@ -128,7 +133,10 @@ supabase functions serve  # Serve Edge Functions locally
 | `src/db/client.ts` | SQLite singleton |
 | `supabase/functions/interpret/index.ts` | Claude interpretation Edge Function |
 | `supabase/migrations/005_rls.sql` | All RLS policies |
-| `supabase/migrations/006_triggers.sql` | Recurrence trigger |
-| `supabase/migrations/007_pg_cron.sql` | Monthly reset + deletion cleanup |
+| `supabase/migrations/006_triggers.sql` | Signup bootstrap + recurrence trigger |
+| `supabase/migrations/007_pg_cron.sql` | Monthly reset + deletion cleanup + expiry |
+| `supabase/migrations/011_schema_reconciliation.sql` | Missing `profiles` columns; column-level write grants |
+| `supabase/migrations/012_entitlement_credit_rpc.sql` | Atomic interpretation-credit consume/refund |
+| `tests/integration/schema-contract.test.ts` | Asserts every queried column exists in the migrations |
 | `specs/001-morpheo-app/` | Full specification, plan, tasks |
 | `.specify/memory/constitution.md` | Morpheo governance constitution |

@@ -91,7 +91,9 @@ function AppNavigator() {
         router.push('/(auth)/lock');
       }
       const MAX_CACHE_BYTES = 200 * 1024 * 1024;
-      services.storage.evictToLimit(MAX_CACHE_BYTES).catch(() => {});
+      services.storage.evictToLimit(MAX_CACHE_BYTES).catch((err: unknown) => {
+        console.error('Cache eviction on foreground failed:', err);
+      });
     }
   }
 

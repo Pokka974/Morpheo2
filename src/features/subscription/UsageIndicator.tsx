@@ -12,7 +12,10 @@ export function UsageIndicator() {
     entitlement
       .fetchEntitlement()
       .then(setData)
-      .catch(() => {});
+      .catch((err: unknown) => {
+        // Non-blocking: the indicator stays hidden rather than breaking the screen.
+        console.error('Failed to load usage entitlement:', err);
+      });
   }, [entitlement]);
 
   if (!data || data.subscriptionTier === 'premium') return null;

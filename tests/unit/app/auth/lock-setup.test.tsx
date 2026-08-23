@@ -14,14 +14,46 @@ jest.mock('expo-router', () => ({
 
 const mockSetupPin = jest.fn().mockResolvedValue(undefined);
 const mockGetLockMethod = jest.fn();
-jest.mock('@services/auth/ExpoLocalLockService', () => ({
-  ExpoLocalLockService: jest.fn().mockImplementation(() => ({
-    setupPin: (...args: unknown[]) => mockSetupPin(...args),
-    getLockMethod: (...args: unknown[]) => mockGetLockMethod(...args),
-  })),
-}));
+
+import { ServicesProvider } from '@services/ServicesProvider';
+import { MockAuthService } from '@services/auth/__mocks__/MockAuthService';
+import { MockLocalLockService } from '@services/auth/__mocks__/MockLocalLockService';
+import { MockInterpretationService } from '@services/ai/interpretation/__mocks__/MockInterpretationService';
+import { MockImageGenerationService } from '@services/ai/image/__mocks__/MockImageGenerationService';
+import { MockVideoGenerationService } from '@services/ai/video/__mocks__/MockVideoGenerationService';
+import { MockStorageService } from '@services/storage/__mocks__/MockStorageService';
+import { MockEntitlementService } from '@services/entitlement/__mocks__/MockEntitlementService';
+import { MockNotificationService } from '@services/notifications/__mocks__/MockNotificationService';
+import type { ServiceRegistry } from '@services/registry';
 
 import OnboardingLockSetupScreen from '@app/(auth)/onboarding/lock-setup';
+
+// The screen resolves its lock service through useServices(), so the double is injected
+// via ServicesProvider rather than by mocking the concrete class module.
+function buildRegistry(): ServiceRegistry {
+  const localLock = Object.assign(new MockLocalLockService(), {
+    setupPin: (...args: unknown[]) => mockSetupPin(...args) as Promise<void>,
+    getLockMethod: (...args: unknown[]) => mockGetLockMethod(...args) as Promise<'pin'>,
+  });
+  return {
+    auth: new MockAuthService(),
+    localLock,
+    interpretation: new MockInterpretationService(),
+    imageGeneration: new MockImageGenerationService(),
+    videoGeneration: new MockVideoGenerationService(),
+    storage: new MockStorageService(),
+    entitlement: new MockEntitlementService(),
+    notifications: new MockNotificationService(),
+  };
+}
+
+function renderScreen() {
+  return render(
+    <ServicesProvider services={buildRegistry()}>
+      <OnboardingLockSetupScreen />
+    </ServicesProvider>
+  );
+}
 
 describe('OnboardingLockSetupScreen', () => {
   let alertSpy: jest.SpyInstance;
@@ -39,19 +71,19 @@ describe('OnboardingLockSetupScreen', () => {
 
   it('shows the biometric-aware subtitle when biometric is available', async () => {
     mockGetLockMethod.mockResolvedValue('biometric');
-    const { findByText } = render(<OnboardingLockSetupScreen />);
+    const { findByText } = renderScreen();
     expect(await findByText(/Set a PIN as a backup to Face ID/)).toBeTruthy();
   });
 
   it('shows the generic subtitle when biometric is not available', async () => {
     mockGetLockMethod.mockResolvedValue('pin');
-    const { findByText } = render(<OnboardingLockSetupScreen />);
+    const { findByText } = renderScreen();
     expect(await findByText(/Create a PIN to protect your dream journal/)).toBeTruthy();
   });
 
   it('shows an alert and does not call setupPin when the PIN is too short', async () => {
     mockGetLockMethod.mockResolvedValue('pin');
-    const { getByText, getByPlaceholderText } = render(<OnboardingLockSetupScreen />);
+    const { getByText, getByPlaceholderText } = renderScreen();
     await waitFor(() => expect(mockGetLockMethod).toHaveBeenCalled());
 
     fireEvent.changeText(getByPlaceholderText('Create PIN (min 4 digits)'), '12');
@@ -70,7 +102,7 @@ describe('OnboardingLockSetupScreen', () => {
 
   it('shows an alert and does not call setupPin when PINs do not match', async () => {
     mockGetLockMethod.mockResolvedValue('pin');
-    const { getByText, getByPlaceholderText } = render(<OnboardingLockSetupScreen />);
+    const { getByText, getByPlaceholderText } = renderScreen();
     await waitFor(() => expect(mockGetLockMethod).toHaveBeenCalled());
 
     fireEvent.changeText(getByPlaceholderText('Create PIN (min 4 digits)'), '1234');
@@ -84,7 +116,7 @@ describe('OnboardingLockSetupScreen', () => {
   it('sets up the PIN, marks onboarding complete, and navigates to sign-in on success', async () => {
     mockGetLockMethod.mockResolvedValue('pin');
     const setItemSpy = jest.spyOn(AsyncStorage, 'setItem').mockResolvedValue();
-    const { getByText, getByPlaceholderText } = render(<OnboardingLockSetupScreen />);
+    const { getByText, getByPlaceholderText } = renderScreen();
 
     fireEvent.changeText(getByPlaceholderText('Create PIN (min 4 digits)'), '1234');
     fireEvent.changeText(getByPlaceholderText('Confirm PIN'), '1234');
@@ -97,7 +129,7 @@ describe('OnboardingLockSetupScreen', () => {
 
   it('disables Set Up Protection while the PIN is under 4 characters', async () => {
     mockGetLockMethod.mockResolvedValue('pin');
-    const { getByRole } = render(<OnboardingLockSetupScreen />);
+    const { getByRole } = renderScreen();
     await waitFor(() => expect(mockGetLockMethod).toHaveBeenCalled());
     expect(getByRole('button', { name: 'Set Up Protection' }).props.accessibilityState?.disabled).toBe(true);
   });

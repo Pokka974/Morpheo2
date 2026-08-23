@@ -9,10 +9,15 @@ export class RevenueCatEntitlementService implements EntitlementService {
   }
 
   async fetchEntitlement(): Promise<Entitlement> {
-    // Server-authoritative: always fetch from Supabase, never trust client SDK
+    // Server-authoritative: always fetch from Supabase, never trust client SDK.
+    // Columns are listed explicitly rather than '*' so the schema-contract test can
+    // verify them against the migrations — a '*' select hides column-name drift until
+    // it surfaces as an undefined field at runtime.
     const { data, error }: { data: unknown; error: unknown } = await supabase
       .from('entitlements')
-      .select('*')
+      .select(
+        'subscription_tier, interpretations_used_this_month, monthly_interpretation_limit, images_used_this_month, monthly_image_limit, reset_date, subscription_expires_at'
+      )
       .single();
 
     if (error || !data) throw new Error('Failed to fetch entitlement');
@@ -23,10 +28,10 @@ export class RevenueCatEntitlementService implements EntitlementService {
     nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
 
     return {
-      subscriptionTier: e['tier'] as 'free' | 'premium',
+      subscriptionTier: e['subscription_tier'] as 'free' | 'premium',
       interpretationsUsedThisMonth: e['interpretations_used_this_month'] as number,
       monthlyInterpretationLimit: e['monthly_interpretation_limit'] as number | null,
-      imagesUsedThisMonth: e['image_generations_used_this_month'] as number,
+      imagesUsedThisMonth: e['images_used_this_month'] as number,
       monthlyImageLimit: e['monthly_image_limit'] as number | null,
       resetDate,
       subscriptionExpiresAt: e['subscription_expires_at']

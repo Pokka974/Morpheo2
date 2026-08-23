@@ -71,8 +71,26 @@ describe('Morpheo Constitution Verification (T133)', () => {
   describe('Principle V — Server-side entitlement gating', () => {
     it('interpret Edge Function checks entitlement server-side', () => {
       const source = readFile('supabase/functions/interpret/index.ts');
-      expect(source).toContain('entitlements');
-      expect(source).toContain('monthly_interpretation_limit');
+      // The limit check and the increment happen in one statement inside
+      // consume_interpretation_credit (012_entitlement_credit_rpc.sql) so concurrent
+      // requests cannot both pass a read-then-write check.
+      expect(source).toContain('consume_interpretation_credit');
+      expect(source).toContain('Limit exceeded');
+
+      const rpc = readFile('supabase/migrations/012_entitlement_credit_rpc.sql');
+      expect(rpc).toContain('monthly_interpretation_limit');
+      expect(rpc).toContain('interpretations_used_this_month + 1');
+    });
+
+    it('interpret refunds the credit when no interpretation is produced', () => {
+      const source = readFile('supabase/functions/interpret/index.ts');
+      expect(source).toContain('refund_interpretation_credit');
+    });
+
+    it('usage counters are not writable by the client', () => {
+      const rpc = readFile('supabase/migrations/012_entitlement_credit_rpc.sql');
+      expect(rpc).toContain('REVOKE ALL ON FUNCTION consume_interpretation_credit');
+      expect(rpc).toContain('GRANT EXECUTE ON FUNCTION consume_interpretation_credit(UUID) TO service_role');
     });
 
     it('generate-image Edge Function checks entitlement server-side', () => {

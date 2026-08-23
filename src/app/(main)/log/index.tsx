@@ -88,7 +88,9 @@ export default function DreamLogScreen() {
       // Best-effort immediate sync so the dream exists server-side before the
       // user requests an interpretation (interpretations.dream_id has an FK
       // to dreams.id). Offline saves still queue via useSyncOnConnect.
-      syncPendingDreams().catch(() => {});
+      syncPendingDreams().catch((err: unknown) => {
+        console.error('Immediate post-save sync failed; dream stays queued:', err);
+      });
       router.navigate('/(main)/journal');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save dream.');

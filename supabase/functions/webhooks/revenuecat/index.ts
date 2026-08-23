@@ -23,26 +23,42 @@ serve(async (req: Request) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+  let tier: 'free' | 'premium' | null = null;
   if (eventType === 'INITIAL_PURCHASE' || eventType === 'RENEWAL') {
-    await supabase
-      .from('entitlements')
-      .update({ tier: 'premium', subscription_expires_at: expiresAt })
-      .eq('user_id', appUserId);
-    await supabase
-      .from('profiles')
-      .update({ subscription_tier: 'premium' })
-      .eq('id', appUserId);
+    tier = 'premium';
   } else if (eventType === 'EXPIRATION') {
-    await supabase
-      .from('entitlements')
-      .update({ tier: 'free', subscription_expires_at: null })
-      .eq('user_id', appUserId);
-    await supabase
-      .from('profiles')
-      .update({ subscription_tier: 'free' })
-      .eq('id', appUserId);
+    tier = 'free';
   }
   // CANCELLATION: no immediate action — premium continues until expiry
+
+  if (tier === null) return new Response(JSON.stringify({ ok: true }), { status: 200 });
+
+  // entitlements is the source of truth; profiles.subscription_tier is a denormalized
+  // copy for RLS performance (data-model.md). Both must move together.
+  const { error: entError } = await supabase
+    .from('entitlements')
+    .update({
+      subscription_tier: tier,
+      subscription_expires_at: tier === 'premium' ? expiresAt : null,
+    })
+    .eq('user_id', appUserId);
+
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .update({ subscription_tier: tier })
+    .eq('id', appUserId);
+
+  // Fail loudly: a 5xx makes RevenueCat retry. Silently returning 200 on a failed
+  // write means a paying user never receives premium and the event is never resent.
+  if (entError || profileError) {
+    console.error('RevenueCat webhook write failed', {
+      appUserId,
+      eventType,
+      entitlementsError: entError?.message,
+      profilesError: profileError?.message,
+    });
+    return new Response(JSON.stringify({ error: 'entitlement_update_failed' }), { status: 500 });
+  }
 
   return new Response(JSON.stringify({ ok: true }), { status: 200 });
 });

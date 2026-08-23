@@ -19,13 +19,44 @@ jest.mock('@services/../supabase/client', () => ({
 }));
 
 const mockSetupPin = jest.fn().mockResolvedValue(undefined);
-jest.mock('@services/auth/ExpoLocalLockService', () => ({
-  ExpoLocalLockService: jest.fn().mockImplementation(() => ({
-    setupPin: (...args: unknown[]) => mockSetupPin(...args),
-  })),
-}));
+import { ServicesProvider } from '@services/ServicesProvider';
+import { MockAuthService } from '@services/auth/__mocks__/MockAuthService';
+import { MockLocalLockService } from '@services/auth/__mocks__/MockLocalLockService';
+import { MockInterpretationService } from '@services/ai/interpretation/__mocks__/MockInterpretationService';
+import { MockImageGenerationService } from '@services/ai/image/__mocks__/MockImageGenerationService';
+import { MockVideoGenerationService } from '@services/ai/video/__mocks__/MockVideoGenerationService';
+import { MockStorageService } from '@services/storage/__mocks__/MockStorageService';
+import { MockEntitlementService } from '@services/entitlement/__mocks__/MockEntitlementService';
+import { MockNotificationService } from '@services/notifications/__mocks__/MockNotificationService';
+import type { ServiceRegistry } from '@services/registry';
 
 import ForgotPinScreen from '@app/(auth)/forgot-pin';
+
+// The screen resolves its lock service through useServices(), so the double is injected
+// via ServicesProvider rather than by mocking the concrete class module.
+function buildRegistry(): ServiceRegistry {
+  const localLock = Object.assign(new MockLocalLockService(), {
+    setupPin: (...args: unknown[]) => mockSetupPin(...args) as Promise<void>,
+  });
+  return {
+    auth: new MockAuthService(),
+    localLock,
+    interpretation: new MockInterpretationService(),
+    imageGeneration: new MockImageGenerationService(),
+    videoGeneration: new MockVideoGenerationService(),
+    storage: new MockStorageService(),
+    entitlement: new MockEntitlementService(),
+    notifications: new MockNotificationService(),
+  };
+}
+
+function renderScreen() {
+  return render(
+    <ServicesProvider services={buildRegistry()}>
+      <ForgotPinScreen />
+    </ServicesProvider>
+  );
+}
 
 describe('ForgotPinScreen', () => {
   let alertSpy: jest.SpyInstance;
@@ -43,20 +74,20 @@ describe('ForgotPinScreen', () => {
   });
 
   it('renders the verify step by default', () => {
-    const { getByText, getByPlaceholderText } = render(<ForgotPinScreen />);
+    const { getByText, getByPlaceholderText } = renderScreen();
     expect(getByText('Verify your identity')).toBeTruthy();
     expect(getByPlaceholderText('Account password')).toBeTruthy();
   });
 
   it('disables Verify while the password is empty', () => {
-    const { getByRole } = render(<ForgotPinScreen />);
+    const { getByRole } = renderScreen();
     expect(getByRole('button', { name: 'Verify' }).props.accessibilityState?.disabled).toBe(true);
   });
 
   it('moves to the reset step when the password is verified', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { email: 'me@example.com' } } });
     mockSignInWithPassword.mockResolvedValue({ error: null });
-    const { getByText, getByPlaceholderText, findByText } = render(<ForgotPinScreen />);
+    const { getByText, getByPlaceholderText, findByText } = renderScreen();
 
     fireEvent.changeText(getByPlaceholderText('Account password'), 'hunter2');
     fireEvent.press(getByText('Verify'));
@@ -67,7 +98,7 @@ describe('ForgotPinScreen', () => {
 
   it('shows a verification-failed alert when there is no user email', async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
-    const { getByText, getByPlaceholderText } = render(<ForgotPinScreen />);
+    const { getByText, getByPlaceholderText } = renderScreen();
 
     fireEvent.changeText(getByPlaceholderText('Account password'), 'hunter2');
     fireEvent.press(getByText('Verify'));
@@ -80,7 +111,7 @@ describe('ForgotPinScreen', () => {
   it('shows a verification-failed alert when signInWithPassword errors', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { email: 'me@example.com' } } });
     mockSignInWithPassword.mockResolvedValue({ error: new Error('bad password') });
-    const { getByText, getByPlaceholderText } = render(<ForgotPinScreen />);
+    const { getByText, getByPlaceholderText } = renderScreen();
 
     fireEvent.changeText(getByPlaceholderText('Account password'), 'wrong');
     fireEvent.press(getByText('Verify'));
@@ -93,7 +124,7 @@ describe('ForgotPinScreen', () => {
   it('shows a mismatch alert and does not call setupPin when PINs differ', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { email: 'me@example.com' } } });
     mockSignInWithPassword.mockResolvedValue({ error: null });
-    const { getByText, getByPlaceholderText, findByText } = render(<ForgotPinScreen />);
+    const { getByText, getByPlaceholderText, findByText } = renderScreen();
 
     fireEvent.changeText(getByPlaceholderText('Account password'), 'hunter2');
     fireEvent.press(getByText('Verify'));
@@ -110,7 +141,7 @@ describe('ForgotPinScreen', () => {
   it('resets the PIN and navigates back on success', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { email: 'me@example.com' } } });
     mockSignInWithPassword.mockResolvedValue({ error: null });
-    const { getByText, getByPlaceholderText, findByText } = render(<ForgotPinScreen />);
+    const { getByText, getByPlaceholderText, findByText } = renderScreen();
 
     fireEvent.changeText(getByPlaceholderText('Account password'), 'hunter2');
     fireEvent.press(getByText('Verify'));
@@ -135,7 +166,7 @@ describe('ForgotPinScreen', () => {
   it('disables Reset PIN while the new PIN is under 4 characters', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { email: 'me@example.com' } } });
     mockSignInWithPassword.mockResolvedValue({ error: null });
-    const { getByText, getByRole, getByPlaceholderText, findByText } = render(<ForgotPinScreen />);
+    const { getByText, getByRole, getByPlaceholderText, findByText } = renderScreen();
 
     fireEvent.changeText(getByPlaceholderText('Account password'), 'hunter2');
     fireEvent.press(getByText('Verify'));

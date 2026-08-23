@@ -39,11 +39,15 @@ export default function SettingsScreen() {
     storage
       .getCacheSize()
       .then(setCacheSize)
-      .catch(() => {});
+      .catch((err: unknown) => {
+        console.error('Failed to read cache size:', err);
+      });
     entitlement
       .fetchEntitlement()
       .then(setEntitlementData)
-      .catch(() => {});
+      .catch((err: unknown) => {
+        console.error('Failed to load entitlement:', err);
+      });
   }, [storage, entitlement]);
 
   const handleClearCache = () => {

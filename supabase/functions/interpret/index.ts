@@ -42,6 +42,21 @@ serve(async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
+  // Set once the interpretation credit has been consumed, so every failure path —
+  // including an unexpected throw — can return it.
+  let creditConsumedFor: string | null = null;
+  const refundCredit = async (reason: string) => {
+    if (!creditConsumedFor) return;
+    const userId = creditConsumedFor;
+    creditConsumedFor = null;
+    const { error: refundError } = await supabase.rpc('refund_interpretation_credit', {
+      p_user_id: userId,
+    });
+    if (refundError) {
+      console.error(`Failed to refund interpretation credit after ${reason}:`, refundError);
+    }
+  };
+
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -71,22 +86,20 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: 'Consent required' }), { status: 403 });
     }
 
-    // Check + increment entitlement atomically
-    const { data: entitlement, error: entError } = await supabase
-      .from('entitlements')
-      .select('interpretations_used_this_month, monthly_interpretation_limit')
-      .eq('user_id', user.id)
-      .single();
+    // Check + increment entitlement in one statement (012_entitlement_credit_rpc.sql).
+    // A read-then-write here would let concurrent requests both pass the limit check.
+    // The credit is refunded below if the interpretation cannot be produced.
+    const { data: creditGranted, error: entError } = await supabase.rpc(
+      'consume_interpretation_credit',
+      { p_user_id: user.id }
+    );
 
-    if (entError || !entitlement) {
-      console.error('Entitlement query failed:', entError);
+    if (entError) {
+      console.error('Entitlement check failed:', entError);
       return new Response(JSON.stringify({ error: 'Entitlement check failed' }), { status: 500 });
     }
 
-    if (
-      entitlement.monthly_interpretation_limit !== null &&
-      entitlement.interpretations_used_this_month >= entitlement.monthly_interpretation_limit
-    ) {
+    if (!creditGranted) {
       const resetDate = new Date();
       resetDate.setMonth(resetDate.getMonth() + 1, 1);
       resetDate.setHours(0, 0, 0, 0);
@@ -95,6 +108,8 @@ serve(async (req: Request) => {
         { status: 429 }
       );
     }
+
+    creditConsumedFor = user.id;
 
     const body = await req.json() as { dreamId: string; description: string; style?: string; languageHint?: string };
 
@@ -107,6 +122,7 @@ serve(async (req: Request) => {
 
     if (!promptRow) {
       console.error('No active system prompt found in system_prompts table');
+      await refundCredit('missing system prompt');
       return new Response(JSON.stringify({ error: 'No active system prompt' }), { status: 500 });
     }
 
@@ -134,6 +150,7 @@ serve(async (req: Request) => {
 
     const toolUse = message.content.find(b => b.type === 'tool_use');
     if (!toolUse || toolUse.type !== 'tool_use') {
+      await refundCredit('AI provider returned no tool_use block');
       return new Response(JSON.stringify({ error: 'AI provider error' }), { status: 503 });
     }
 
@@ -167,14 +184,9 @@ serve(async (req: Request) => {
 
     if (insertError || !interpretation) {
       console.error('Interpretation insert failed:', insertError);
+      await refundCredit('interpretation insert failure');
       return new Response(JSON.stringify({ error: 'Failed to save interpretation' }), { status: 500 });
     }
-
-    // Increment usage count
-    await supabase
-      .from('entitlements')
-      .update({ interpretations_used_this_month: entitlement.interpretations_used_this_month + 1 })
-      .eq('user_id', user.id);
 
     return new Response(
       JSON.stringify({
@@ -194,6 +206,8 @@ serve(async (req: Request) => {
     );
   } catch (err) {
     console.error('interpret edge function error:', err);
+    // No interpretation was returned, so the user must not be charged for it.
+    await refundCredit('unhandled error');
     return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500 });
   }
 });

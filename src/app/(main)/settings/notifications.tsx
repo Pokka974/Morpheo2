@@ -15,11 +15,15 @@ export default function NotificationsScreen() {
   useEffect(() => {
     void supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('notification_reminders_enabled, notification_reminder_time')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
+      if (error) {
+        console.error('Failed to load notification preferences:', error);
+        return;
+      }
       const row = data as {
         notification_reminders_enabled: boolean | null;
         notification_reminder_time: string | null;
@@ -70,13 +74,17 @@ export default function NotificationsScreen() {
     } = await supabase.auth.getUser();
     if (!user) return;
     const timeStr = `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({
         notification_reminders_enabled: isEnabled,
         notification_reminder_time: timeStr,
       })
       .eq('id', user.id);
+    if (error) {
+      console.error('Failed to save notification preferences:', error);
+      Alert.alert('Could Not Save', 'Your reminder settings were not saved. Please try again.');
+    }
   };
 
   const timeLabel = reminderTime.toLocaleTimeString(undefined, {

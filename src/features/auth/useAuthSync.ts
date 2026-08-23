@@ -7,7 +7,9 @@ export function useAuthSync(auth: AuthService, notifications: NotificationServic
     const unsubscribe = auth.onAuthStateChange(session => {
       if (session) {
         // Push token registration is non-critical; failure does not block auth
-        void notifications.registerPushToken().catch(() => {});
+        void notifications.registerPushToken().catch((err: unknown) => {
+          console.error('Push token registration failed:', err);
+        });
       }
     });
     return unsubscribe;

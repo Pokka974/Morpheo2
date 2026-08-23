@@ -14,14 +14,14 @@ import type { ServiceRegistry } from '@services/registry';
 jest.mock('@react-native-community/datetimepicker', () => 'DateTimePicker');
 
 const mockGetUser = jest.fn();
-const mockSingle = jest.fn();
+const mockMaybeSingle = jest.fn();
 const mockUpdateEq = jest.fn();
 
 jest.mock('@services/../supabase/client', () => ({
   supabase: {
     auth: { getUser: (...args: unknown[]) => mockGetUser(...args) },
     from: jest.fn(() => ({
-      select: jest.fn(() => ({ eq: jest.fn(() => ({ single: mockSingle })) })),
+      select: jest.fn(() => ({ eq: jest.fn(() => ({ maybeSingle: mockMaybeSingle })) })),
       update: jest.fn(() => ({ eq: mockUpdateEq })),
     })),
   },
@@ -45,12 +45,12 @@ function buildRegistry(notifications: MockNotificationService): ServiceRegistry 
 describe('NotificationsScreen', () => {
   beforeEach(() => {
     mockGetUser.mockReset().mockResolvedValue({ data: { user: { id: 'user-1' } } });
-    mockSingle.mockReset().mockResolvedValue({ data: null });
+    mockMaybeSingle.mockReset().mockResolvedValue({ data: null });
     mockUpdateEq.mockReset().mockResolvedValue({});
   });
 
   it('loads with reminders enabled + a saved time: switch is on and a time row renders', async () => {
-    mockSingle.mockResolvedValue({
+    mockMaybeSingle.mockResolvedValue({
       data: { notification_reminders_enabled: true, notification_reminder_time: '08:30' },
     });
     const notifications = new MockNotificationService();
@@ -65,7 +65,7 @@ describe('NotificationsScreen', () => {
   });
 
   it('loads with no profile data: stays disabled and shows no reminder-time row', async () => {
-    mockSingle.mockResolvedValue({ data: null });
+    mockMaybeSingle.mockResolvedValue({ data: null });
     const { getByLabelText, queryByText } = render(
       <ServicesProvider services={buildRegistry(new MockNotificationService())}>
         <NotificationsScreen />
@@ -78,7 +78,7 @@ describe('NotificationsScreen', () => {
   });
 
   it('loads with enabled=true but no saved reminder time: falls back to the default time and still shows the row', async () => {
-    mockSingle.mockResolvedValue({ data: { notification_reminders_enabled: true } });
+    mockMaybeSingle.mockResolvedValue({ data: { notification_reminders_enabled: true } });
     const { getByText, getByLabelText } = render(
       <ServicesProvider services={buildRegistry(new MockNotificationService())}>
         <NotificationsScreen />
@@ -133,7 +133,7 @@ describe('NotificationsScreen', () => {
   });
 
   it('toggling off cancels the reminder and persists the preference', async () => {
-    mockSingle.mockResolvedValue({ data: { notification_reminders_enabled: true } });
+    mockMaybeSingle.mockResolvedValue({ data: { notification_reminders_enabled: true } });
     const notifications = new MockNotificationService();
     const cancelSpy = jest.spyOn(notifications, 'cancelReminder');
     const { getByLabelText } = render(
@@ -153,7 +153,7 @@ describe('NotificationsScreen', () => {
   });
 
   it('pressing the time label opens the picker, which is hidden by default', async () => {
-    mockSingle.mockResolvedValue({ data: { notification_reminders_enabled: true } });
+    mockMaybeSingle.mockResolvedValue({ data: { notification_reminders_enabled: true } });
     const { getByText, UNSAFE_queryByProps } = render(
       <ServicesProvider services={buildRegistry(new MockNotificationService())}>
         <NotificationsScreen />
@@ -169,7 +169,7 @@ describe('NotificationsScreen', () => {
   });
 
   it('picker onChange with a date reschedules (when enabled) and persists the new time', async () => {
-    mockSingle.mockResolvedValue({ data: { notification_reminders_enabled: true } });
+    mockMaybeSingle.mockResolvedValue({ data: { notification_reminders_enabled: true } });
     const notifications = new MockNotificationService();
     const scheduleSpy = jest.spyOn(notifications, 'scheduleReminder');
     const { getByText, UNSAFE_getByProps } = render(
@@ -194,7 +194,7 @@ describe('NotificationsScreen', () => {
   });
 
   it('picker onChange with no date is a no-op (closes picker without rescheduling)', async () => {
-    mockSingle.mockResolvedValue({ data: { notification_reminders_enabled: true } });
+    mockMaybeSingle.mockResolvedValue({ data: { notification_reminders_enabled: true } });
     const notifications = new MockNotificationService();
     const scheduleSpy = jest.spyOn(notifications, 'scheduleReminder');
     const { getByText, UNSAFE_getByProps, UNSAFE_queryByProps } = render(
@@ -218,7 +218,7 @@ describe('NotificationsScreen', () => {
   });
 
   it('picker onChange with a date while disabled persists without rescheduling (the `if (enabled)` false branch)', async () => {
-    mockSingle.mockResolvedValue({ data: { notification_reminders_enabled: true } });
+    mockMaybeSingle.mockResolvedValue({ data: { notification_reminders_enabled: true } });
     const notifications = new MockNotificationService();
     const scheduleSpy = jest.spyOn(notifications, 'scheduleReminder');
     const { getByLabelText, getByText, UNSAFE_getByProps } = render(

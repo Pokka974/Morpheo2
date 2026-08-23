@@ -5,12 +5,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '@shared/components/Button';
 import { spacing } from '@shared/tokens/spacing';
 import { fontSize } from '@shared/tokens/typography';
-import { ExpoLocalLockService } from '@services/auth/ExpoLocalLockService';
-
-const lockService = new ExpoLocalLockService();
+import { useServices } from '@services/useServices';
 
 export default function OnboardingLockSetupScreen() {
   const router = useRouter();
+  const { localLock: lockService } = useServices();
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [biometricAvailable, setBiometricAvailable] = useState(false);
@@ -20,7 +19,7 @@ export default function OnboardingLockSetupScreen() {
     void lockService.getLockMethod().then(method => {
       setBiometricAvailable(method === 'biometric');
     });
-  }, []);
+  }, [lockService]);
 
   const handleSetupPin = async () => {
     if (pin.length < 4) {

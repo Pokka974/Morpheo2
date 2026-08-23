@@ -4,13 +4,12 @@ import { useRouter } from 'expo-router';
 import { Button } from '@shared/components/Button';
 import { spacing } from '@shared/tokens/spacing';
 import { fontSize } from '@shared/tokens/typography';
-import { supabase } from '@services/../supabase/client';
-import { ExpoLocalLockService } from '@services/auth/ExpoLocalLockService';
-
-const lockService = new ExpoLocalLockService();
+import { supabase } from '../../supabase/client';
+import { useServices } from '@services/useServices';
 
 export default function ForgotPinScreen() {
   const router = useRouter();
+  const { localLock: lockService } = useServices();
   const [password, setPassword] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');

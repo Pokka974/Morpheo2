@@ -36,10 +36,10 @@ jest.mock('@services/../supabase/client', () => ({
 }));
 
 const FREE_ENTITLEMENT = {
-  tier: 'free',
+  subscription_tier: 'free',
   interpretations_used_this_month: 3,
   monthly_interpretation_limit: 5,
-  image_generations_used_this_month: 2,
+  images_used_this_month: 2,
   monthly_image_limit: 3,
   reset_date: '2026-09-01',
   subscription_expires_at: null,
@@ -47,7 +47,7 @@ const FREE_ENTITLEMENT = {
 
 const PREMIUM_ENTITLEMENT = {
   ...FREE_ENTITLEMENT,
-  tier: 'premium',
+  subscription_tier: 'premium',
   monthly_interpretation_limit: null,
   monthly_image_limit: null,
 };
@@ -91,7 +91,7 @@ describe('RevenueCatEntitlementService', () => {
   describe('canGenerateImage', () => {
     it('returns false when free tier image limit exhausted', async () => {
       mockSingle.mockResolvedValue({
-        data: { ...FREE_ENTITLEMENT, image_generations_used_this_month: 3 },
+        data: { ...FREE_ENTITLEMENT, images_used_this_month: 3 },
         error: null,
       });
       expect(await service.canGenerateImage()).toBe(false);

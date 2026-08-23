@@ -12,7 +12,7 @@ SELECT cron.schedule(
     UPDATE entitlements
     SET
       interpretations_used_this_month = 0,
-      image_generations_used_this_month = 0,
+      images_used_this_month = 0,
       reset_date = date_trunc('month', now() + interval '1 month')
     WHERE reset_date <= now();
   $$
@@ -41,18 +41,20 @@ SELECT cron.schedule(
   'expire-subscriptions',
   '15 0 * * *', -- Daily at 00:15 UTC
   $$
-    UPDATE entitlements
-    SET tier = 'free'
-    WHERE tier = 'premium'
-      AND subscription_expires_at IS NOT NULL
-      AND subscription_expires_at < now();
-
     UPDATE profiles
     SET subscription_tier = 'free'
     WHERE subscription_tier = 'premium'
       AND id IN (
         SELECT user_id FROM entitlements
-        WHERE tier = 'free' AND subscription_expires_at < now()
+        WHERE subscription_tier = 'premium'
+          AND subscription_expires_at IS NOT NULL
+          AND subscription_expires_at < now()
       );
+
+    UPDATE entitlements
+    SET subscription_tier = 'free'
+    WHERE subscription_tier = 'premium'
+      AND subscription_expires_at IS NOT NULL
+      AND subscription_expires_at < now();
   $$
 );

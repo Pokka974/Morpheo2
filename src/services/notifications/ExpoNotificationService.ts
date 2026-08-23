@@ -56,6 +56,12 @@ export class ExpoNotificationService implements NotificationService {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    await supabase.from('profiles').update({ push_token: tokenData.data }).eq('id', user.id);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ push_token: tokenData.data })
+      .eq('id', user.id);
+    if (error) {
+      console.error('Failed to persist push token:', error);
+    }
   }
 }

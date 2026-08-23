@@ -40,15 +40,20 @@ Extends Supabase's `auth.users`. Created automatically via Supabase Auth trigger
 | `subscription_tier` | `text` | NOT NULL DEFAULT `'free'` CHECK IN ('free','premium') | Source of truth from `entitlements`; denormalized here for RLS performance |
 | `interpretation_style` | `text` | NOT NULL DEFAULT `'symbolic'` CHECK IN ('symbolic','mythological','psychological') | User's chosen style preset |
 | `ai_consent_granted` | `boolean` | NOT NULL DEFAULT `false` | Drives FR-025; blocks AI calls if false |
-| `ai_consent_date` | `timestamptz` | NULLABLE | Set when consent first granted |
+| `ai_consent_granted_at` | `timestamptz` | NULLABLE | Set when consent is granted; cleared on withdrawal. `consent_records` is the append-only audit trail |
 | `ai_consent_provider_disclosed` | `text` | NULLABLE | Provider category string shown to user at consent time |
 | `notification_reminders_enabled` | `boolean` | NOT NULL DEFAULT `false` | |
 | `notification_reminder_time` | `time` | NULLABLE | Local time for reminder; null = not set |
 | `push_token` | `text` | NULLABLE | Expo push token; updated on app open |
+| `deletion_scheduled_at` | `timestamptz` | NULLABLE | Set by the `account-delete` Edge Function; the hard delete runs 30 days later via pg_cron |
 | `created_at` | `timestamptz` | NOT NULL DEFAULT `now()` | |
 | `updated_at` | `timestamptz` | NOT NULL DEFAULT `now()` | Updated by trigger |
 
-**RLS**: User can SELECT and UPDATE their own row only. `subscription_tier` is updated only by the entitlement Edge Function (service role key).
+**RLS**: User can SELECT and UPDATE their own row only. Write access is further
+restricted per column (`011_schema_reconciliation.sql`): `authenticated` holds `UPDATE`
+only on `interpretation_style`, the `ai_consent_*` fields, the `notification_*` fields,
+`push_token` and `updated_at`. `subscription_tier` and `deletion_scheduled_at` are
+service-role only — a table-level `UPDATE` grant would let a client set its own tier.
 
 ---
 
@@ -61,7 +66,7 @@ One row per user. Managed exclusively by the RevenueCat webhook Edge Function.
 | `id` | `uuid` | PK DEFAULT `gen_random_uuid()` | |
 | `user_id` | `uuid` | UNIQUE NOT NULL FK → `profiles.id` ON DELETE CASCADE | |
 | `subscription_tier` | `text` | NOT NULL DEFAULT `'free'` CHECK IN ('free','premium') | |
-| `interpretations_used_this_month` | `integer` | NOT NULL DEFAULT `0` CHECK >= 0 | Incremented by interpretation Edge Function |
+| `interpretations_used_this_month` | `integer` | NOT NULL DEFAULT `0` CHECK >= 0 | Consumed via `consume_interpretation_credit()`, which checks the limit and increments in one statement; returned by `refund_interpretation_credit()` when no interpretation is produced |
 | `images_used_this_month` | `integer` | NOT NULL DEFAULT `0` CHECK >= 0 | Incremented by image generation Edge Function |
 | `monthly_interpretation_limit` | `integer` | NOT NULL DEFAULT `5` | 5 free / NULL = unlimited for premium |
 | `monthly_image_limit` | `integer` | NOT NULL DEFAULT `3` | 3 free / NULL = unlimited for premium |
@@ -72,7 +77,7 @@ One row per user. Managed exclusively by the RevenueCat webhook Edge Function.
 
 **RLS**: User can SELECT their own row. No client-side UPDATE permitted. Service role key only for writes.
 
-**Monthly reset**: A Supabase cron job (pg_cron, runs 00:01 UTC on the 1st of each month) resets `interpretations_used_this_month = 0`, `images_used_this_month = 0`, and advances `reset_date`.
+**Monthly reset**: A Supabase cron job (pg_cron, `reset-monthly-entitlements`, runs 00:05 UTC on the 1st of each month) resets `interpretations_used_this_month = 0`, `images_used_this_month = 0`, and advances `reset_date`. A second job (`expire-subscriptions`, daily at 00:15 UTC) downgrades `subscription_tier` on both `entitlements` and `profiles` once `subscription_expires_at` has passed — a safety net for missed RevenueCat webhooks.
 
 ---
 

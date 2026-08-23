@@ -40,7 +40,6 @@
     "expo-notifications": "~0.31.5",
     "expo-router": "~5.1.11",
     "expo-secure-store": "~14.2.4",
-    "expo-speech": "~13.1.7",
     "expo-sqlite": "~15.2.14",
     "expo-status-bar": "~2.2.3",
     "expo-video": "~2.2.2",

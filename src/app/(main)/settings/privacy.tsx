@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { supabase } from '../../../supabase/client';
 import { spacing } from '@shared/tokens/spacing';
 import { colors } from '@shared/tokens/colors';
@@ -12,6 +12,7 @@ interface ConsentState {
 export default function PrivacyScreen() {
   const [consent, setConsent] = useState<ConsentState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadConsent();
@@ -22,21 +23,25 @@ export default function PrivacyScreen() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
-      .select('ai_consent_granted, ai_consent_updated_at')
+      .select('ai_consent_granted, ai_consent_granted_at')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
+    if (error) {
+      console.error('Failed to load consent state:', error);
+      setLoadError('Could not load your consent status.');
+      return;
+    }
     const row = data as {
       ai_consent_granted: boolean | null;
-      ai_consent_updated_at: string | null;
+      ai_consent_granted_at: string | null;
     } | null;
-    if (row) {
-      setConsent({
-        granted: row.ai_consent_granted ?? false,
-        updatedAt: row.ai_consent_updated_at,
-      });
-    }
+    setLoadError(null);
+    setConsent({
+      granted: row?.ai_consent_granted ?? false,
+      updatedAt: row?.ai_consent_granted_at ?? null,
+    });
   };
 
   const updateConsent = async (granted: boolean) => {
@@ -47,20 +52,32 @@ export default function PrivacyScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
       const now = new Date().toISOString();
-      await supabase
+      // ai_consent_granted_at records when consent was granted, so it is cleared on
+      // withdrawal; consent_records is the append-only audit trail of both directions.
+      const grantedAt = granted ? now : null;
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           ai_consent_granted: granted,
-          ai_consent_updated_at: now,
+          ai_consent_granted_at: grantedAt,
         })
         .eq('id', user.id);
-      await supabase.from('consent_records').insert({
+      if (profileError) {
+        console.error('Failed to update consent:', profileError);
+        Alert.alert('Could Not Save', 'Your consent preference was not saved. Please try again.');
+        return;
+      }
+      const { error: auditError } = await supabase.from('consent_records').insert({
         user_id: user.id,
-        consent_type: 'ai_interpretation',
-        granted,
+        action: granted ? 'granted' : 'revoked',
         recorded_at: now,
       });
-      setConsent({ granted, updatedAt: now });
+      if (auditError) {
+        // The preference itself is saved; only the audit row failed. Surface it rather
+        // than dropping it, since consent history is a compliance record.
+        console.error('Failed to write consent audit record:', auditError);
+      }
+      setConsent({ granted, updatedAt: grantedAt });
     } finally {
       setIsSaving(false);
     }
@@ -87,8 +104,10 @@ export default function PrivacyScreen() {
         >
           {consent?.granted ? 'Consent Granted' : 'Consent Withdrawn'}
         </Text>
-        {dateLabel && <Text style={styles.statusDate}>Updated {dateLabel}</Text>}
+        {dateLabel && <Text style={styles.statusDate}>Granted {dateLabel}</Text>}
       </View>
+
+      {loadError && <Text style={styles.loadError}>{loadError}</Text>}
 
       {isSaving ? (
         <ActivityIndicator color={colors.primary} />
@@ -132,6 +151,7 @@ const styles = StyleSheet.create({
   statusGranted: { color: '#6bcb6b' },
   statusWithdrawn: { color: '#e05c5c' },
   statusDate: { fontSize: 12, color: '#555' },
+  loadError: { fontSize: 13, color: colors.error, marginBottom: spacing.md },
   withdrawButton: {
     backgroundColor: '#2a1a1a',
     borderWidth: 1,

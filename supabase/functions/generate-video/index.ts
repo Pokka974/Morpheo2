@@ -27,11 +27,11 @@ serve(async (req: Request) => {
   // Server-side entitlement check — video is premium-only
   const { data: entitlement } = await supabase
     .from('entitlements')
-    .select('tier')
+    .select('subscription_tier')
     .eq('user_id', user.id)
     .single();
 
-  if (!entitlement || entitlement.tier !== 'premium') {
+  if (!entitlement || entitlement.subscription_tier !== 'premium') {
     return new Response(JSON.stringify({ error: 'premium_required' }), { status: 403, headers: corsHeaders });
   }
 
