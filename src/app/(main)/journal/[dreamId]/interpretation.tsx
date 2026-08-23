@@ -11,6 +11,7 @@ import { LockIcon } from '@shared/components/icons';
 import { InterpretationResultView } from '@features/interpretation/InterpretationResultView';
 import { ConsentPromptModal } from '@features/auth/ConsentPromptModal';
 import { useInterpretation } from '@features/interpretation/useInterpretation';
+import { recordRecurrence } from '@features/recurrence/recurrenceRepository';
 import { useServices } from '@services/useServices';
 import { colors } from '@theme/tokens';
 
@@ -74,7 +75,15 @@ export default function InterpretationScreen() {
           result.createdAt,
         ]
       )
-      .then(() => {
+      .then(async () => {
+        const dreamRow = await db.getFirstAsync<{ user_id: string }>(
+          `SELECT user_id FROM dreams WHERE id = ?`,
+          [dreamId]
+        );
+        if (dreamRow) {
+          await recordRecurrence(dreamRow.user_id, dreamId, 'keyword', result.keywords);
+          await recordRecurrence(dreamRow.user_id, dreamId, 'emotion', result.emotions);
+        }
         router.replace(`/(main)/journal/${dreamId}/detail`);
       });
   }, [state, dreamId, router]);

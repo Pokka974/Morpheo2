@@ -151,7 +151,12 @@
     "clear": "Vider",
     "signOutRow": "Se déconnecter",
     "signOutAlertTitle": "Se déconnecter ?",
-    "signOutAlertBody": "Vous pourrez vous reconnecter à tout moment. Les rêves non synchronisés restent sur cet appareil."
+    "signOutAlertBody": "Vous pourrez vous reconnecter à tout moment. Les rêves non synchronisés restent sur cet appareil.",
+    "sectionDeveloper": "Développeur",
+    "seedDreamsRow": "Ajouter des rêves d'exemple",
+    "seedDreamsSuccessTitle": "Rêves d'exemple ajoutés",
+    "seedDreamsSuccessBody": "{{count}} rêves ajoutés. Ouvrez Insights pour voir la constellation et le ruban d'émotions.",
+    "seedDreamsErrorTitle": "Impossible d'ajouter les rêves d'exemple"
   },
   "settingsStyle": {
     "title": "Style d'interprétation",

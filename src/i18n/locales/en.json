@@ -151,7 +151,12 @@
     "clear": "Clear",
     "signOutRow": "Sign out",
     "signOutAlertTitle": "Sign out?",
-    "signOutAlertBody": "You can sign back in at any time. Any unsynced dreams stay on this device."
+    "signOutAlertBody": "You can sign back in at any time. Any unsynced dreams stay on this device.",
+    "sectionDeveloper": "Developer",
+    "seedDreamsRow": "Seed sample dreams",
+    "seedDreamsSuccessTitle": "Sample dreams added",
+    "seedDreamsSuccessBody": "{{count}} dreams added. Open Insights to see the constellation and emotion ribbon.",
+    "seedDreamsErrorTitle": "Couldn't seed sample dreams"
   },
   "settingsStyle": {
     "title": "Interpretation style",

@@ -17,21 +17,13 @@ import type Voice from '@react-native-voice/voice';
 
 import { Button } from '@shared/components/Button';
 import { MicIcon, StopIcon } from '@shared/components/icons';
+import { generateId } from '@shared/id';
 import { saveDream } from '@features/dream-log/dreamRepository';
 import { syncPendingDreams } from '@features/dream-log/syncService';
 import { useServices } from '@services/useServices';
 import { colors, glow, radius, spacing, typography } from '@theme/tokens';
 
 const MIN_DESCRIPTION = 20;
-
-function generateId(): string {
-  // dreams.id is a Postgres uuid column — must be a valid UUID, not a local-only string.
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
 
 function formatElapsed(seconds: number): string {
   const m = Math.floor(seconds / 60);
