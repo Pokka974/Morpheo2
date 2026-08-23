@@ -55,6 +55,8 @@ describe('InterpretationScreen', () => {
     entitlementService.configure('free');
     mockRouterReplace.mockClear();
     (db.runAsync as jest.Mock).mockClear();
+    (db.prepareSync as jest.Mock).mockClear();
+    (db.getFirstAsync as jest.Mock).mockClear();
   });
 
   it('fires the interpretation request on mount — no CTA to press first', () => {
@@ -127,6 +129,41 @@ describe('InterpretationScreen', () => {
     await waitFor(() => {
       expect(mockRouterReplace).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail');
     });
+  });
+
+  it('records recurrence patterns for the keywords and emotions once the interpretation is persisted', async () => {
+    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce({ user_id: 'user-id' });
+
+    render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => {
+      const insertCalls = (db.prepareSync as jest.Mock).mock.calls.filter(([sql]) =>
+        (sql as string).includes('INSERT INTO recurrence_patterns')
+      );
+      expect(insertCalls.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('does not blow up when the dream row cannot be found locally — recurrence is skipped, navigation still happens', async () => {
+    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(null);
+
+    render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => {
+      expect(mockRouterReplace).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail');
+    });
+    const insertCalls = (db.prepareSync as jest.Mock).mock.calls.filter(([sql]) =>
+      (sql as string).includes('INSERT INTO recurrence_patterns')
+    );
+    expect(insertCalls.length).toBe(0);
   });
 
   it('shows the paywall when the client-side entitlement precheck fails, before any service call', async () => {

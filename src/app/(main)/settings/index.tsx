@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useServices } from '@services/useServices';
 import type { Entitlement } from '@services/entitlement/EntitlementService';
 import { SettingsRow, SettingsSection } from '@shared/components/SettingsRow';
+import { seedSampleDreams } from '@features/dev/seedSampleDreams';
 import { colors, spacing, typography } from '@theme/tokens';
 
 const APP_VERSION = 'v1.0.0';
@@ -15,7 +16,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { storage, entitlement } = useServices();
+  const { storage, entitlement, auth } = useServices();
   const [cacheSize, setCacheSize] = useState<number>(0);
   const [entitlementData, setEntitlementData] = useState<Entitlement | null>(null);
 
@@ -59,6 +60,23 @@ export default function SettingsScreen() {
     entitlementData?.subscriptionTier === 'premium'
       ? t('settings.tierPremium')
       : t('settings.tierFree');
+
+  const handleSeedDreams = () => {
+    void (async () => {
+      const session = await auth.getSession();
+      if (!session) return;
+      try {
+        const { count } = await seedSampleDreams(session.user.id);
+        Alert.alert(
+          t('settings.seedDreamsSuccessTitle'),
+          t('settings.seedDreamsSuccessBody', { count })
+        );
+      } catch (err) {
+        console.error('Failed to seed sample dreams:', err);
+        Alert.alert(t('settings.seedDreamsErrorTitle'));
+      }
+    })();
+  };
 
   return (
     <ScrollView
@@ -117,6 +135,16 @@ export default function SettingsScreen() {
           navigable={false}
         />
       </SettingsSection>
+
+      {__DEV__ ? (
+        <SettingsSection title={t('settings.sectionDeveloper')}>
+          <SettingsRow
+            label={t('settings.seedDreamsRow')}
+            onPress={handleSeedDreams}
+            navigable={false}
+          />
+        </SettingsSection>
+      ) : null}
     </ScrollView>
   );
 }

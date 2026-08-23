@@ -148,7 +148,12 @@
     "tierPremium": "Premium",
     "clearCacheAlertTitle": "Clear cache",
     "clearCacheAlertBody": "Remove all locally cached media?",
-    "clear": "Clear"
+    "clear": "Clear",
+    "sectionDeveloper": "Developer",
+    "seedDreamsRow": "Seed sample dreams",
+    "seedDreamsSuccessTitle": "Sample dreams added",
+    "seedDreamsSuccessBody": "{{count}} dreams added. Open Insights to see the constellation and emotion ribbon.",
+    "seedDreamsErrorTitle": "Couldn't seed sample dreams"
   },
   "settingsStyle": {
     "title": "Interpretation style",
