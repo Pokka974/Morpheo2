@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useServices } from '@services/useServices';
 import type { Entitlement } from '@services/entitlement/EntitlementService';
-import { spacing } from '@shared/tokens/spacing';
+import { colors, spacing } from '@theme/tokens';
 
 export function UsageIndicator() {
   const { entitlement } = useServices();
@@ -40,11 +40,11 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
   },
   text: {
     fontSize: 12,
-    color: '#888',
+    color: colors.textMuted,
     textAlign: 'center',
   },
 });

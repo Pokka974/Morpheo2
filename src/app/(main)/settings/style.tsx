@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { supabase } from '../../../supabase/client';
-import { spacing } from '@shared/tokens/spacing';
-import { colors } from '@shared/tokens/colors';
+import { colors, spacing } from '@theme/tokens';
 
 type Style = 'symbolic' | 'mythological' | 'psychological';
 
@@ -82,7 +81,7 @@ export default function StyleScreen() {
 
       {isSaving && (
         <View style={styles.savingRow}>
-          <ActivityIndicator size="small" color={colors.primary} />
+          <ActivityIndicator size="small" color={colors.accent} />
           <Text style={styles.savingText}>Saving...</Text>
         </View>
       )}
@@ -91,35 +90,35 @@ export default function StyleScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d1a', padding: spacing.md, gap: spacing.md },
-  title: { fontSize: 18, color: '#fff', fontWeight: '700' },
-  subtitle: { fontSize: 13, color: '#888' },
+  container: { flex: 1, backgroundColor: colors.background, padding: spacing.md, gap: spacing.md },
+  title: { fontSize: 18, color: colors.textPrimary, fontWeight: '700' },
+  subtitle: { fontSize: 13, color: colors.textMuted },
   option: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: spacing.md,
     gap: spacing.xs,
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: colors.transparent,
   },
-  optionSelected: { borderColor: colors.primary },
+  optionSelected: { borderColor: colors.accent },
   optionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   radio: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#444',
+    borderColor: colors.textMuted,
   },
-  radioSelected: { borderColor: colors.primary, backgroundColor: colors.primary },
-  optionLabel: { fontSize: 15, color: '#ccc', flex: 1 },
-  optionLabelSelected: { color: '#fff', fontWeight: '600' },
-  optionDesc: { fontSize: 12, color: '#666', marginLeft: 28 },
+  radioSelected: { borderColor: colors.accent, backgroundColor: colors.accent },
+  optionLabel: { fontSize: 15, color: colors.textSecondary, flex: 1 },
+  optionLabelSelected: { color: colors.textPrimary, fontWeight: '600' },
+  optionDesc: { fontSize: 12, color: colors.textMuted, marginLeft: 28 },
   savingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     justifyContent: 'center',
   },
-  savingText: { color: '#666', fontSize: 13 },
+  savingText: { color: colors.textMuted, fontSize: 13 },
 });

@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
 import { Text } from 'react-native';
 import { Card } from '@shared/components/Card';
@@ -14,8 +15,9 @@ describe('Card', () => {
   });
 
   it('merges a custom style without crashing', () => {
+    const extraStyle = StyleSheet.create({ spaced: { marginTop: 10 } });
     const { getByText } = render(
-      <Card style={{ marginTop: 10 }}>
+      <Card style={extraStyle.spaced}>
         <Text>Styled content</Text>
       </Card>
     );

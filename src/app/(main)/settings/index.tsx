@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useServices } from '@services/useServices';
-import { spacing } from '@shared/tokens/spacing';
 import type { Entitlement } from '@services/entitlement/EntitlementService';
+import { colors, spacing } from '@theme/tokens';
 
 function SettingsRow({
   label,
@@ -125,11 +125,11 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d1a' },
+  container: { flex: 1, backgroundColor: colors.background },
   content: { paddingBottom: spacing.xxl },
   sectionHeader: {
     fontSize: 12,
-    color: '#555',
+    color: colors.textMuted,
     fontWeight: '600',
     letterSpacing: 0.5,
     paddingHorizontal: spacing.md,
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   section: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     marginHorizontal: spacing.md,
     borderRadius: 12,
     overflow: 'hidden',
@@ -148,10 +148,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#2a2a3e',
+    borderBottomColor: colors.divider,
   },
-  rowLabel: { flex: 1, fontSize: 15, color: '#ddd' },
-  rowLabelDestructive: { color: '#e05c5c' },
-  rowValue: { fontSize: 14, color: '#666', marginRight: spacing.xs },
-  chevron: { color: '#444', fontSize: 18 },
+  rowLabel: { flex: 1, fontSize: 15, color: colors.textSecondary },
+  rowLabelDestructive: { color: colors.error },
+  rowValue: { fontSize: 14, color: colors.textMuted, marginRight: spacing.xs },
+  chevron: { color: colors.textMuted, fontSize: 18 },
 });

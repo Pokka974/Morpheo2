@@ -9,6 +9,7 @@ import { InterpretationResultView } from '@features/interpretation/Interpretatio
 import { ConsentPromptModal } from '@features/auth/ConsentPromptModal';
 import { useInterpretation } from '@features/interpretation/useInterpretation';
 import { useServices } from '@services/useServices';
+import { colors } from '@theme/tokens';
 
 export default function InterpretationScreen() {
   const { dreamId, description } = useLocalSearchParams<{ dreamId: string; description: string }>();
@@ -118,6 +119,6 @@ export default function InterpretationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0d0d1a',
+    backgroundColor: colors.background,
   },
 });

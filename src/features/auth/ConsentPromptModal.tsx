@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { Modal, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@shared/components/Button';
-import { spacing } from '@shared/tokens/spacing';
-import { fontSize } from '@shared/tokens/typography';
 import { supabase } from '../../supabase/client';
+import { colors, fontSize, spacing } from '@theme/tokens';
 
 interface Props {
   visible: boolean;
@@ -65,13 +64,13 @@ export function ConsentPromptModal({ visible, onGranted, onDismiss }: Props) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
   },
   card: {
-    backgroundColor: '#1a1a3e',
+    backgroundColor: colors.inputSurface,
     borderRadius: 16,
     padding: spacing.xl,
     gap: spacing.lg,
@@ -80,11 +79,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: fontSize.lg,
     fontWeight: '700',
-    color: '#f0eeff',
+    color: colors.textPrimary,
   },
   body: {
     fontSize: fontSize.md,
-    color: '#c8c0e8',
+    color: colors.textSecondary,
     lineHeight: 22,
   },
 });

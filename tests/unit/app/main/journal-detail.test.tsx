@@ -104,13 +104,13 @@ describe('DreamDetailScreen', () => {
   it('shows a loading state before the dream query resolves', () => {
     (db.getFirstAsync as jest.Mock).mockImplementation(() => new Promise(() => {}));
     const { getByText } = renderScreen();
-    expect(getByText('Loading dream...')).toBeTruthy();
+    expect(getByText('Loading…')).toBeTruthy();
   });
 
   it('shows "Dream not found." when the dream row does not exist', async () => {
     (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(null);
     const { getByText } = renderScreen();
-    await waitFor(() => expect(getByText('Dream not found.')).toBeTruthy());
+    await waitFor(() => expect(getByText('This dream could not be found.')).toBeTruthy());
   });
 
   it('shows the interpret CTA when no interpretation exists yet, and navigates to the interpretation screen on press', async () => {
@@ -118,8 +118,8 @@ describe('DreamDetailScreen', () => {
     imageService.configure('success'); // getImage resolves non-null so the auto-generate effect stays inert
     const { getByText } = renderScreen();
 
-    await waitFor(() => expect(getByText('🌙 Get AI Interpretation')).toBeTruthy());
-    fireEvent.press(getByText('🌙 Get AI Interpretation'));
+    await waitFor(() => expect(getByText('Interpret this dream')).toBeTruthy());
+    fireEvent.press(getByText('Interpret this dream'));
     expect(mockPush).toHaveBeenCalledWith(
       expect.stringContaining('/(main)/journal/dream-1/interpretation?dreamId=dream-1&description=')
     );
@@ -130,9 +130,11 @@ describe('DreamDetailScreen', () => {
     const { getByText, queryByText } = renderScreen();
 
     await waitFor(() => expect(getByText('Interpretation')).toBeTruthy());
-    expect(getByText('Symbols')).toBeTruthy();
-    expect(getByText('Emotions')).toBeTruthy();
-    expect(queryByText('🌙 Get AI Interpretation')).toBeNull();
+    // Keywords and emotions render as chips on the interpretation card rather than
+    // under section headings.
+    expect(getByText('forest')).toBeTruthy();
+    expect(getByText('wonder')).toBeTruthy();
+    expect(queryByText('Interpret this dream')).toBeNull();
   });
 
   it('applies fallback defaults when keywords/emotions/cultural_references/confidence are missing', async () => {
@@ -147,7 +149,7 @@ describe('DreamDetailScreen', () => {
 
     await waitFor(() => expect(getByText('Interpretation')).toBeTruthy());
     // confidence defaults to 'medium' (not 'low'), so the degraded banner must not show
-    expect(queryByText(/limited detail/)).toBeNull();
+    expect(queryByText(/low confidence/)).toBeNull();
   });
 
   it('shows the degraded banner when confidence is "low"', async () => {
@@ -156,7 +158,7 @@ describe('DreamDetailScreen', () => {
       .mockResolvedValueOnce({ ...INTERP_ROW, confidence: 'low' });
     const { getByText } = renderScreen();
 
-    await waitFor(() => expect(getByText(/limited detail/)).toBeTruthy());
+    await waitFor(() => expect(getByText(/low confidence/)).toBeTruthy());
   });
 
   it('auto-triggers image generation once dream + interpretation exist and no image is cached yet', async () => {
@@ -205,14 +207,6 @@ describe('DreamDetailScreen', () => {
     await waitFor(() => expect(getByLabelText('Dream illustration')).toBeTruthy());
   });
 
-  it('navigates to the log screen in edit mode when pressing "Edit Dream"', async () => {
-    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
-    const { getByText } = renderScreen();
-
-    await waitFor(() => expect(getByText('Edit Dream')).toBeTruthy());
-    fireEvent.press(getByText('Edit Dream'));
-    expect(mockPush).toHaveBeenCalledWith('/(main)/log?editId=dream-1');
-  });
 
   it('soft-deletes the dream and navigates back when confirming delete', async () => {
     (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
@@ -221,7 +215,7 @@ describe('DreamDetailScreen', () => {
 
     fireEvent.press(getByText('Delete'));
     const alertCall = (Alert.alert as jest.Mock).mock.calls[0];
-    expect(alertCall[0]).toBe('Delete Dream');
+    expect(alertCall[0]).toBe('Delete this dream?');
     const buttons = alertCall[2] as Array<{ text: string; onPress?: () => void }>;
     const deleteButton = buttons.find(b => b.text === 'Delete')!;
     const cancelButton = buttons.find(b => b.text === 'Cancel')!;

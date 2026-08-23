@@ -2,8 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@shared/components/Button';
-import { spacing } from '@shared/tokens/spacing';
-import { fontSize } from '@shared/tokens/typography';
+import { colors, fontSize, spacing } from '@theme/tokens';
 
 export default function OnboardingWelcomeScreen() {
   const router = useRouter();
@@ -26,7 +25,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
-    backgroundColor: '#0d0d1a',
+    backgroundColor: colors.background,
     gap: spacing.lg,
   },
   logo: {
@@ -35,11 +34,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: fontSize.display,
     fontWeight: '700',
-    color: '#f0eeff',
+    color: colors.textPrimary,
   },
   tagline: {
     fontSize: fontSize.md,
-    color: '#c8c0e8',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
   },

@@ -45,6 +45,18 @@ function buildRegistry(): ServiceRegistry {
 
 import InsightsScreen from '@app/(main)/insights/index';
 
+function pattern(id: string, term: string, patternType: string, count: number, dreamIds: string[]) {
+  return {
+    id,
+    userId: 'user-1',
+    term,
+    patternType,
+    occurrenceCount: count,
+    dreamIds,
+    lastSeenAt: '2026-08-01T00:00:00.000Z',
+  };
+}
+
 describe('InsightsScreen', () => {
   beforeEach(() => {
     mockPush.mockClear();
@@ -60,27 +72,28 @@ describe('InsightsScreen', () => {
         <InsightsScreen />
       </ServicesProvider>
     );
-    expect(getByText('Loading insights...')).toBeTruthy();
+    expect(getByText('Loading insights…')).toBeTruthy();
   });
 
-  it('stays in the loading state forever when there is no signed-in user (documents current early-return behavior)', async () => {
+  it('resolves out of the loading state when there is no signed-in user', async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
-    const { getByText } = render(
+    const { queryByText } = render(
       <ServicesProvider services={buildRegistry()}>
         <InsightsScreen />
       </ServicesProvider>
     );
-    await waitFor(() => expect(mockGetUser).toHaveBeenCalled());
-    expect(getByText('Loading insights...')).toBeTruthy();
+    // Previously the screen returned early and span forever; the finally block now
+    // always clears the loading flag.
+    await waitFor(() => expect(queryByText('Loading insights…')).toBeNull());
   });
 
-  it('free tier: renders TopRecurrencesView content plus an upgrade card, and navigates to the paywall', async () => {
+  it('free tier: shows recurring emotions and the upgrade card, and navigates to the paywall', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
     mockGetTopRecurrences.mockImplementation((_userId: string, type: string) =>
       Promise.resolve(
         type === 'keyword'
-          ? [{ id: 'k1', userId: 'user-1', term: 'ocean', patternType: 'keyword', occurrenceCount: 4, dreamIds: [], lastSeenAt: '' }]
-          : [{ id: 'e1', userId: 'user-1', term: 'anxious', patternType: 'emotion', occurrenceCount: 2, dreamIds: [], lastSeenAt: '' }]
+          ? [pattern('k1', 'ocean', 'keyword', 4, ['d1'])]
+          : [pattern('e1', 'anxiety', 'emotion', 2, ['d1'])]
       )
     );
     entitlementService.configure('free');
@@ -91,15 +104,31 @@ describe('InsightsScreen', () => {
       </ServicesProvider>
     );
 
-    await waitFor(() => expect(getByText('ocean')).toBeTruthy());
-    expect(getByText('anxious')).toBeTruthy();
-    expect(getByText('Full Insights — Premium')).toBeTruthy();
+    await waitFor(() => expect(getByText('anxiety')).toBeTruthy());
+    expect(getByText('Full insights — Premium')).toBeTruthy();
+    // No period switch for free users — the window is fixed at 30 days.
+    expect(() => getByText('90 d')).toThrow();
 
-    fireEvent.press(getByText('View Premium Plans'));
+    fireEvent.press(getByText('View premium plans'));
     expect(mockPush).toHaveBeenCalledWith('/(main)/paywall');
   });
 
-  it('premium tier: renders RecurrenceAnalyticsView instead of the free summary', async () => {
+  it('free tier: requests only the top 3 over a fixed 30-day window', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
+    mockGetTopRecurrences.mockResolvedValue([]);
+    entitlementService.configure('free');
+
+    render(
+      <ServicesProvider services={buildRegistry()}>
+        <InsightsScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(mockGetTopRecurrences).toHaveBeenCalled());
+    expect(mockGetTopRecurrences).toHaveBeenCalledWith('user-1', 'keyword', 3, 30);
+  });
+
+  it('premium tier: offers the period switch and drops the upgrade card', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
     mockGetTopRecurrences.mockResolvedValue([]);
     entitlementService.configure('premium');
@@ -110,7 +139,64 @@ describe('InsightsScreen', () => {
       </ServicesProvider>
     );
 
-    await waitFor(() => expect(getByText('No recurring patterns found for this time range.')).toBeTruthy());
-    expect(queryByText('Full Insights — Premium')).toBeNull();
+    await waitFor(() => expect(getByText('Insights')).toBeTruthy());
+    expect(queryByText('Full insights — Premium')).toBeNull();
+    expect(getByText('90 d')).toBeTruthy();
+  });
+
+  it('premium tier: switching the period refetches over the new window', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
+    mockGetTopRecurrences.mockResolvedValue([]);
+    entitlementService.configure('premium');
+
+    const { getByText } = render(
+      <ServicesProvider services={buildRegistry()}>
+        <InsightsScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(getByText('90 d')).toBeTruthy());
+    mockGetTopRecurrences.mockClear();
+    fireEvent.press(getByText('90 d'));
+
+    await waitFor(() =>
+      expect(mockGetTopRecurrences).toHaveBeenCalledWith('user-1', 'keyword', 12, 90)
+    );
+  });
+
+  it('all-time drops the date filter entirely', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
+    mockGetTopRecurrences.mockResolvedValue([]);
+    entitlementService.configure('premium');
+
+    const { getByText } = render(
+      <ServicesProvider services={buildRegistry()}>
+        <InsightsScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(getByText('All')).toBeTruthy());
+    mockGetTopRecurrences.mockClear();
+    fireEvent.press(getByText('All'));
+
+    await waitFor(() =>
+      expect(mockGetTopRecurrences).toHaveBeenCalledWith('user-1', 'keyword', 12, undefined)
+    );
+  });
+
+  it('shows the constellation empty state below the three-dream threshold', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
+    mockGetTopRecurrences.mockImplementation((_userId: string, type: string) =>
+      Promise.resolve(type === 'keyword' ? [pattern('k1', 'ocean', 'keyword', 1, ['d1'])] : [])
+    );
+    entitlementService.configure('premium');
+
+    const { getByText } = render(
+      <ServicesProvider services={buildRegistry()}>
+        <InsightsScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(getByText('Not enough dreams yet')).toBeTruthy());
   });
 });

@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { colors } from '@shared/tokens/colors';
-import { spacing } from '@shared/tokens/spacing';
+import { colors, spacing } from '@theme/tokens';
 interface VideoGenerationButtonProps {
   state: ReturnType<typeof import('./useVideoGeneration').useVideoGeneration>['state'];
   onSubmit: () => void;
@@ -20,7 +19,7 @@ export function VideoGenerationButton({ state, onSubmit, onUpgrade }: VideoGener
   if (state.status === 'submitting') {
     return (
       <View style={styles.statusRow}>
-        <ActivityIndicator color={colors.primary} size="small" />
+        <ActivityIndicator color={colors.accent} size="small" />
         <Text style={styles.statusText}>Submitting...</Text>
       </View>
     );
@@ -29,7 +28,7 @@ export function VideoGenerationButton({ state, onSubmit, onUpgrade }: VideoGener
   if (state.status === 'processing') {
     return (
       <View style={styles.statusRow}>
-        <ActivityIndicator color={colors.primary} size="small" />
+        <ActivityIndicator color={colors.accent} size="small" />
         <Text style={styles.statusText}>
           Generating video (~{Math.ceil(state.job.estimatedDurationSeconds / 60)} min)...
         </Text>
@@ -69,24 +68,24 @@ export function VideoGenerationButton({ state, onSubmit, onUpgrade }: VideoGener
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     padding: spacing.md,
     borderRadius: 8,
     alignItems: 'center',
   },
   buttonText: {
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
   upgradeButton: {
-    backgroundColor: '#4a3f7a',
+    backgroundColor: colors.surfaceElevated,
     padding: spacing.md,
     borderRadius: 8,
     alignItems: 'center',
   },
   upgradeText: {
-    color: '#c9a8ff',
+    color: colors.accentText,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -97,21 +96,21 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   statusText: {
-    color: '#aaa',
+    color: colors.textMuted,
     fontSize: 14,
   },
   successText: {
-    color: '#6bcb6b',
+    color: colors.success,
     fontSize: 14,
     fontWeight: '600',
   },
   errorText: {
-    color: '#e05c5c',
+    color: colors.error,
     fontSize: 14,
     flex: 1,
   },
   retryText: {
-    color: colors.primary,
+    color: colors.accent,
     fontSize: 14,
   },
 });

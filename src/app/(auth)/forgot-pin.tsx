@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, View, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@shared/components/Button';
-import { spacing } from '@shared/tokens/spacing';
-import { fontSize } from '@shared/tokens/typography';
 import { supabase } from '../../supabase/client';
 import { useServices } from '@services/useServices';
+import { colors, fontSize, spacing } from '@theme/tokens';
 
 export default function ForgotPinScreen() {
   const router = useRouter();
@@ -58,7 +57,7 @@ export default function ForgotPinScreen() {
           <TextInput
             style={styles.input}
             placeholder="Account password"
-            placeholderTextColor="#6b6882"
+            placeholderTextColor={colors.textMuted}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -78,7 +77,7 @@ export default function ForgotPinScreen() {
           <TextInput
             style={styles.input}
             placeholder="New PIN (min 4 digits)"
-            placeholderTextColor="#6b6882"
+            placeholderTextColor={colors.textMuted}
             value={newPin}
             onChangeText={setNewPin}
             keyboardType="number-pad"
@@ -88,7 +87,7 @@ export default function ForgotPinScreen() {
           <TextInput
             style={styles.input}
             placeholder="Confirm new PIN"
-            placeholderTextColor="#6b6882"
+            placeholderTextColor={colors.textMuted}
             value={confirmPin}
             onChangeText={setConfirmPin}
             keyboardType="number-pad"
@@ -113,26 +112,26 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xxl,
-    backgroundColor: '#0d0d1a',
+    backgroundColor: colors.background,
     gap: spacing.lg,
   },
   title: {
     fontSize: fontSize.xl,
     fontWeight: '700',
-    color: '#f0eeff',
+    color: colors.textPrimary,
   },
   subtitle: {
     fontSize: fontSize.md,
-    color: '#c8c0e8',
+    color: colors.textSecondary,
   },
   input: {
-    backgroundColor: '#1a1a3e',
+    backgroundColor: colors.inputSurface,
     borderRadius: 10,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     fontSize: fontSize.md,
-    color: '#f0eeff',
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: '#3a3a6a',
+    borderColor: colors.borderElevated,
   },
 });

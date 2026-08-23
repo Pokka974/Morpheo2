@@ -48,6 +48,42 @@ tests/
 | H3 | generation_jobs RLS | SELECT policy for owner — enables client polling |
 | H4 | Cache size query | `getCacheSize(): Promise<number>` — NOT `evictToLimit(0)` (destructive) |
 
+## Design System (binding for all UI work)
+
+The app has one visual system, ported from the "Morpheo : système de design onirique"
+Claude Design project. **Dark is the only theme** — these are not overrides of a light
+default, they are the palette.
+
+**`src/theme/tokens.ts` is the single source of truth.** Colours, spacing, radii,
+typography, gradients, glows and touch targets all live there and nowhere else.
+
+Rules, enforced by ESLint as **errors** (not warnings):
+
+- **No hardcoded values.** `react-native/no-color-literals` and
+  `no-inline-styles` fail the build. A raw hex anywhere outside `tokens.ts` is a
+  lint error. If a value is missing, *add it to the tokens* — never inline it.
+- **Build from the existing components** before writing new markup:
+  `Button` / `ActionButton`, `Chip` / `ChipRow`, `Card`, `DreamCard`, `TabBar`,
+  `EmptyState`, `ErrorState`, `LoadingState` / `SkeletonCard`.
+- **Two families, one rule.** Fraunces carries the dream — its title, its narrative
+  and the AI's voice. Everything interactive stays in Manrope. Use the `typography.*`
+  styles rather than assembling `fontFamily` + `fontSize` by hand.
+- **Elevation is light, never shadow.** Use `glow.soft` / `glow.action` /
+  `glow.highlight`; no drop shadows, and `tokens.test.ts` asserts zero offset.
+- **Amber (`colors.highlight`) is reserved** for positive emotions and the lucid-dream
+  marker. Never for a destructive action.
+- **Icons are drawn**, never emoji or dingbats — inline `react-native-svg` on a 24px
+  grid, stroked, inheriting palette colours.
+- **Accessibility is a gate, not a polish pass.** `tests/unit/theme/contrast.test.ts`
+  asserts WCAG AA (4.5:1) for every text/surface pairing and every emotion chip; a
+  token edit that drops below AA fails CI. Interactive targets hold
+  `MIN_TOUCH_TARGET` (44px). No datum is ever carried by colour alone — the
+  constellation labels every star with its term and count.
+- **All user-facing copy goes through i18n.** `useTranslation()` + a key in
+  `src/i18n/locales/{en,fr}.json`. Never a literal string in a component;
+  `locales.test.ts` enforces key parity and matching interpolation placeholders
+  across both languages.
+
 ## Service Adapter Pattern
 
 All 8 external integrations are behind TypeScript interfaces in `src/services/`.
@@ -87,6 +123,9 @@ Every code change must satisfy all of the following before it's considered compl
 - **Service adapter pattern** — new or changed external integrations stay
   behind a `src/services/` interface, consumed only via `useServices()`,
   never by importing a concrete class directly
+- **Design system** — any UI change consumes `src/theme/tokens.ts` and the shared
+  components; no hardcoded colours, spacing or type, and all copy through i18n
+  (see the Design System section above)
 
 ## Environment Variables
 
@@ -126,6 +165,13 @@ supabase functions serve  # Serve Edge Functions locally
 
 | File | Purpose |
 |------|---------|
+| `src/theme/tokens.ts` | **Design tokens — the only place raw values live** |
+| `src/theme/useAppFonts.ts` | Manrope + Fraunces loading gate |
+| `src/i18n/locales/{en,fr}.json` | All user-facing copy |
+| `src/shared/components/` | Button, Chip, Card, TabBar, state components |
+| `src/features/recurrence/ConstellationChart.tsx` | Theme co-occurrence graph (react-native-svg) |
+| `src/features/recurrence/EmotionRibbon.tsx` | Night emotional arc (react-native-svg) |
+| `tests/unit/theme/contrast.test.ts` | WCAG AA gate on every token pairing |
 | `src/app/_layout.tsx` | Root layout, service wiring, lock gate, cache eviction |
 | `src/services/ServicesProvider.tsx` | React context for service injection |
 | `src/services/registry.ts` | ServiceRegistry type |

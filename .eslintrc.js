@@ -20,9 +20,25 @@ module.exports = {
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     'react/react-in-jsx-scope': 'off',
     'react-native/no-unused-styles': 'error',
-    'react-native/no-inline-styles': 'warn',
-    'react-native/no-color-literals': 'warn',
+    // Design-system enforcement. Every colour and every style value must come from
+    // src/theme/tokens.ts — these are errors, not warnings, so a hardcoded hex fails
+    // CI instead of quietly accumulating. If a value is genuinely missing from the
+    // tokens, add it there rather than inlining it here.
+    'react-native/no-inline-styles': 'error',
+    'react-native/no-color-literals': 'error',
     'react-native/sort-styles': 'off',
+    // The theme is the only place raw hex belongs.
+    'no-restricted-imports': [
+      'error',
+      {
+        paths: [
+          {
+            name: '@shared/tokens/colors',
+            message: 'Superseded by @theme/tokens — import { colors } from "@theme/tokens".',
+          },
+        ],
+      },
+    ],
   },
   settings: {
     react: {
@@ -49,6 +65,8 @@ module.exports = {
       // type-checked ruleset is not meant to police outside of real app source.
       files: ['tests/**/*.{ts,tsx}', 'src/**/__mocks__/**/*.{ts,tsx}', '**/*.test.{ts,tsx}'],
       rules: {
+        // Tests assert on raw values (contrast ratios, hex fixtures) by design.
+        'react-native/no-color-literals': 'off',
         '@typescript-eslint/no-unsafe-assignment': 'off',
         '@typescript-eslint/no-unsafe-member-access': 'off',
         '@typescript-eslint/no-unsafe-call': 'off',

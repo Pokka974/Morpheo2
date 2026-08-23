@@ -63,7 +63,8 @@
       "expo-sqlite",
       "expo-video",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      "expo-localization"
     ],
     "scheme": "morpheo",
     "extra": {

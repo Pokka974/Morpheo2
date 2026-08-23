@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@shared/components/Button';
-import { spacing } from '@shared/tokens/spacing';
-import { fontSize } from '@shared/tokens/typography';
 import { supabase } from '@services/../supabase/client';
+import { colors, fontSize, spacing } from '@theme/tokens';
 
 export default function OnboardingConsentScreen() {
   const router = useRouter();
@@ -83,27 +82,27 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xxl,
-    backgroundColor: '#0d0d1a',
+    backgroundColor: colors.background,
     gap: spacing.lg,
   },
   title: {
     fontSize: fontSize.xl,
     fontWeight: '700',
-    color: '#f0eeff',
+    color: colors.textPrimary,
   },
   card: {
-    backgroundColor: '#1a1a3e',
+    backgroundColor: colors.inputSurface,
     borderRadius: 12,
     padding: spacing.lg,
     gap: spacing.md,
   },
   bodyText: {
     fontSize: fontSize.md,
-    color: '#c8c0e8',
+    color: colors.textSecondary,
     lineHeight: 22,
   },
   bold: {
     fontWeight: '700',
-    color: '#b399e0',
+    color: colors.accentText,
   },
 });

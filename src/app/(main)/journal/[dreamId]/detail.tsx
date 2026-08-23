@@ -1,17 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
+
 import { sqlite as db } from '@db/client';
 import { LoadingState } from '@shared/components/LoadingState';
 import { ErrorState } from '@shared/components/ErrorState';
-import { InterpretationResultView } from '@features/interpretation/InterpretationResultView';
+import { Button } from '@shared/components/Button';
+import { Chip, ChipRow } from '@shared/components/Chip';
 import { DreamMediaView } from '@features/media-generation/DreamMediaView';
 import { useImageGeneration } from '@features/media-generation/useImageGeneration';
 import { useVideoGeneration } from '@features/media-generation/useVideoGeneration';
 import { VideoGenerationButton } from '@features/media-generation/VideoGenerationButton';
 import { useServices } from '@services/useServices';
-import { spacing } from '@shared/tokens/spacing';
-import { colors } from '@shared/tokens/colors';
+import { colors, gradients, radius, spacing, typography } from '@theme/tokens';
 import type {
   CulturalReference,
   InterpretationResult,
@@ -24,9 +29,15 @@ interface DreamDetail {
   occurredAt: string;
 }
 
+const HERO_HEIGHT = 206;
+/** How far the content sheet rides up over the hero image. */
+const CONTENT_OVERLAP = 42;
+
 export default function DreamDetailScreen() {
   const { dreamId } = useLocalSearchParams<{ dreamId: string }>();
   const router = useRouter();
+  const { t, i18n } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { imageGeneration } = useServices();
 
   const [dream, setDream] = useState<DreamDetail | null>(null);
@@ -90,8 +101,8 @@ export default function DreamDetailScreen() {
 
         const media = await imageGeneration.getImage(dreamId);
         setImageMedia(media);
-      } catch {
-        // leave null
+      } catch (err) {
+        console.error('Failed to load dream detail:', err);
       } finally {
         setIsLoading(false);
       }
@@ -120,10 +131,10 @@ export default function DreamDetailScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert('Delete Dream', 'This will permanently remove this dream entry.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('dream.deleteConfirmTitle'), t('dream.deleteConfirmBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('dream.delete'),
         style: 'destructive',
         onPress: () => {
           void confirmDelete();
@@ -132,43 +143,133 @@ export default function DreamDetailScreen() {
     ]);
   };
 
-  if (isLoading) return <LoadingState message="Loading dream..." />;
-  if (!dream) return <ErrorState message="Dream not found." />;
+  if (isLoading) return <LoadingState message={t('common.loading')} />;
+  if (!dream) return <ErrorState message={t('dream.notFound')} />;
 
   const activeImage = imageState.status === 'success' ? imageState.media : imageMedia;
+  // Prefer the on-device copy so an opened dream never re-fetches from the provider
+  // (FR-013); fall back to the signed URL until the cache is warm.
+  const heroUri = activeImage?.localCachePath ?? activeImage?.signedUrl ?? null;
+  const occurred = new Date(dream.occurredAt);
+  const dateLabel = occurred.toLocaleDateString(i18n.language, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  const timeLabel = occurred.toLocaleTimeString(i18n.language, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.date}>
-        {new Date(dream.occurredAt).toLocaleDateString(undefined, {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })}
-      </Text>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.hero}>
+        {heroUri ? (
+          <Image
+            source={{ uri: heroUri }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={300}
+            accessibilityIgnoresInvertColors
+          />
+        ) : null}
+        <LinearGradient
+          colors={[...gradients.imageScrim.colors]}
+          locations={[...gradients.imageScrim.locations]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+          style={[styles.heroButton, { top: insets.top + spacing.sm }]}
+        >
+          <Text style={styles.heroGlyph}>‹</Text>
+        </Pressable>
+      </View>
 
-      <Text style={styles.description}>{dream.description}</Text>
+      <View style={styles.sheet}>
+        <View style={styles.metaRow}>
+          <Text style={styles.meta}>
+            {dateLabel} · {timeLabel}
+          </Text>
+        </View>
 
-      <View style={styles.section}>
+        <Text style={styles.title}>{firstLine(dream.description)}</Text>
+
+        {interpretation?.emotions.length ? (
+          <ChipRow>
+            {interpretation.emotions.slice(0, 3).map(emotion => (
+              <Chip key={emotion} label={emotion} />
+            ))}
+          </ChipRow>
+        ) : null}
+
+        <Text style={styles.narrative}>{dream.description}</Text>
+
         {interpretation ? (
-          <InterpretationResultView result={interpretation} />
+          <LinearGradient
+            colors={[...gradients.interpretation.colors]}
+            locations={[...gradients.interpretation.locations]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.interpretationCard}
+          >
+            <View style={styles.interpretationHeader}>
+              <View style={styles.interpretationBrand}>
+                <LinearGradient
+                  colors={[...gradients.fab.colors]}
+                  locations={[...gradients.fab.locations]}
+                  style={styles.interpretationMark}
+                />
+                <Text style={styles.interpretationTitle}>{t('dream.interpretation')}</Text>
+              </View>
+            </View>
+
+            {interpretation.isDegraded ? (
+              <Text style={styles.degraded}>{t('dream.degradedNotice')}</Text>
+            ) : null}
+
+            <Text style={styles.interpretationBody}>{interpretation.overallReading}</Text>
+
+            {interpretation.keywords.length ? (
+              <ChipRow>
+                {interpretation.keywords.map(keyword => (
+                  <Chip key={keyword} label={keyword} variant="keyword" />
+                ))}
+              </ChipRow>
+            ) : null}
+
+            <View style={styles.interpretationActions}>
+              <Button
+                label={t('dream.anotherAngle')}
+                variant="secondary"
+                onPress={() =>
+                  router.push(
+                    `/(main)/journal/${dream.id}/interpretation?dreamId=${dream.id}&description=${encodeURIComponent(dream.description)}`
+                  )
+                }
+                style={styles.flexAction}
+              />
+            </View>
+          </LinearGradient>
         ) : (
-          <TouchableOpacity
-            style={styles.interpretButton}
+          <Button
+            label={t('dream.interpretButton')}
             onPress={() =>
               router.push(
                 `/(main)/journal/${dream.id}/interpretation?dreamId=${dream.id}&description=${encodeURIComponent(dream.description)}`
               )
             }
-            accessibilityRole="button"
-          >
-            <Text style={styles.interpretButtonText}>🌙 Get AI Interpretation</Text>
-          </TouchableOpacity>
+            fullWidth
+          />
         )}
-      </View>
 
-      <View style={styles.section}>
         <DreamMediaView
           media={activeImage}
           isGenerating={imageState.status === 'generating'}
@@ -188,9 +289,7 @@ export default function DreamDetailScreen() {
             });
           }}
         />
-      </View>
 
-      <View style={styles.section}>
         <VideoGenerationButton
           state={videoState}
           onSubmit={() => {
@@ -202,59 +301,123 @@ export default function DreamDetailScreen() {
           }}
           onUpgrade={() => router.push('/(main)/paywall')}
         />
-      </View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => router.push(`/(main)/log?editId=${dream.id}`)}
-          accessibilityRole="button"
-        >
-          <Text style={styles.editText}>Edit Dream</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.deleteButton}
+        {/* The "Edit dream" affordance from the design is intentionally absent: the
+            log screen does not yet accept an editId, so the button led nowhere.
+            Tracked as the FR-031 edit-flow ticket. */}
+        <Button
+          label={t('dream.delete')}
+          variant="ghost"
           onPress={handleDelete}
-          accessibilityRole="button"
-        >
-          <Text style={styles.deleteText}>Delete</Text>
-        </TouchableOpacity>
+          style={styles.delete}
+        />
       </View>
     </ScrollView>
   );
 }
 
+/** Stands in as a headline until interpretations carry a generated title. */
+function firstLine(description: string): string {
+  const sentence = description.split(/(?<=[.!?])\s/)[0] ?? description;
+  return sentence.length > 70 ? `${sentence.slice(0, 67).trimEnd()}…` : sentence;
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d1a' },
-  content: { padding: spacing.md, gap: spacing.lg, paddingBottom: spacing.xxl },
-  date: { fontSize: 13, color: '#888' },
-  description: { fontSize: 16, color: '#ccc', lineHeight: 24 },
-  section: { gap: spacing.sm },
-  interpretButton: {
-    backgroundColor: '#3d2b7a',
-    borderRadius: 12,
-    padding: spacing.lg,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#7c5cbf',
-  },
-  interpretButtonText: { color: '#e0d0ff', fontSize: 16, fontWeight: '600' },
-  actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
-  editButton: {
+  screen: {
     flex: 1,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: 8,
-    alignItems: 'center',
+    backgroundColor: colors.background,
   },
-  editText: { color: colors.primary, fontSize: 15, fontWeight: '600' },
-  deleteButton: {
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: '#e05c5c',
-    borderRadius: 8,
-    alignItems: 'center',
+  scrollContent: {
+    paddingBottom: spacing.xxl,
   },
-  deleteText: { color: '#e05c5c', fontSize: 15, fontWeight: '600' },
+  hero: {
+    height: HERO_HEIGHT,
+    backgroundColor: colors.surfaceElevated,
+  },
+  heroButton: {
+    position: 'absolute',
+    left: spacing.md,
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.borderElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroGlyph: {
+    ...typography.cardTitle,
+    fontSize: 18,
+    lineHeight: 20,
+  },
+  sheet: {
+    marginTop: -CONTENT_OVERLAP,
+    paddingHorizontal: 18,
+    gap: spacing.md,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  meta: {
+    ...typography.meta,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+  },
+  title: {
+    ...typography.dreamTitle,
+    fontSize: 27,
+    lineHeight: 33,
+  },
+  narrative: {
+    ...typography.dreamBody,
+    fontSize: 15.5,
+    lineHeight: 26,
+  },
+  interpretationCard: {
+    borderRadius: radius.panel,
+    borderWidth: 1,
+    borderColor: colors.borderMystic,
+    padding: 18,
+    gap: 12,
+  },
+  interpretationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  interpretationBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  interpretationMark: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+  },
+  interpretationTitle: {
+    ...typography.cardTitle,
+    fontSize: 14,
+  },
+  interpretationBody: {
+    ...typography.interpretationBody,
+  },
+  degraded: {
+    ...typography.meta,
+    color: colors.highlight,
+  },
+  interpretationActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 2,
+  },
+  flexAction: {
+    flex: 1,
+  },
+  delete: {
+    alignSelf: 'center',
+  },
 });

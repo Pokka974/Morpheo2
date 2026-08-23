@@ -3,8 +3,7 @@ import { View, Text, Switch, StyleSheet, Alert } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useServices } from '@services/useServices';
 import { supabase } from '../../../supabase/client';
-import { spacing } from '@shared/tokens/spacing';
-import { colors } from '@shared/tokens/colors';
+import { colors, spacing } from '@theme/tokens';
 
 export default function NotificationsScreen() {
   const { notifications } = useServices();
@@ -102,7 +101,7 @@ export default function NotificationsScreen() {
         <Switch
           value={enabled}
           onValueChange={handleToggle}
-          trackColor={{ true: colors.primary }}
+          trackColor={{ true: colors.accent }}
           accessibilityLabel="Enable daily dream reminder"
         />
       </View>
@@ -131,17 +130,17 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d1a', padding: spacing.md, gap: spacing.md },
+  container: { flex: 1, backgroundColor: colors.background, padding: spacing.md, gap: spacing.md },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: spacing.md,
   },
   labelBlock: { flex: 1, gap: 2 },
-  label: { fontSize: 15, color: '#ddd' },
-  sublabel: { fontSize: 12, color: '#666' },
-  timeValue: { fontSize: 15, color: colors.primary, fontWeight: '600' },
+  label: { fontSize: 15, color: colors.textSecondary },
+  sublabel: { fontSize: 12, color: colors.textMuted },
+  timeValue: { fontSize: 15, color: colors.accent, fontWeight: '600' },
 });

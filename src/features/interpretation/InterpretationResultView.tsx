@@ -1,63 +1,64 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+
 import type { InterpretationResult } from '@services/ai/interpretation/InterpretationService';
-import { spacing } from '@shared/tokens/spacing';
-import { fontSize } from '@shared/tokens/typography';
+import { Chip, ChipRow } from '@shared/components/Chip';
+import { colors, radius, spacing, typography } from '@theme/tokens';
 
 interface Props {
   result: InterpretationResult;
 }
 
 export function InterpretationResultView({ result }: Props) {
+  const { t } = useTranslation();
   const [expandedRef, setExpandedRef] = useState<number | null>(null);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       {result.isDegraded ? (
         <View style={styles.degradedBanner}>
-          <Text style={styles.degradedText}>
-            This dream had limited detail, so the interpretation may be less precise than usual. It
-            reflects general patterns rather than specific symbols.
-          </Text>
+          <Text style={styles.degradedText}>{t('dream.degradedNotice')}</Text>
         </View>
       ) : null}
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Interpretation</Text>
+        <Text style={styles.sectionTitle}>{t('dream.interpretation')}</Text>
         <Text style={styles.reading}>{result.overallReading}</Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Symbols</Text>
-        <View style={styles.chips}>
-          {result.keywords.map(kw => (
-            <View key={kw} style={styles.chip}>
-              <Text style={styles.chipText}>{kw}</Text>
-            </View>
-          ))}
+      {result.keywords.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('dream.symbols')}</Text>
+          <ChipRow>
+            {result.keywords.map(kw => (
+              <Chip key={kw} label={kw} variant="keyword" />
+            ))}
+          </ChipRow>
         </View>
-      </View>
+      ) : null}
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Emotions</Text>
-        <View style={styles.chips}>
-          {result.emotions.map(em => (
-            <View key={em} style={[styles.chip, styles.emotionChip]}>
-              <Text style={[styles.chipText, styles.emotionText]}>{em}</Text>
-            </View>
-          ))}
+      {result.emotions.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('dream.emotions')}</Text>
+          <ChipRow>
+            {result.emotions.map(em => (
+              <Chip key={em} label={em} />
+            ))}
+          </ChipRow>
         </View>
-      </View>
+      ) : null}
 
       {result.culturalReferences.length > 0 ? (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cultural References</Text>
+          <Text style={styles.sectionTitle}>{t('dream.culturalReferences')}</Text>
           {result.culturalReferences.map((ref, i) => (
             <TouchableOpacity
               key={i}
               style={styles.accordionItem}
               onPress={() => setExpandedRef(expandedRef === i ? null : i)}
               accessibilityRole="button"
+              accessibilityState={{ expanded: expandedRef === i }}
             >
               <View style={styles.accordionHeader}>
                 <Text style={styles.accordionSymbol}>{ref.symbol}</Text>
@@ -77,64 +78,36 @@ export function InterpretationResultView({ result }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
+    padding: spacing.md,
     gap: spacing.lg,
   },
   degradedBanner: {
-    backgroundColor: '#2d2d1a',
-    borderRadius: 8,
     padding: spacing.md,
-    borderLeftWidth: 3,
-    borderLeftColor: '#e0a85c',
+    borderRadius: radius.card,
+    backgroundColor: colors.errorSurface,
+    borderWidth: 1,
+    borderColor: colors.errorBorder,
   },
   degradedText: {
-    color: '#e0c880',
-    fontSize: fontSize.sm,
-    lineHeight: 20,
+    ...typography.meta,
+    color: colors.textSecondary,
   },
   section: {
     gap: spacing.sm,
   },
   sectionTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: '#6b6882',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    ...typography.overline,
   },
   reading: {
-    fontSize: fontSize.md,
-    color: '#f0eeff',
-    lineHeight: 24,
-  },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
-    backgroundColor: '#2d2d6b',
-    borderRadius: 20,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  chipText: {
-    color: '#b399e0',
-    fontSize: fontSize.sm,
-    fontWeight: '500',
-  },
-  emotionChip: {
-    backgroundColor: '#2d1a2d',
-  },
-  emotionText: {
-    color: '#e0a8b3',
+    ...typography.interpretationBody,
   },
   accordionItem: {
-    backgroundColor: '#1a1a3e',
-    borderRadius: 8,
     padding: spacing.md,
-    gap: spacing.sm,
+    borderRadius: radius.card,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.sm,
   },
   accordionHeader: {
     flexDirection: 'row',
@@ -142,22 +115,21 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   accordionSymbol: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: '#f0eeff',
+    ...typography.cardTitle,
+    fontSize: 15,
     flex: 1,
   },
   accordionTradition: {
-    fontSize: fontSize.sm,
-    color: '#6b6882',
+    ...typography.meta,
+    fontSize: 12,
+    color: colors.accentText,
   },
   accordionToggle: {
-    color: '#6b6882',
-    fontSize: fontSize.sm,
+    ...typography.meta,
+    fontSize: 10,
   },
   accordionMeaning: {
-    fontSize: fontSize.sm,
-    color: '#c8c0e8',
-    lineHeight: 20,
+    ...typography.dreamBody,
+    marginTop: spacing.sm,
   },
 });

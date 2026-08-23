@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { supabase } from '../../../supabase/client';
-import { spacing } from '@shared/tokens/spacing';
-import { colors } from '@shared/tokens/colors';
+import { colors, spacing } from '@theme/tokens';
 
 interface ConsentState {
   granted: boolean;
@@ -110,7 +109,7 @@ export default function PrivacyScreen() {
       {loadError && <Text style={styles.loadError}>{loadError}</Text>}
 
       {isSaving ? (
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={colors.accent} />
       ) : consent?.granted ? (
         <TouchableOpacity
           style={styles.withdrawButton}
@@ -137,35 +136,40 @@ export default function PrivacyScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0d0d1a', padding: spacing.md, gap: spacing.md },
-  title: { fontSize: 18, color: '#fff', fontWeight: '700' },
-  description: { fontSize: 13, color: '#aaa', lineHeight: 20 },
+  container: { flex: 1, backgroundColor: colors.background, padding: spacing.md, gap: spacing.md },
+  title: { fontSize: 18, color: colors.textPrimary, fontWeight: '700' },
+  description: { fontSize: 13, color: colors.textMuted, lineHeight: 20 },
   statusCard: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: spacing.md,
     gap: spacing.xs,
   },
-  statusLabel: { fontSize: 12, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5 },
+  statusLabel: {
+    fontSize: 12,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   statusValue: { fontSize: 16, fontWeight: '700' },
-  statusGranted: { color: '#6bcb6b' },
-  statusWithdrawn: { color: '#e05c5c' },
-  statusDate: { fontSize: 12, color: '#555' },
+  statusGranted: { color: colors.success },
+  statusWithdrawn: { color: colors.error },
+  statusDate: { fontSize: 12, color: colors.textMuted },
   loadError: { fontSize: 13, color: colors.error, marginBottom: spacing.md },
   withdrawButton: {
-    backgroundColor: '#2a1a1a',
+    backgroundColor: colors.destructiveSurface,
     borderWidth: 1,
-    borderColor: '#e05c5c',
+    borderColor: colors.error,
     borderRadius: 8,
     padding: spacing.md,
     alignItems: 'center',
   },
-  withdrawText: { color: '#e05c5c', fontWeight: '600' },
+  withdrawText: { color: colors.error, fontWeight: '600' },
   grantButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     borderRadius: 8,
     padding: spacing.md,
     alignItems: 'center',
   },
-  grantText: { color: '#fff', fontWeight: '600' },
+  grantText: { color: colors.textPrimary, fontWeight: '600' },
 });

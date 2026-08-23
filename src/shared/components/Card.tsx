@@ -1,14 +1,39 @@
 import React from 'react';
-import { StyleSheet, View, ViewProps } from 'react-native';
-import { spacing } from '../tokens/spacing';
+import { StyleSheet, View, type ViewProps } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import { colors, glow, gradients, radius, spacing } from '@theme/tokens';
+
+export type CardVariant = 'surface' | 'mystic';
 
 interface Props extends ViewProps {
   children: React.ReactNode;
+  /**
+   * `surface` is the default flat card. `mystic` is the gradient-and-glow card the
+   * design reserves for AI output and insights — used sparingly, it is what marks
+   * a surface as "the app thought about this".
+   */
+  variant?: CardVariant;
 }
 
-export function Card({ children, style, ...rest }: Props) {
+export function Card({ children, style, variant = 'surface', ...rest }: Props) {
+  if (variant === 'mystic') {
+    return (
+      <LinearGradient
+        colors={[...gradients.mystic.colors]}
+        locations={[...gradients.mystic.locations]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.card, styles.mystic, style]}
+        {...rest}
+      >
+        {children}
+      </LinearGradient>
+    );
+  }
+
   return (
-    <View style={[styles.card, style]} {...rest}>
+    <View style={[styles.card, styles.surface, style]} {...rest}>
       {children}
     </View>
   );
@@ -16,13 +41,16 @@ export function Card({ children, style, ...rest }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: radius.card,
     padding: spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    borderWidth: 1,
+  },
+  surface: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+  },
+  mystic: {
+    borderColor: colors.borderMystic,
+    ...glow.soft,
   },
 });

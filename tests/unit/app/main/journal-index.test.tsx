@@ -79,7 +79,7 @@ describe('JournalListScreen', () => {
   it('shows a loading state before entries resolve', () => {
     (db.getAllAsync as jest.Mock).mockImplementation(() => new Promise(() => {}));
     const { getByText } = render(<JournalListScreen />);
-    expect(getByText('Loading your dreams...')).toBeTruthy();
+    expect(getByText('Loading your dreams…')).toBeTruthy();
   });
 
   it('shows the empty-journal state with a CTA when there are no dreams, and navigates to log on press', async () => {
@@ -87,7 +87,7 @@ describe('JournalListScreen', () => {
     const { getByText } = render(<JournalListScreen />);
 
     await waitFor(() => expect(getByText('Your dream journal is empty')).toBeTruthy());
-    fireEvent.press(getByText('Log a Dream'));
+    fireEvent.press(getByText('Log a dream'));
     expect(mockNavigate).toHaveBeenCalledWith('/(main)/log');
   });
 
@@ -135,7 +135,7 @@ describe('JournalListScreen', () => {
     expect(mockSearch).toHaveBeenCalledWith('castle');
 
     await waitFor(() => expect(getByText('No dreams match this search')).toBeTruthy());
-    fireEvent.press(getByText('Clear Search'));
+    fireEvent.press(getByText('Clear search'));
     expect(mockClearSearch).toHaveBeenCalled();
   });
 
