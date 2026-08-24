@@ -69,12 +69,31 @@ serve(async (req: Request) => {
   const keywordStr = keywords?.length ? ` Key symbols: ${keywords.slice(0, 5).join(', ')}.` : '';
   const prompt = `Dreamlike, surreal illustration of: ${description.slice(0, 300)}${keywordStr} Artistic, imaginative, non-photorealistic style. No text.`;
 
-  // Call OpenAI's gpt-image-2 (dall-e-3 was removed from the API on 2026-05-12)
-  const openAiResponse = await fetch('https://api.openai.com/v1/images/generations', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'gpt-image-2', prompt, n: 1, size: '1024x1024', quality: 'high' }),
-  });
+  // Call OpenAI's gpt-image-2 (dall-e-3 was removed from the API on 2026-05-12).
+  // quality: 'medium', not 'high' -- 'high' at 1024x1024 has a median generation
+  // latency around 195s (p95 ~280s), well past Supabase's 150s idle-response
+  // timeout, which silently 504s the invocation with zero logs since the function
+  // never gets past this await to log anything. 'medium' keeps this a fast
+  // synchronous call, as the original dall-e-3 architecture assumed.
+  console.log('Calling OpenAI gpt-image-2 for dream', dreamId);
+  let openAiResponse: Response;
+  try {
+    openAiResponse = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-image-2', prompt, n: 1, size: '1024x1024', quality: 'medium' }),
+      // Safety net: fail loudly and logged well before Supabase's 150s idle-response
+      // timeout kills the invocation with no application-level log at all.
+      signal: AbortSignal.timeout(120_000),
+    });
+  } catch (err) {
+    const isTimeout = err instanceof Error && err.name === 'TimeoutError';
+    console.error(
+      isTimeout ? 'OpenAI image generation timed out after 120s:' : 'OpenAI image generation request failed:',
+      err
+    );
+    return new Response(JSON.stringify({ error: 'generation_failed' }), { status: 503, headers: corsHeaders });
+  }
 
   if (!openAiResponse.ok) {
     const err = await openAiResponse.json();

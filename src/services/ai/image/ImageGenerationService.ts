@@ -47,3 +47,10 @@ export class ImageLimitError extends Error {
     this.name = 'ImageLimitError';
   }
 }
+
+export class ImageGenerationProviderError extends Error {
+  constructor(public readonly retryable: boolean) {
+    super('Image generation provider unavailable');
+    this.name = 'ImageGenerationProviderError';
+  }
+}

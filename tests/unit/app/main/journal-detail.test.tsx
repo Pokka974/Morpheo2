@@ -20,7 +20,13 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, back: mockBack }),
 }));
 
-let mockImageState: { status: string; media?: unknown } = { status: 'idle' };
+let mockImageState: {
+  status: string;
+  media?: unknown;
+  message?: string;
+  max?: number;
+  resetDate?: Date;
+} = { status: 'idle' };
 let mockVideoState: { status: string; job?: unknown; message?: string } = { status: 'idle' };
 const mockGenerate = jest.fn();
 const mockRegenerate = jest.fn();
@@ -247,5 +253,19 @@ describe('DreamDetailScreen', () => {
     await waitFor(() => expect(getByText('Upgrade to generate video')).toBeTruthy());
     fireEvent.press(getByText('Upgrade to generate video'));
     expect(mockPush).toHaveBeenCalledWith('/(main)/paywall');
+  });
+
+  it('surfaces the real reason an image failed instead of a generic placeholder', async () => {
+    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(INTERP_ROW);
+    imageService.configure('failure'); // getImage resolves null, so the fallback text would otherwise win
+    mockImageState = { status: 'safety_blocked' };
+    const { getByText, queryByText } = renderScreen();
+
+    await waitFor(() =>
+      expect(
+        getByText("This dream couldn't be illustrated — its description was flagged by content safety filtering.")
+      ).toBeTruthy()
+    );
+    expect(queryByText('No illustration yet')).toBeNull();
   });
 });
