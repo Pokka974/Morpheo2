@@ -131,13 +131,16 @@ describe('dreamRepository', () => {
   });
 
   describe('deleteDream', () => {
-    it('soft-deletes by setting isDeleted=true and syncStatus=local', async () => {
+    it('soft-deletes by setting isDeleted=true, bumping lastModifiedAt, and syncStatus=local', async () => {
       mockUpdateWhere.mockReset().mockResolvedValue(undefined);
       mockSet.mockClear();
       await deleteDream('dream-1');
 
-      const setArg = mockSet.mock.calls[mockSet.mock.calls.length - 1]![0];
-      expect(setArg).toEqual({ isDeleted: true, syncStatus: 'local' });
+      const setArg = mockSet.mock.calls[mockSet.mock.calls.length - 1]![0] as Record<string, unknown>;
+      expect(setArg['isDeleted']).toBe(true);
+      expect(setArg['syncStatus']).toBe('local');
+      expect(typeof setArg['lastModifiedAt']).toBe('string');
+      expect(new Date(setArg['lastModifiedAt'] as string).toString()).not.toBe('Invalid Date');
     });
   });
 
@@ -146,18 +149,19 @@ describe('dreamRepository', () => {
       mockFromNoWhere = null;
     });
 
-    it('excludes synced and deleted dreams', async () => {
+    it('excludes only synced dreams — a deleted-but-unsynced dream is still pending', async () => {
       const rows: Dream[] = [
         { ...baseDream, id: '1', syncStatus: 'local', isDeleted: false },
         { ...baseDream, id: '2', syncStatus: 'synced', isDeleted: false },
         { ...baseDream, id: '3', syncStatus: 'sync_failed', isDeleted: false },
         { ...baseDream, id: '4', syncStatus: 'local', isDeleted: true },
+        { ...baseDream, id: '5', syncStatus: 'synced', isDeleted: true },
       ];
       // getPendingDreams calls db.select().from(dreams) with no .where(), so `from` must resolve directly.
       mockFromNoWhere = jest.fn().mockResolvedValue(rows);
 
       const pending = await getPendingDreams();
-      expect(pending.map(d => d.id)).toEqual(['1', '3']);
+      expect(pending.map(d => d.id)).toEqual(['1', '3', '4']);
     });
   });
 

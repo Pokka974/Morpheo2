@@ -12,6 +12,9 @@ import { EmptyState } from '@shared/components/EmptyState';
 import { DreamCard, type JournalEntry } from '@features/journal/DreamCard';
 import { useJournalSearch } from '@features/journal/useJournalSearch';
 import { useJournalFilters } from '@features/journal/useJournalFilters';
+import { syncPendingDreams } from '@features/dream-log/syncService';
+import { pullRemoteChanges } from '@features/sync/pullService';
+import { useServices } from '@services/useServices';
 import { colors, gradients, radius, spacing, typography } from '@theme/tokens';
 
 const PAGE_SIZE = 20;
@@ -20,9 +23,11 @@ export default function JournalListScreen() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { auth } = useServices();
 
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { results: searchResults, isSearching, search, clearSearch } = useJournalSearch();
   const { results: filterResults } = useJournalFilters();
@@ -81,6 +86,32 @@ export default function JournalListScreen() {
       void loadEntries();
     }, [loadEntries])
   );
+
+  // Pull-to-refresh: reconcile with Supabase on demand (push this device's pending
+  // changes, then pull remote ones — including deletions made elsewhere, which
+  // otherwise only get picked up on the next foreground/reconnect/login cycle)
+  // before re-reading the local list.
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const session = await auth.getSession();
+      if (session) {
+        try {
+          await syncPendingDreams();
+        } catch (err) {
+          console.error('Push sync on pull-to-refresh failed:', err);
+        }
+        try {
+          await pullRemoteChanges(session.user.id);
+        } catch (err) {
+          console.error('Pull sync on pull-to-refresh failed:', err);
+        }
+      }
+      await loadEntries();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [auth, loadEntries]);
 
   const displayEntries: JournalEntry[] = (searchResults ?? filterResults ?? entries).map(r =>
     'occurredAt' in r
@@ -173,6 +204,8 @@ export default function JournalListScreen() {
           ItemSeparatorComponent={Separator}
           ListFooterComponent={displayEntries.length > 0 ? <WeeklyInsight /> : null}
           showsVerticalScrollIndicator={false}
+          refreshing={isRefreshing}
+          onRefresh={() => void onRefresh()}
         />
       )}
     </View>

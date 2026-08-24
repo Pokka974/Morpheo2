@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import { syncPendingDreams, AuthExpiredError } from './syncService';
+import { pullRemoteChanges } from '@features/sync/pullService';
 import type { AuthService } from '@services/auth/AuthService';
 
 export function useSyncOnConnect(auth: AuthService) {
@@ -21,6 +22,9 @@ export function useSyncOnConnect(auth: AuthService) {
       if (wasOfflineRef.current) {
         wasOfflineRef.current = false;
         try {
+          // Push this device's own pending changes first, so they reach the server
+          // before the pull reconciles down — otherwise an in-flight local edit
+          // could look like something the pull should discard.
           await syncPendingDreams();
         } catch (err) {
           if (err instanceof AuthExpiredError) {
@@ -31,6 +35,13 @@ export function useSyncOnConnect(auth: AuthService) {
               // Session refresh failed: surface via notification
             }
           }
+        }
+
+        try {
+          const session = await auth.getSession();
+          if (session) await pullRemoteChanges(session.user.id);
+        } catch (err) {
+          console.error('Pull sync on reconnect failed:', err);
         }
       }
     };

@@ -49,6 +49,11 @@ jest.mock('@features/media-generation/useVideoGeneration', () => ({
   }),
 }));
 
+const mockDeleteDream = jest.fn();
+jest.mock('@features/dream-log/dreamRepository', () => ({
+  deleteDream: (...args: unknown[]) => mockDeleteDream(...args),
+}));
+
 const imageService = new MockImageGenerationService();
 
 function buildRegistry(): ServiceRegistry {
@@ -216,6 +221,7 @@ describe('DreamDetailScreen', () => {
 
   it('soft-deletes the dream and navigates back when confirming delete', async () => {
     (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
+    mockDeleteDream.mockReset().mockResolvedValue(undefined);
     const { getByText } = renderScreen();
     await waitFor(() => expect(getByText('Delete')).toBeTruthy());
 
@@ -228,7 +234,10 @@ describe('DreamDetailScreen', () => {
     expect(cancelButton.onPress).toBeUndefined();
 
     await deleteButton.onPress!();
-    expect(db.runAsync).toHaveBeenCalledWith(expect.stringContaining('UPDATE dreams SET is_deleted = 1'), 'dream-1');
+    // Goes through dreamRepository.deleteDream — the same repository path every
+    // other dream mutation uses — rather than a raw SQL statement, so the deletion
+    // also becomes eligible for the sync queue instead of staying purely local.
+    expect(mockDeleteDream).toHaveBeenCalledWith('dream-1');
     expect(mockBack).toHaveBeenCalled();
   });
 

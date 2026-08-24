@@ -1,3 +1,8 @@
+const mockPullRemoteChanges = jest.fn();
+jest.mock('@features/sync/pullService', () => ({
+  pullRemoteChanges: (...args: unknown[]) => mockPullRemoteChanges(...args),
+}));
+
 import { renderHook } from '@testing-library/react-native';
 import { useAuthSync } from '@features/auth/useAuthSync';
 import type { AuthService, AuthSession } from '@services/auth/AuthService';
@@ -10,6 +15,10 @@ const session: AuthSession = {
 };
 
 describe('useAuthSync', () => {
+  beforeEach(() => {
+    mockPullRemoteChanges.mockReset().mockResolvedValue(undefined);
+  });
+
   it('registers a push token when the auth state change carries a session', async () => {
     const unsubscribe = jest.fn();
     let capturedCallback: (session: AuthSession | null) => void = () => {};
@@ -44,6 +53,68 @@ describe('useAuthSync', () => {
 
     await capturedCallback(null);
     expect(registerPushToken).not.toHaveBeenCalled();
+  });
+
+  it('backfills local SQLite from Supabase for the signed-in user', async () => {
+    const unsubscribe = jest.fn();
+    let capturedCallback: (session: AuthSession | null) => void = () => {};
+    const auth = {
+      onAuthStateChange: jest.fn((cb: (s: AuthSession | null) => void) => {
+        capturedCallback = cb;
+        return unsubscribe;
+      }),
+    } as unknown as AuthService;
+    const notifications = {
+      registerPushToken: jest.fn().mockResolvedValue(undefined),
+    } as unknown as NotificationService;
+
+    renderHook(() => useAuthSync(auth, notifications));
+
+    await capturedCallback(session);
+    // Fire-and-forget: let the pull's microtask settle.
+    await Promise.resolve();
+    expect(mockPullRemoteChanges).toHaveBeenCalledWith('user-1');
+  });
+
+  it('does not pull when the session is null', async () => {
+    const unsubscribe = jest.fn();
+    let capturedCallback: (session: AuthSession | null) => void = () => {};
+    const auth = {
+      onAuthStateChange: jest.fn((cb: (s: AuthSession | null) => void) => {
+        capturedCallback = cb;
+        return unsubscribe;
+      }),
+    } as unknown as AuthService;
+    const notifications = {
+      registerPushToken: jest.fn().mockResolvedValue(undefined),
+    } as unknown as NotificationService;
+
+    renderHook(() => useAuthSync(auth, notifications));
+
+    await capturedCallback(null);
+    expect(mockPullRemoteChanges).not.toHaveBeenCalled();
+  });
+
+  it('swallows a pull failure without throwing', async () => {
+    mockPullRemoteChanges.mockRejectedValue(new Error('pull failed'));
+    const unsubscribe = jest.fn();
+    let capturedCallback: (session: AuthSession | null) => void = () => {};
+    const auth = {
+      onAuthStateChange: jest.fn((cb: (s: AuthSession | null) => void) => {
+        capturedCallback = cb;
+        return unsubscribe;
+      }),
+    } as unknown as AuthService;
+    const notifications = {
+      registerPushToken: jest.fn().mockResolvedValue(undefined),
+    } as unknown as NotificationService;
+
+    renderHook(() => useAuthSync(auth, notifications));
+
+    expect(() => capturedCallback(session)).not.toThrow();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mockPullRemoteChanges).toHaveBeenCalledTimes(1);
   });
 
   it('swallows a registerPushToken failure without throwing', async () => {
