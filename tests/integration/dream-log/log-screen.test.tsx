@@ -32,10 +32,28 @@ jest.mock('@features/dream-log/dreamRepository', () => ({
   validateForInterpretation: jest.fn(),
 }));
 
-const mockSyncPendingDreams = jest.fn().mockResolvedValue(undefined);
-jest.mock('@features/dream-log/syncService', () => ({
-  syncPendingDreams: () => mockSyncPendingDreams(),
-}));
+const mockSyncPendingDreams = jest.fn().mockResolvedValue({ syncedIds: [], failures: [] });
+const mockSyncDreamForInterpretation = jest.fn().mockResolvedValue(undefined);
+// The error class is declared inside the factory: jest.mock is hoisted above every
+// class declaration in this file, so a class defined out here is still in its temporal
+// dead zone when the screen's `instanceof` check runs.
+jest.mock('@features/dream-log/syncService', () => {
+  class DreamNotSyncedError extends Error {
+    constructor(id: string) {
+      super(`Dream ${id} did not reach the server`);
+      this.name = 'DreamNotSyncedError';
+    }
+  }
+  return {
+    syncPendingDreams: () => mockSyncPendingDreams(),
+    syncDreamForInterpretation: (...args: unknown[]) => mockSyncDreamForInterpretation(...args),
+    DreamNotSyncedError,
+  };
+});
+
+const { DreamNotSyncedError } = jest.requireMock<{
+  DreamNotSyncedError: new (dreamId: string) => Error;
+}>('@features/dream-log/syncService');
 
 import DreamLogScreen from '@app/(main)/log/index';
 
@@ -59,6 +77,7 @@ describe('DreamLogScreen', () => {
   beforeEach(() => {
     mockSaveDream.mockClear();
     mockSyncPendingDreams.mockClear();
+    mockSyncDreamForInterpretation.mockReset().mockResolvedValue(undefined);
     mockReplace.mockClear();
     mockNavigate.mockClear();
     mockPush.mockClear();
@@ -78,6 +97,41 @@ describe('DreamLogScreen', () => {
       await waitFor(() => expect(mockSaveDream).toHaveBeenCalledTimes(1));
       const savedId = mockSaveDream.mock.calls[0][0].id;
       expect(savedId).toMatch(UUID_V4);
+    });
+
+    it('saves the emotions the dreamer picked and the lucid marker alongside the account', async () => {
+      const { getByLabelText, getByText } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      fireEvent.changeText(getByLabelText('Dream description'), LONG_ENOUGH);
+      fireEvent.press(getByLabelText('Emotion: calm'));
+      fireEvent.press(getByLabelText('Emotion: freedom'));
+      fireEvent.press(getByLabelText('Lucid dream'));
+      fireEvent.press(getByText('Save draft'));
+
+      await waitFor(() => expect(mockSaveDream).toHaveBeenCalledTimes(1));
+      const saved = mockSaveDream.mock.calls[0][0];
+      expect(JSON.parse(saved.emotions)).toEqual(['calm', 'freedom']);
+      expect(saved.isLucid).toBe(true);
+    });
+
+    it('defaults to no emotions and a non-lucid dream when neither is touched', async () => {
+      const { getByLabelText, getByText } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      fireEvent.changeText(getByLabelText('Dream description'), LONG_ENOUGH);
+      fireEvent.press(getByText('Save draft'));
+
+      await waitFor(() => expect(mockSaveDream).toHaveBeenCalledTimes(1));
+      const saved = mockSaveDream.mock.calls[0][0];
+      expect(JSON.parse(saved.emotions)).toEqual([]);
+      expect(saved.isLucid).toBe(false);
     });
 
     it('triggers a best-effort sync after saving and returns to the journal list', async () => {
@@ -128,8 +182,8 @@ describe('DreamLogScreen', () => {
       ).toBeFalsy();
     });
 
-    it('shows how many more characters are needed, below the threshold', () => {
-      const { getByLabelText, getByText } = render(
+    it('counts what the account already is rather than what it still lacks', () => {
+      const { getByLabelText, getByText, queryByText } = render(
         <ServicesProvider services={buildRegistry()}>
           <DreamLogScreen />
         </ServicesProvider>
@@ -137,7 +191,46 @@ describe('DreamLogScreen', () => {
 
       fireEvent.changeText(getByLabelText('Dream description'), TOO_SHORT);
 
-      expect(getByText('11 more characters to unlock interpretation.')).toBeTruthy();
+      expect(getByText('9 chars.')).toBeTruthy();
+      expect(getByText('Keep going — a few more words')).toBeTruthy();
+      expect(queryByText('Long enough to be interpreted')).toBeNull();
+    });
+
+    it('flips the counter hint to "long enough" once the threshold is met', () => {
+      const { getByLabelText, getByText } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      fireEvent.changeText(getByLabelText('Dream description'), LONG_ENOUGH);
+
+      expect(getByText(`${LONG_ENOUGH.length} chars.`)).toBeTruthy();
+      expect(getByText('Long enough to be interpreted')).toBeTruthy();
+    });
+
+    it('keeps the dream and explains itself when the sync fails, instead of navigating into a foreign-key violation', async () => {
+      mockSyncDreamForInterpretation.mockRejectedValueOnce(new DreamNotSyncedError('dream-1'));
+
+      const { getByLabelText, getByText, findByText } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      fireEvent.changeText(getByLabelText('Dream description'), LONG_ENOUGH);
+      fireEvent.press(getByText('Interpret this dream'));
+
+      // The dream is saved locally either way — only the trip to the server failed.
+      await waitFor(() => expect(mockSaveDream).toHaveBeenCalledTimes(1));
+      expect(
+        await findByText(
+          'Your dream is saved, but we could not reach the server — it will be interpreted once you are back online.'
+        )
+      ).toBeTruthy();
+      // Navigating would put the interpret Edge Function in front of a dream row that
+      // is not there, which surfaces to the user as a generic failure.
+      expect(mockPush).not.toHaveBeenCalled();
     });
 
     it('saves, awaits the sync, then navigates straight to the auto-firing interpretation screen — one press, not two', async () => {
@@ -154,7 +247,7 @@ describe('DreamLogScreen', () => {
       const savedId = mockSaveDream.mock.calls[0][0].id;
       expect(savedId).toMatch(UUID_V4);
 
-      await waitFor(() => expect(mockSyncPendingDreams).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockSyncDreamForInterpretation).toHaveBeenCalledWith(savedId));
       await waitFor(() =>
         expect(mockPush).toHaveBeenCalledWith(
           `/(main)/journal/${savedId}/interpretation?dreamId=${savedId}&description=${encodeURIComponent(LONG_ENOUGH)}`
@@ -166,7 +259,7 @@ describe('DreamLogScreen', () => {
 
     it('waits for the sync to resolve before navigating — the interpret screen must not fire against a dream the server does not have yet', async () => {
       let resolveSync: () => void = () => {};
-      mockSyncPendingDreams.mockReturnValueOnce(
+      mockSyncDreamForInterpretation.mockReturnValueOnce(
         new Promise<void>(resolve => {
           resolveSync = resolve;
         })

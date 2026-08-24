@@ -144,7 +144,7 @@ export default function DreamDetailScreen() {
   };
 
   if (isLoading) return <LoadingState message={t('common.loading')} />;
-  if (!dream) return <ErrorState message={t('dream.notFound')} />;
+  if (!dream) return <ErrorState message={t('dream.notFound')} fullScreen />;
 
   const activeImage = imageState.status === 'success' ? imageState.media : imageMedia;
   // Prefer the on-device copy so an opened dream never re-fetches from the provider

@@ -9,6 +9,8 @@
  * this (react-native/no-color-literals is an error) — extend the tokens instead.
  */
 
+import { Platform } from 'react-native';
+
 // ---------------------------------------------------------------------------
 // Palette — raw values. Prefer the semantic `colors` export in components.
 // ---------------------------------------------------------------------------
@@ -19,6 +21,8 @@ const palette = {
   surface: '#16162e',
   surfaceElevated: '#1e1e3c',
   indigoLight: '#2d2d6b',
+  /** The lit stop of every mystical gradient — the mystic card, the waiting sky. */
+  mysticLight: '#2a2456',
 
   purple: '#7c5cbf',
   purpleLight: '#9f7dd8',
@@ -175,7 +179,7 @@ export const gradients = {
   },
   /** Mystical card ground (interpretation, insight of the week). */
   mystic: {
-    colors: ['#2a2456', palette.surface] as const,
+    colors: [palette.mysticLight, palette.surface] as const,
     locations: [0, 1] as const,
   },
   /** Interpretation card — slightly deeper than `mystic`. */
@@ -196,6 +200,21 @@ export const gradients = {
   /** The free-tier quota nudge card — a shade deeper than `mystic`. */
   premiumQuota: {
     colors: [palette.indigoLight, palette.surface] as const,
+    locations: [0, 1] as const,
+  },
+  /** The interpretation wait screen — a night sky lit from above. */
+  waiting: {
+    colors: [palette.mysticLight, palette.night900] as const,
+    locations: [0, 0.68] as const,
+  },
+  /** The breathing orb at the centre of the wait screen. */
+  orb: {
+    colors: [palette.amethyst, palette.purple] as const,
+    locations: [0, 1] as const,
+  },
+  /** The account avatar disc in Settings. */
+  avatar: {
+    colors: [palette.purpleLight, palette.indigoLight] as const,
     locations: [0, 1] as const,
   },
   /** Scrim over a generated visual so text stays legible on any image. */
@@ -274,6 +293,12 @@ export const fontFamily = {
   dream: 'Fraunces_400Regular',
   dreamMedium: 'Fraunces_500Medium',
   dreamItalic: 'Fraunces_400Regular_Italic',
+  /**
+   * The design sets counters, timers and durations in `ui-monospace`. There is no
+   * bundled monospace face — these are the system ones, which is what `ui-monospace`
+   * resolves to on the web too.
+   */
+  mono: Platform.select({ ios: 'Menlo', default: 'monospace' }),
 } as const;
 
 export const fontSize = {
@@ -396,6 +421,13 @@ export const typography = {
     fontSize: 10,
     lineHeight: 13,
   },
+  /** Counters, elapsed timers, quota fractions — monospace so digits don't jitter. */
+  counter: {
+    fontFamily: fontFamily.mono,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.textMuted,
+  },
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -450,6 +482,13 @@ export const sizes = {
   avatar: 42,
   thumbSmall: 58,
   thumbMedium: 60,
+  /** Circular chrome button — the back chevron and the dismiss cross. */
+  circleButton: 38,
+  /** The lucid / preference switch. */
+  toggleTrack: 44,
+  toggleKnob: 20,
+  /** The breathing orb on the interpretation wait screen. */
+  orb: 132,
 } as const;
 
 export const tokens = {

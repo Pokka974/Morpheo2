@@ -99,6 +99,11 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
 
   const activeName = state.routes[state.index]?.name;
 
+  // Logging a dream is a modal flow, not a destination: it opens from the centre
+  // action and is left through its own back chevron, so the bar steps out of the way
+  // rather than offering a second, competing way out mid-telling.
+  if (activeName === CENTRE_ROUTE) return null;
+
   const renderTab = (name: string) => {
     const Icon = ICONS[name];
     if (!Icon) return null;

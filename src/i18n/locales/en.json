@@ -59,7 +59,21 @@
     "limitReachedTitle": "Monthly limit reached",
     "limitReachedBody": "Your free interpretations reset on {{date}}.",
     "paywallTitle": "Upgrade required",
-    "paywallBody": "Unlimited interpretations are available with a premium subscription."
+    "paywallBody": "Unlimited interpretations are available with a premium subscription.",
+    "waitingOverline": "Interpretation in progress",
+    "waitingSubtitle": "One moment — we are reading your account closely.",
+    "waitingSubtitleWithHistory": "One moment — we are reading your account alongside your {{count}} previous dream.",
+    "waitingSubtitleWithHistory_other": "One moment — we are reading your account alongside your {{count}} previous dreams.",
+    "waitingStage": {
+      "reading": "Account read",
+      "symbols": "Spotting the symbols",
+      "crossing": "Crossing with your recurring themes"
+    },
+    "waitingModel": "{{model}} · ~15 s",
+    "waitingDuration": "~15 s",
+    "continueInBackground": "Continue in the background",
+    "dreamNotSyncedTitle": "This dream is still on your device",
+    "dreamNotSyncedBody": "We could not reach the server, so it cannot be interpreted yet. Your dream is safe — try again once you are back online."
   },
   "insights": {
     "title": "Insights",
@@ -94,17 +108,31 @@
     "topEmotions": "Recurring emotions"
   },
   "log": {
-    "title": "Tell your dream",
+    "title": "New dream",
     "placeholder": "Tell your dream…",
-    "minLengthRemaining": "{{count}} more character to unlock interpretation.",
-    "minLengthRemaining_other": "{{count}} more characters to unlock interpretation.",
     "saveError": "Could not save the dream.",
     "recording": "Recording",
     "micStart": "Start voice dictation",
     "micStop": "Stop voice dictation",
     "micUnavailable": "Voice dictation is not available on this device.",
     "dateLabel": "Dream occurred",
-    "interpretCta": "Interpret this dream"
+    "interpretCta": "Interpret this dream",
+    "modeWrite": "Write",
+    "modeDictate": "Dictate",
+    "longEnough": "Long enough to be interpreted",
+    "keepGoing": "Keep going — a few more words",
+    "charCount": "{{count}} char.",
+    "charCount_other": "{{count}} chars.",
+    "emotionsHeading": "What you felt",
+    "emotionsMore": "+ {{count}}",
+    "emotionsMore_other": "+ {{count}}",
+    "emotionsMoreA11y": "Show {{count}} more emotion",
+    "emotionsMoreA11y_other": "Show {{count}} more emotions",
+    "lucidLabel": "Lucid dream",
+    "lucidHintOn": "You knew you were dreaming",
+    "lucidHintOff": "Mark it if you knew you were dreaming",
+    "recordingElapsed": "Recording, {{time}} elapsed",
+    "syncRequiredError": "Your dream is saved, but we could not reach the server — it will be interpreted once you are back online."
   },
   "states": {
     "emptyTitle": "Nothing here yet",
@@ -119,7 +147,8 @@
     "tab": "{{label}} tab",
     "logDreamButton": "Log a new dream",
     "emotionChip": "Emotion: {{label}}",
-    "keywordChip": "Keyword: {{label}}"
+    "keywordChip": "Keyword: {{label}}",
+    "changeDreamDate": "Change the dream date, currently {{date}}"
   },
   "video": {
     "generate": "Generate a dream video",
@@ -131,9 +160,6 @@
   "settings": {
     "title": "Settings",
     "sectionAccount": "Account",
-    "sectionPersonalization": "Personalization",
-    "sectionPrivacy": "Privacy",
-    "sectionApp": "App",
     "subscriptionRow": "Subscription",
     "manageSubscriptionRow": "Manage subscription",
     "interpretationStyleRow": "Interpretation style",
@@ -156,7 +182,26 @@
     "seedDreamsRow": "Seed sample dreams",
     "seedDreamsSuccessTitle": "Sample dreams added",
     "seedDreamsSuccessBody": "{{count}} dreams added. Open Insights to see the constellation and emotion ribbon.",
-    "seedDreamsErrorTitle": "Couldn't seed sample dreams"
+    "seedDreamsErrorTitle": "Couldn't seed sample dreams",
+    "sectionReading": "Your reading",
+    "sectionData": "Your data",
+    "accountNoEmail": "Your account",
+    "profileMeta": "{{count}} dream · since {{since}}",
+    "profileMeta_other": "{{count}} dreams · since {{since}}",
+    "profileMetaNoDate": "{{count}} dream",
+    "profileMetaNoDate_other": "{{count}} dreams",
+    "quotaRemaining": "{{count}} interpretation left",
+    "quotaRemaining_other": "{{count}} interpretations left",
+    "quotaFraction": "{{used}} / {{limit}}",
+    "quotaResets": "Renews on {{date}}",
+    "quotaUnlimited": "Unlimited interpretations",
+    "goPremium": "Go premium",
+    "reminderOff": "Off",
+    "consentGranted": "granted",
+    "consentWithheld": "not granted",
+    "style_symbolic": "symbolic",
+    "style_mythological": "mythological",
+    "style_psychological": "psychological"
   },
   "settingsStyle": {
     "title": "Interpretation style",
@@ -216,5 +261,17 @@
     "confirmDelete": "Confirm delete",
     "doneTitle": "Account deletion scheduled",
     "doneBody": "Your account has been signed out. Your data will be fully removed within 30 days."
+  },
+  "emotions": {
+    "calm": "calm",
+    "joy": "joy",
+    "freedom": "freedom",
+    "curiosity": "curiosity",
+    "nostalgia": "nostalgia",
+    "confusion": "confusion",
+    "anxiety": "anxiety",
+    "fear": "fear",
+    "anger": "anger",
+    "wonder": "wonder"
   }
 }

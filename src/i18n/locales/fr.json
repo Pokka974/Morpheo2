@@ -59,7 +59,21 @@
     "limitReachedTitle": "Limite mensuelle atteinte",
     "limitReachedBody": "Vos interprétations gratuites se renouvellent le {{date}}.",
     "paywallTitle": "Passage premium requis",
-    "paywallBody": "Les interprétations illimitées sont réservées à l’abonnement premium."
+    "paywallBody": "Les interprétations illimitées sont réservées à l’abonnement premium.",
+    "waitingOverline": "Interprétation en cours",
+    "waitingSubtitle": "Un instant — nous relisons votre récit.",
+    "waitingSubtitleWithHistory": "Un instant — nous relisons votre récit avec votre {{count}} rêve précédent.",
+    "waitingSubtitleWithHistory_other": "Un instant — nous relisons votre récit avec vos {{count}} rêves précédents.",
+    "waitingStage": {
+      "reading": "Récit relu",
+      "symbols": "Repérage des symboles",
+      "crossing": "Croisement avec vos thèmes récurrents"
+    },
+    "waitingModel": "{{model}} · ~15 s",
+    "waitingDuration": "~15 s",
+    "continueInBackground": "Continuer en arrière-plan",
+    "dreamNotSyncedTitle": "Ce rêve est encore sur votre appareil",
+    "dreamNotSyncedBody": "Le serveur est injoignable, l'interprétation n'est donc pas encore possible. Votre rêve est en sécurité — réessayez une fois de retour en ligne."
   },
   "insights": {
     "title": "Insights",
@@ -94,17 +108,31 @@
     "topEmotions": "Émotions récurrentes"
   },
   "log": {
-    "title": "Racontez votre rêve",
+    "title": "Nouveau rêve",
     "placeholder": "Racontez votre rêve…",
-    "minLengthRemaining": "{{count}} caractère de plus pour débloquer l’interprétation.",
-    "minLengthRemaining_other": "{{count}} caractères de plus pour débloquer l’interprétation.",
     "saveError": "Impossible d'enregistrer le rêve.",
     "recording": "Enregistrement",
     "micStart": "Démarrer la dictée vocale",
     "micStop": "Arrêter la dictée vocale",
     "micUnavailable": "La dictée vocale n’est pas disponible sur cet appareil.",
     "dateLabel": "Rêve survenu le",
-    "interpretCta": "Interpréter ce rêve"
+    "interpretCta": "Interpréter ce rêve",
+    "modeWrite": "Écrire",
+    "modeDictate": "Dicter",
+    "longEnough": "Assez long pour être interprété",
+    "keepGoing": "Continuez — encore quelques mots",
+    "charCount": "{{count}} car.",
+    "charCount_other": "{{count}} car.",
+    "emotionsHeading": "Ce que vous avez ressenti",
+    "emotionsMore": "+ {{count}}",
+    "emotionsMore_other": "+ {{count}}",
+    "emotionsMoreA11y": "Afficher {{count}} émotion de plus",
+    "emotionsMoreA11y_other": "Afficher {{count}} émotions de plus",
+    "lucidLabel": "Rêve lucide",
+    "lucidHintOn": "Vous saviez que vous rêviez",
+    "lucidHintOff": "Marquez-le si vous saviez que vous rêviez",
+    "recordingElapsed": "Enregistrement, {{time}} écoulées",
+    "syncRequiredError": "Votre rêve est enregistré, mais le serveur est injoignable — il sera interprété dès votre retour en ligne."
   },
   "states": {
     "emptyTitle": "Rien pour l'instant",
@@ -119,7 +147,8 @@
     "tab": "Onglet {{label}}",
     "logDreamButton": "Noter un nouveau rêve",
     "emotionChip": "Émotion : {{label}}",
-    "keywordChip": "Mot-clé : {{label}}"
+    "keywordChip": "Mot-clé : {{label}}",
+    "changeDreamDate": "Changer la date du rêve, actuellement le {{date}}"
   },
   "video": {
     "generate": "Générer une vidéo du rêve",
@@ -131,9 +160,6 @@
   "settings": {
     "title": "Paramètres",
     "sectionAccount": "Compte",
-    "sectionPersonalization": "Personnalisation",
-    "sectionPrivacy": "Confidentialité",
-    "sectionApp": "Application",
     "subscriptionRow": "Abonnement",
     "manageSubscriptionRow": "Gérer l'abonnement",
     "interpretationStyleRow": "Style d'interprétation",
@@ -156,7 +182,26 @@
     "seedDreamsRow": "Ajouter des rêves d'exemple",
     "seedDreamsSuccessTitle": "Rêves d'exemple ajoutés",
     "seedDreamsSuccessBody": "{{count}} rêves ajoutés. Ouvrez Insights pour voir la constellation et le ruban d'émotions.",
-    "seedDreamsErrorTitle": "Impossible d'ajouter les rêves d'exemple"
+    "seedDreamsErrorTitle": "Impossible d'ajouter les rêves d'exemple",
+    "sectionReading": "Votre lecture",
+    "sectionData": "Vos données",
+    "accountNoEmail": "Votre compte",
+    "profileMeta": "{{count}} rêve · depuis {{since}}",
+    "profileMeta_other": "{{count}} rêves · depuis {{since}}",
+    "profileMetaNoDate": "{{count}} rêve",
+    "profileMetaNoDate_other": "{{count}} rêves",
+    "quotaRemaining": "{{count}} interprétation restante",
+    "quotaRemaining_other": "{{count}} interprétations restantes",
+    "quotaFraction": "{{used}} / {{limit}}",
+    "quotaResets": "Renouvelé le {{date}}",
+    "quotaUnlimited": "Interprétations illimitées",
+    "goPremium": "Passer en premium",
+    "reminderOff": "Désactivé",
+    "consentGranted": "accordé",
+    "consentWithheld": "non accordé",
+    "style_symbolic": "symbolique",
+    "style_mythological": "mythologique",
+    "style_psychological": "psychologique"
   },
   "settingsStyle": {
     "title": "Style d'interprétation",
@@ -216,5 +261,17 @@
     "confirmDelete": "Confirmer la suppression",
     "doneTitle": "Suppression du compte programmée",
     "doneBody": "Vous avez été déconnecté. Vos données seront entièrement supprimées sous 30 jours."
+  },
+  "emotions": {
+    "calm": "calme",
+    "joy": "joie",
+    "freedom": "liberté",
+    "curiosity": "curiosité",
+    "nostalgia": "nostalgie",
+    "confusion": "confusion",
+    "anxiety": "angoisse",
+    "fear": "peur",
+    "anger": "colère",
+    "wonder": "émerveillement"
   }
 }

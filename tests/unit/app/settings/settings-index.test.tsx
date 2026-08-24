@@ -29,6 +29,35 @@ jest.mock('@features/dev/seedSampleDreams', () => ({
   seedSampleDreams: (...args: unknown[]) => mockSeedSampleDreams(...args),
 }));
 
+// The screen reads the profile row for the values each settings row now reports
+// (style, reminder time, AI consent). The real client throws at import time without
+// EXPO_PUBLIC_SUPABASE_URL/ANON_KEY, so it is stubbed rather than configured.
+const mockGetUser = jest.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } });
+const mockMaybeSingle = jest.fn().mockResolvedValue({
+  data: {
+    interpretation_style: 'symbolic',
+    notification_reminder_time: '07:00:00',
+    notification_reminders_enabled: true,
+    ai_consent_granted: true,
+  },
+  error: null,
+});
+jest.mock('@services/../supabase/client', () => ({
+  supabase: {
+    auth: { getUser: (...args: unknown[]) => mockGetUser(...args) },
+    from: jest.fn(() => ({
+      select: jest.fn(() => ({ eq: jest.fn(() => ({ maybeSingle: mockMaybeSingle })) })),
+    })),
+  },
+}));
+
+// The profile card counts dreams from the local store.
+const mockGetFirstAsync = jest.fn().mockResolvedValue({ count: 84, first: '2026-02-11' });
+jest.mock('@db/client', () => ({
+  sqlite: { getFirstAsync: (...args: unknown[]) => mockGetFirstAsync(...args) },
+  db: {},
+}));
+
 let alertSpy: jest.SpyInstance;
 
 function buildRegistry(overrides: Partial<ServiceRegistry> = {}): ServiceRegistry {
@@ -56,6 +85,91 @@ describe('SettingsScreen', () => {
 
   afterEach(() => {
     alertSpy.mockRestore();
+  });
+
+  it('leads with the profile card — identity and remaining quota, not a "Subscription: Free" row', async () => {
+    const registry = buildRegistry({
+      entitlement: new MockEntitlementService().configure('free'),
+    });
+
+    const { getByText, findByText } = render(
+      <ServicesProvider services={registry}>
+        <SettingsScreen />
+      </ServicesProvider>
+    );
+
+    expect(await findByText('84 dreams · since February 2026')).toBeTruthy();
+    expect(getByText('test@example.com')).toBeTruthy();
+    expect(getByText('Free')).toBeTruthy();
+    // MockEntitlementService's free tier is 0 of 5 used.
+    expect(getByText('5 interpretations left')).toBeTruthy();
+    expect(getByText('0 / 5')).toBeTruthy();
+  });
+
+  it('names the groups from the user\'s side, not the system\'s', async () => {
+    const registry = buildRegistry();
+    const { getByText } = render(
+      <ServicesProvider services={registry}>
+        <SettingsScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(getByText('Your reading')).toBeTruthy());
+    expect(getByText('Your data')).toBeTruthy();
+    expect(getByText('Account')).toBeTruthy();
+  });
+
+  it('reports each preference\'s current value on its row, so the screen can be scanned', async () => {
+    const registry = buildRegistry();
+    const { getByText } = render(
+      <ServicesProvider services={registry}>
+        <SettingsScreen />
+      </ServicesProvider>
+    );
+
+    // interpretation_style, notification_reminder_time and ai_consent_granted come
+    // from the one profiles read the screen makes.
+    await waitFor(() => expect(getByText('symbolic')).toBeTruthy());
+    expect(getByText('07:00')).toBeTruthy();
+    expect(getByText('granted')).toBeTruthy();
+  });
+
+  it('says the reminder is off rather than showing a stale time when it is disabled', async () => {
+    mockMaybeSingle.mockResolvedValueOnce({
+      data: {
+        interpretation_style: 'symbolic',
+        notification_reminder_time: '07:00:00',
+        notification_reminders_enabled: false,
+        ai_consent_granted: false,
+      },
+      error: null,
+    });
+
+    const registry = buildRegistry();
+    const { getByText, queryByText } = render(
+      <ServicesProvider services={registry}>
+        <SettingsScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(getByText('Off')).toBeTruthy());
+    expect(queryByText('07:00')).toBeNull();
+    expect(getByText('not granted')).toBeTruthy();
+  });
+
+  it('still renders every row when the preferences read fails — values are a summary, not a gate', async () => {
+    mockMaybeSingle.mockResolvedValueOnce({ data: null, error: { message: 'boom' } });
+
+    const registry = buildRegistry();
+    const { getByText } = render(
+      <ServicesProvider services={registry}>
+        <SettingsScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(getByText('Interpretation style')).toBeTruthy());
+    expect(getByText('AI consent')).toBeTruthy();
+    expect(getByText('Delete account')).toBeTruthy();
   });
 
   it('shows Free subscription label and KB-formatted cache size for a small cache', async () => {

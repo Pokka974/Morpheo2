@@ -2,20 +2,50 @@ import { supabase } from '../../supabase/client';
 import { getPendingDreams, markSynced } from './dreamRepository';
 import type { Dream } from '@db/schema';
 
-export async function syncPendingDreams(): Promise<void> {
+/**
+ * What a drain actually managed to push. A failed dream is not an exception — the
+ * queue is offline-first and retries on the next cycle — but a caller that is about
+ * to do something the server side depends on (interpreting, which inserts against a
+ * FK on `dreams.id`) has to be able to tell that its own dream did not make it.
+ */
+export interface SyncOutcome {
+  syncedIds: string[];
+  failures: Array<{ dreamId: string; error: unknown }>;
+}
+
+export async function syncPendingDreams(): Promise<SyncOutcome> {
+  const outcome: SyncOutcome = { syncedIds: [], failures: [] };
   const pending = await getPendingDreams();
-  if (pending.length === 0) return;
+  if (pending.length === 0) return outcome;
 
   const sorted = [...pending].sort(
     (a, b) => new Date(a.loggedAt).getTime() - new Date(b.loggedAt).getTime()
   );
 
   for (const dream of sorted) {
-    await syncDream(dream);
+    const error = await syncDream(dream);
+    if (error === null) outcome.syncedIds.push(dream.id);
+    else outcome.failures.push({ dreamId: dream.id, error });
   }
+  return outcome;
 }
 
-async function syncDream(dream: Dream): Promise<void> {
+/**
+ * Drains the queue and insists that one specific dream reached Postgres.
+ *
+ * The interpret Edge Function inserts an `interpretations` row against a server-side
+ * FK on `dreams.id`. If the dream is still local-only the insert fails deep inside the
+ * function with a foreign-key violation the user sees as a generic "interpretation
+ * unavailable" — so the caller checks here instead, where the reason is still known.
+ */
+export async function syncDreamForInterpretation(dreamId: string): Promise<void> {
+  const outcome = await syncPendingDreams();
+  const failure = outcome.failures.find(f => f.dreamId === dreamId);
+  if (failure) throw new DreamNotSyncedError(dreamId, failure.error);
+}
+
+/** Returns `null` on success, or the error that stopped this dream from syncing. */
+async function syncDream(dream: Dream): Promise<unknown> {
   try {
     const { error } = await supabase.from('dreams').upsert(
       {
@@ -23,6 +53,10 @@ async function syncDream(dream: Dream): Promise<void> {
         user_id: dream.userId,
         description: dream.description,
         occurred_at: dream.occurredAt,
+        // Stored as a JSON string locally (SQLite has no array type) but as TEXT[] on
+        // Postgres, so it has to be parsed on the way out rather than passed through.
+        emotions: parseEmotions(dream.emotions),
+        is_lucid: dream.isLucid,
         logged_at: dream.loggedAt,
         last_modified_at: dream.lastModifiedAt,
         is_deleted: dream.isDeleted,
@@ -42,10 +76,29 @@ async function syncDream(dream: Dream): Promise<void> {
     }
 
     await markSynced(dream.id);
+    return null;
   } catch (err) {
     if (err instanceof AuthExpiredError) throw err;
-    // Non-auth errors: mark for retry on next sync cycle
+    // Non-auth errors: the dream keeps its pending status and is retried on the next
+    // sync cycle. It is reported rather than swallowed so a caller that depends on
+    // this dream existing server-side can react.
     console.error('Dream sync failed for', dream.id, err);
+    return err;
+  }
+}
+
+/**
+ * A dream written before 013 — or by a build that predates it — carries `'[]'`, but a
+ * row corrupted mid-write would throw here and stall the whole queue. An unreadable
+ * emotion list is not worth losing the dream over, so it degrades to empty.
+ */
+function parseEmotions(raw: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((e): e is string => typeof e === 'string') : [];
+  } catch {
+    console.error('Unreadable emotions payload on a dream; syncing it as empty:', raw);
+    return [];
   }
 }
 
@@ -53,5 +106,16 @@ export class AuthExpiredError extends Error {
   constructor() {
     super('Auth session expired during sync');
     this.name = 'AuthExpiredError';
+  }
+}
+
+/** A dream is still local-only, so anything server-side keyed to it cannot proceed. */
+export class DreamNotSyncedError extends Error {
+  constructor(
+    readonly dreamId: string,
+    readonly reason: unknown
+  ) {
+    super(`Dream ${dreamId} did not reach the server`);
+    this.name = 'DreamNotSyncedError';
   }
 }

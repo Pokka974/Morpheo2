@@ -14,7 +14,12 @@ jest.mock('@features/dream-log/dreamRepository', () => ({
   markSynced: (...args: unknown[]) => mockMarkSynced(...args),
 }));
 
-import { AuthExpiredError, syncPendingDreams } from '@features/dream-log/syncService';
+import {
+  AuthExpiredError,
+  DreamNotSyncedError,
+  syncDreamForInterpretation,
+  syncPendingDreams,
+} from '@features/dream-log/syncService';
 import type { Dream } from '@db/schema';
 
 const makeDream = (overrides: Partial<Dream>): Dream => ({
@@ -22,6 +27,8 @@ const makeDream = (overrides: Partial<Dream>): Dream => ({
   userId: 'user-1',
   description: 'A long enough dream description for testing purposes.',
   occurredAt: '2026-08-01T00:00:00.000Z',
+  emotions: '[]',
+  isLucid: false,
   loggedAt: '2026-08-01T00:00:00.000Z',
   lastModifiedAt: '2026-08-01T00:00:00.000Z',
   isDeleted: false,
@@ -105,6 +112,52 @@ describe('syncPendingDreams', () => {
     expect(mockMarkSynced).toHaveBeenCalledWith('dream-x');
   });
 
+  it('unpacks the locally-stringified emotions into the Postgres TEXT[] the column expects', async () => {
+    mockGetPendingDreams.mockResolvedValue([
+      makeDream({ emotions: '["calm","freedom"]', isLucid: true }),
+    ]);
+    mockUpsert.mockResolvedValue({ error: null });
+
+    await syncPendingDreams();
+
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ emotions: ['calm', 'freedom'], is_lucid: true }),
+      expect.anything()
+    );
+  });
+
+  it('syncs a dream with an unreadable emotions payload as empty, rather than stalling the queue', async () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      mockGetPendingDreams.mockResolvedValue([makeDream({ id: 'dream-bad', emotions: 'not json' })]);
+      mockUpsert.mockResolvedValue({ error: null });
+
+      await syncPendingDreams();
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({ emotions: [] }),
+        expect.anything()
+      );
+      // The dream still leaves the queue — losing the emotion list is not worth
+      // stranding the account itself.
+      expect(mockMarkSynced).toHaveBeenCalledWith('dream-bad');
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('drops non-string entries rather than sending them to a TEXT[] column', async () => {
+    mockGetPendingDreams.mockResolvedValue([makeDream({ emotions: '["calm",7,null]' })]);
+    mockUpsert.mockResolvedValue({ error: null });
+
+    await syncPendingDreams();
+
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ emotions: ['calm'] }),
+      expect.anything()
+    );
+  });
+
   it('throws AuthExpiredError (and stops syncing) when the upsert errors with code PGRST301', async () => {
     mockGetPendingDreams.mockResolvedValue([makeDream({ id: 'dream-x' })]);
     mockUpsert.mockResolvedValue({ error: { code: 'PGRST301', message: 'jwt expired' } });
@@ -120,13 +173,70 @@ describe('syncPendingDreams', () => {
     await expect(syncPendingDreams()).rejects.toThrow(AuthExpiredError);
   });
 
-  it('swallows a non-auth error, logs it, and does not mark the dream synced (retried next cycle)', async () => {
+  it('reports a non-auth failure in the outcome instead of resolving as though it worked', async () => {
     mockGetPendingDreams.mockResolvedValue([makeDream({ id: 'dream-x' })]);
     mockUpsert.mockResolvedValue({ error: { message: 'constraint violation' } });
 
-    await expect(syncPendingDreams()).resolves.toBeUndefined();
+    const outcome = await syncPendingDreams();
+
+    // The drain still resolves — the queue is offline-first and retries — but the
+    // caller can now tell that this dream did not make it.
+    expect(outcome.syncedIds).toEqual([]);
+    expect(outcome.failures).toEqual([
+      { dreamId: 'dream-x', error: expect.objectContaining({ message: 'constraint violation' }) },
+    ]);
     expect(mockMarkSynced).not.toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalledWith('Dream sync failed for', 'dream-x', expect.anything());
+  });
+
+  it('reports which dreams did reach the server', async () => {
+    mockGetPendingDreams.mockResolvedValue([makeDream({ id: 'dream-x' })]);
+    mockUpsert.mockResolvedValue({ error: null });
+
+    const outcome = await syncPendingDreams();
+
+    expect(outcome.syncedIds).toEqual(['dream-x']);
+    expect(outcome.failures).toEqual([]);
+  });
+
+  describe('syncDreamForInterpretation', () => {
+    it('resolves once the dream has reached Postgres', async () => {
+      mockGetPendingDreams.mockResolvedValue([makeDream({ id: 'dream-x' })]);
+      mockUpsert.mockResolvedValue({ error: null });
+
+      await expect(syncDreamForInterpretation('dream-x')).resolves.toBeUndefined();
+    });
+
+    it('throws when the dream is still local-only, rather than letting the Edge Function hit a foreign-key violation', async () => {
+      mockGetPendingDreams.mockResolvedValue([makeDream({ id: 'dream-x' })]);
+      mockUpsert.mockResolvedValue({ error: { message: 'column "emotions" does not exist' } });
+
+      await expect(syncDreamForInterpretation('dream-x')).rejects.toBeInstanceOf(
+        DreamNotSyncedError
+      );
+    });
+
+    it('carries the underlying reason, so the failure is diagnosable', async () => {
+      mockGetPendingDreams.mockResolvedValue([makeDream({ id: 'dream-x' })]);
+      mockUpsert.mockResolvedValue({ error: { message: 'boom' } });
+
+      await expect(syncDreamForInterpretation('dream-x')).rejects.toMatchObject({
+        dreamId: 'dream-x',
+        reason: expect.objectContaining({ message: 'boom' }),
+      });
+    });
+
+    it('ignores another dream failing — only this one has to have landed', async () => {
+      mockGetPendingDreams.mockResolvedValue([
+        makeDream({ id: 'other', loggedAt: '2026-08-01T00:00:00.000Z' }),
+        makeDream({ id: 'mine', loggedAt: '2026-08-02T00:00:00.000Z' }),
+      ]);
+      mockUpsert
+        .mockResolvedValueOnce({ error: { message: 'boom' } })
+        .mockResolvedValueOnce({ error: null });
+
+      await expect(syncDreamForInterpretation('mine')).resolves.toBeUndefined();
+    });
   });
 
   it('continues syncing subsequent dreams after a non-auth failure on an earlier one', async () => {

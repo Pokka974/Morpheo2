@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { LoadingState } from '@shared/components/LoadingState';
 import { Button } from '@shared/components/Button';
 import { Chip, ChipRow } from '@shared/components/Chip';
+import { SegmentedControl } from '@shared/components/SegmentedControl';
 import {
   ConstellationChart,
   type ConstellationNode,
@@ -31,6 +32,13 @@ import {
 type Period = '30' | '90' | 'all';
 
 const PERIOD_DAYS: Record<Period, number | null> = { '30': 30, '90': 90, all: null };
+const PERIODS = ['30', '90', 'all'] as const;
+/** Short labels for the segmented control; `periodLabel*` are the long forms in prose. */
+const PERIOD_KEYS: Record<Period, string> = {
+  '30': 'insights.period30',
+  '90': 'insights.period90',
+  all: 'insights.periodAll',
+};
 
 /** Free tier sees the top 3 over 30 days (FR-018); premium sees everything. */
 const FREE_LIMIT = 3;
@@ -135,16 +143,15 @@ export default function InsightsScreen() {
         </View>
 
         {isPremium ? (
-          <View style={styles.periodSwitch}>
-            {(['30', '90', 'all'] as const).map(value => (
-              <PeriodTab
-                key={value}
-                value={value}
-                active={period === value}
-                onPress={() => setPeriod(value)}
-              />
-            ))}
-          </View>
+          <SegmentedControl
+            segments={PERIODS.map(value => ({
+              value,
+              label: t(PERIOD_KEYS[value]),
+              accessibilityLabel: t('a11y.selectPeriod', { period: t(PERIOD_KEYS[value]) }),
+            }))}
+            value={period}
+            onChange={setPeriod}
+          />
         ) : null}
       </View>
 
@@ -206,40 +213,6 @@ export default function InsightsScreen() {
         </LinearGradient>
       ) : null}
     </ScrollView>
-  );
-}
-
-function PeriodTab({
-  value,
-  active,
-  onPress,
-}: {
-  value: Period;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const { t } = useTranslation();
-  const label = t(
-    value === '30'
-      ? 'insights.period30'
-      : value === '90'
-        ? 'insights.period90'
-        : 'insights.periodAll'
-  );
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
-      accessibilityLabel={t('a11y.selectPeriod', { period: label })}
-      style={[styles.periodTab, active && styles.periodTabActive]}
-    >
-      <Text
-        style={[styles.periodLabel, active ? styles.periodLabelActive : styles.periodLabelIdle]}
-      >
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -312,32 +285,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...typography.screenTitle,
-  },
-  periodSwitch: {
-    flexDirection: 'row',
-    gap: 6,
-    padding: 4,
-    borderRadius: radius.chip,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  periodTab: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-  },
-  periodTabActive: {
-    backgroundColor: colors.accent,
-  },
-  periodLabel: {
-    ...typography.chip,
-  },
-  periodLabelActive: {
-    color: colors.textOnAccent,
-  },
-  periodLabelIdle: {
-    color: colors.textMuted,
   },
   panel: {
     borderRadius: radius.panel,
