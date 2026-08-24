@@ -26,6 +26,17 @@ interface RemoteDream {
   last_modified_at: string;
   is_deleted: boolean;
   edited_since_interpretation: boolean;
+  bedtime: string | null;
+  wake_time: string | null;
+  sleep_quality: number | null;
+  clarity: number | null;
+  lucidity: string;
+  tone: string | null;
+  dream_ending: string | null;
+  dream_type: string[] | null;
+  characters: string[] | null;
+  places: string[] | null;
+  linked_dream_id: string | null;
 }
 
 interface RemoteInterpretation {
@@ -88,7 +99,7 @@ async function pullDreams(userId: string): Promise<void> {
     const { data, error } = await supabase
       .from('dreams')
       .select(
-        'id, user_id, description, occurred_at, emotions, is_lucid, logged_at, last_modified_at, is_deleted, edited_since_interpretation'
+        'id, user_id, description, occurred_at, emotions, is_lucid, logged_at, last_modified_at, is_deleted, edited_since_interpretation, bedtime, wake_time, sleep_quality, clarity, lucidity, tone, dream_ending, dream_type, characters, places, linked_dream_id'
       )
       .eq('user_id', userId)
       .gt('last_modified_at', cursor)
@@ -118,6 +129,14 @@ async function pullDreams(userId: string): Promise<void> {
  * pushed yet. Otherwise the remote row (soft-delete included — `is_deleted`
  * mirrors straight across, same soft-delete pattern the rest of the app uses)
  * replaces the local one and is marked `synced` since it now matches the server.
+ *
+ * `ON CONFLICT DO UPDATE` naming every synced column, rather than `INSERT OR
+ * REPLACE`, is deliberate: `day_stress` and `presleep_substances` (the private
+ * "Contexte personnel" block) exist only in local SQLite and are never selected
+ * from Supabase above. A blanket `REPLACE` would silently reset both columns to
+ * their defaults on every pull; leaving them out of the `DO UPDATE SET` list
+ * instead means an existing row keeps whatever it already had, and a brand-new
+ * row falls back to the column defaults exactly once.
  */
 async function applyRemoteDream(row: RemoteDream): Promise<void> {
   const existing = await db.select().from(dreams).where(eq(dreams.id, row.id));
@@ -130,9 +149,32 @@ async function applyRemoteDream(row: RemoteDream): Promise<void> {
   }
 
   await sqlite.runAsync(
-    `INSERT OR REPLACE INTO dreams
-      (id, user_id, description, occurred_at, emotions, is_lucid, logged_at, last_modified_at, is_deleted, edited_since_interpretation, sync_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced')`,
+    `INSERT INTO dreams
+      (id, user_id, description, occurred_at, emotions, is_lucid, logged_at, last_modified_at, is_deleted, edited_since_interpretation, sync_status,
+       bedtime, wake_time, sleep_quality, clarity, lucidity, tone, dream_ending, dream_type, characters, places, linked_dream_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       user_id = excluded.user_id,
+       description = excluded.description,
+       occurred_at = excluded.occurred_at,
+       emotions = excluded.emotions,
+       is_lucid = excluded.is_lucid,
+       logged_at = excluded.logged_at,
+       last_modified_at = excluded.last_modified_at,
+       is_deleted = excluded.is_deleted,
+       edited_since_interpretation = excluded.edited_since_interpretation,
+       sync_status = excluded.sync_status,
+       bedtime = excluded.bedtime,
+       wake_time = excluded.wake_time,
+       sleep_quality = excluded.sleep_quality,
+       clarity = excluded.clarity,
+       lucidity = excluded.lucidity,
+       tone = excluded.tone,
+       dream_ending = excluded.dream_ending,
+       dream_type = excluded.dream_type,
+       characters = excluded.characters,
+       places = excluded.places,
+       linked_dream_id = excluded.linked_dream_id`,
     [
       row.id,
       row.user_id,
@@ -144,6 +186,17 @@ async function applyRemoteDream(row: RemoteDream): Promise<void> {
       row.last_modified_at,
       row.is_deleted ? 1 : 0,
       row.edited_since_interpretation ? 1 : 0,
+      row.bedtime,
+      row.wake_time,
+      row.sleep_quality,
+      row.clarity,
+      row.lucidity,
+      row.tone,
+      row.dream_ending,
+      JSON.stringify(row.dream_type ?? []),
+      JSON.stringify(row.characters ?? []),
+      JSON.stringify(row.places ?? []),
+      row.linked_dream_id,
     ]
   );
 }

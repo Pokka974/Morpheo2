@@ -45,6 +45,19 @@ const baseDream: Dream = {
   isDeleted: false,
   editedSinceInterpretation: false,
   syncStatus: 'local',
+  bedtime: null,
+  wakeTime: null,
+  sleepQuality: null,
+  clarity: null,
+  lucidity: 'none',
+  tone: null,
+  dreamEnding: null,
+  dreamType: '[]',
+  characters: '[]',
+  places: '[]',
+  linkedDreamId: null,
+  dayStress: null,
+  presleepSubstances: '[]',
 };
 
 describe('dreamRepository', () => {

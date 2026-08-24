@@ -21,7 +21,20 @@ sqlite.execSync(`
     last_modified_at TEXT NOT NULL DEFAULT (datetime('now')),
     is_deleted INTEGER NOT NULL DEFAULT 0,
     edited_since_interpretation INTEGER NOT NULL DEFAULT 0,
-    sync_status TEXT NOT NULL DEFAULT 'local' CHECK(sync_status IN ('local','sync_pending','synced','sync_failed'))
+    sync_status TEXT NOT NULL DEFAULT 'local' CHECK(sync_status IN ('local','sync_pending','synced','sync_failed')),
+    bedtime TEXT,
+    wake_time TEXT,
+    sleep_quality INTEGER,
+    clarity INTEGER,
+    lucidity TEXT NOT NULL DEFAULT 'none' CHECK(lucidity IN ('none','semi','lucid','full')),
+    tone TEXT CHECK(tone IN ('positive','neutral','negative','mixed')),
+    dream_ending TEXT CHECK(dream_ending IN ('resolved','unresolved','fragmented')),
+    dream_type TEXT NOT NULL DEFAULT '[]',
+    characters TEXT NOT NULL DEFAULT '[]',
+    places TEXT NOT NULL DEFAULT '[]',
+    linked_dream_id TEXT REFERENCES dreams(id) ON DELETE SET NULL,
+    day_stress INTEGER,
+    presleep_substances TEXT NOT NULL DEFAULT '[]'
   );
 `);
 
@@ -94,9 +107,35 @@ if (!dreamsColumns.some(col => col.name === 'is_lucid')) {
   sqlite.execSync(`ALTER TABLE dreams ADD COLUMN is_lucid INTEGER NOT NULL DEFAULT 0;`);
 }
 
+// Same story again: the redesigned log screen's metadata fields (sleep, dream
+// clarity/tone/ending, who/where, recurrence link, and the private "Contexte
+// personnel" block) need to be added explicitly for devices that installed before
+// this migration, or every query naming these columns fails with "no such column".
+const dreamMetadataColumns: Array<[string, string]> = [
+  ['bedtime', 'TEXT'],
+  ['wake_time', 'TEXT'],
+  ['sleep_quality', 'INTEGER'],
+  ['clarity', 'INTEGER'],
+  ['lucidity', `TEXT NOT NULL DEFAULT 'none'`],
+  ['tone', 'TEXT'],
+  ['dream_ending', 'TEXT'],
+  ['dream_type', `TEXT NOT NULL DEFAULT '[]'`],
+  ['characters', `TEXT NOT NULL DEFAULT '[]'`],
+  ['places', `TEXT NOT NULL DEFAULT '[]'`],
+  ['linked_dream_id', 'TEXT'],
+  ['day_stress', 'INTEGER'],
+  ['presleep_substances', `TEXT NOT NULL DEFAULT '[]'`],
+];
+for (const [name, ddl] of dreamMetadataColumns) {
+  if (!dreamsColumns.some(col => col.name === name)) {
+    sqlite.execSync(`ALTER TABLE dreams ADD COLUMN ${name} ${ddl};`);
+  }
+}
+
 sqlite.execSync(`
   CREATE INDEX IF NOT EXISTS idx_dreams_user_id ON dreams(user_id);
   CREATE INDEX IF NOT EXISTS idx_dreams_sync_status ON dreams(sync_status);
+  CREATE INDEX IF NOT EXISTS idx_dreams_linked_dream_id ON dreams(linked_dream_id);
   CREATE INDEX IF NOT EXISTS idx_interpretations_dream_id ON interpretations(dream_id);
   CREATE INDEX IF NOT EXISTS idx_media_dream_id ON media(dream_id);
   CREATE INDEX IF NOT EXISTS idx_recurrence_user ON recurrence_patterns(user_id, symbol);

@@ -58,6 +58,17 @@ const baseRemoteDream = {
   last_modified_at: '2026-08-02T00:00:00.000Z',
   is_deleted: false,
   edited_since_interpretation: false,
+  bedtime: null,
+  wake_time: null,
+  sleep_quality: null,
+  clarity: null,
+  lucidity: 'none',
+  tone: null,
+  dream_ending: null,
+  dream_type: [],
+  characters: [],
+  places: [],
+  linked_dream_id: null,
 };
 
 describe('pullRemoteChanges', () => {
@@ -101,12 +112,12 @@ describe('pullRemoteChanges', () => {
     await pullRemoteChanges('user-1');
 
     expect(mockRunAsync).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT OR REPLACE INTO dreams'),
+      expect.stringContaining('INSERT INTO dreams'),
       expect.arrayContaining(['dream-deleted'])
     );
     const call = mockRunAsync.mock.calls.find(c => (c[1] as unknown[]).includes('dream-deleted'))!;
     const bindings = call[1] as unknown[];
-    // is_deleted is the 9th bound parameter (0-indexed 8) in the INSERT OR REPLACE statement.
+    // is_deleted is the 9th bound parameter (0-indexed 8) in the INSERT statement.
     expect(bindings[8]).toBe(1);
   });
 
@@ -217,7 +228,7 @@ describe('pullRemoteChanges', () => {
     await pullRemoteChanges('user-1');
 
     expect(mockRunAsync).not.toHaveBeenCalledWith(
-      expect.stringContaining('INSERT OR REPLACE INTO dreams'),
+      expect.stringContaining('INSERT INTO dreams'),
       expect.anything()
     );
   });
@@ -246,9 +257,24 @@ describe('pullRemoteChanges', () => {
     await pullRemoteChanges('user-1');
 
     expect(mockRunAsync).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT OR REPLACE INTO dreams'),
+      expect.stringContaining('INSERT INTO dreams'),
       expect.arrayContaining(['dream-1'])
     );
+  });
+
+  it('never names day_stress or presleep_substances, so a pull cannot reset the private local-only block', async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'dreams') return chainable({ data: [baseRemoteDream], error: null });
+      return chainable(EMPTY);
+    });
+
+    await pullRemoteChanges('user-1');
+
+    const call = mockRunAsync.mock.calls.find(c => (c[0] as string).includes('INSERT INTO dreams'))!;
+    const sql = call[0] as string;
+    expect(sql).toContain('ON CONFLICT(id) DO UPDATE SET');
+    expect(sql).not.toContain('day_stress');
+    expect(sql).not.toContain('presleep_substances');
   });
 
   it('persists the cursor as the max last_modified_at seen after a page succeeds', async () => {

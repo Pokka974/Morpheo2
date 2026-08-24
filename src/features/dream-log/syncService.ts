@@ -55,12 +55,26 @@ async function syncDream(dream: Dream): Promise<unknown> {
         occurred_at: dream.occurredAt,
         // Stored as a JSON string locally (SQLite has no array type) but as TEXT[] on
         // Postgres, so it has to be parsed on the way out rather than passed through.
-        emotions: parseEmotions(dream.emotions),
+        emotions: parseJsonArray(dream.emotions),
         is_lucid: dream.isLucid,
         logged_at: dream.loggedAt,
         last_modified_at: dream.lastModifiedAt,
         is_deleted: dream.isDeleted,
         edited_since_interpretation: dream.editedSinceInterpretation,
+        bedtime: dream.bedtime,
+        wake_time: dream.wakeTime,
+        sleep_quality: dream.sleepQuality,
+        clarity: dream.clarity,
+        lucidity: dream.lucidity,
+        tone: dream.tone,
+        dream_ending: dream.dreamEnding,
+        dream_type: parseJsonArray(dream.dreamType),
+        characters: parseJsonArray(dream.characters),
+        places: parseJsonArray(dream.places),
+        linked_dream_id: dream.linkedDreamId,
+        // day_stress / presleep_substances are deliberately omitted: the "Contexte
+        // personnel" block is local-only, per the design's privacy intent — never
+        // sent to Supabase, never sent to the AI. See src/db/client.ts.
       },
       {
         onConflict: 'id',
@@ -90,14 +104,16 @@ async function syncDream(dream: Dream): Promise<unknown> {
 /**
  * A dream written before 013 — or by a build that predates it — carries `'[]'`, but a
  * row corrupted mid-write would throw here and stall the whole queue. An unreadable
- * emotion list is not worth losing the dream over, so it degrades to empty.
+ * JSON array field is not worth losing the dream over, so it degrades to empty. Used
+ * for `emotions`, `dream_type`, `characters` and `places` alike — all stored as a JSON
+ * string locally (SQLite has no array type) but as `TEXT[]` on Postgres.
  */
-function parseEmotions(raw: string): string[] {
+function parseJsonArray(raw: string): string[] {
   try {
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.filter((e): e is string => typeof e === 'string') : [];
   } catch {
-    console.error('Unreadable emotions payload on a dream; syncing it as empty:', raw);
+    console.error('Unreadable JSON array payload on a dream; syncing it as empty:', raw);
     return [];
   }
 }

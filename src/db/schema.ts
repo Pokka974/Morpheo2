@@ -22,6 +22,35 @@ export const dreams = sqliteTable('dreams', {
   syncStatus: text('sync_status', { enum: ['local', 'sync_pending', 'synced', 'sync_failed'] })
     .notNull()
     .default('local'),
+  // --- Sleep ---
+  bedtime: text('bedtime'),
+  wakeTime: text('wake_time'),
+  /** 1–5. */
+  sleepQuality: integer('sleep_quality'),
+  // --- The dream itself ---
+  /** 1–5. */
+  clarity: integer('clarity'),
+  /** Replaces the old boolean-only marker; `isLucid` stays as a derived convenience flag. */
+  lucidity: text('lucidity', { enum: ['none', 'semi', 'lucid', 'full'] })
+    .notNull()
+    .default('none'),
+  tone: text('tone', { enum: ['positive', 'neutral', 'negative', 'mixed'] }),
+  dreamEnding: text('dream_ending', { enum: ['resolved', 'unresolved', 'fragmented'] }),
+  /** JSON array of type tags (e.g. "nightmare", "recurring"). */
+  dreamType: text('dream_type').notNull().default('[]'),
+  // --- Who, where ---
+  /** JSON array of role-based tags (e.g. "ma mère", "un inconnu"), not names. */
+  characters: text('characters').notNull().default('[]'),
+  /** JSON array of place tags. */
+  places: text('places').notNull().default('[]'),
+  /** Set when this dream continues an earlier one — forms a recurrence chain. */
+  linkedDreamId: text('linked_dream_id'),
+  // --- Private context — local-only, never synced to Supabase, never sent to the AI,
+  // excluded from export. See src/db/client.ts for why these have no Postgres column. ---
+  /** 1–5. */
+  dayStress: integer('day_stress'),
+  /** JSON array (e.g. "melatonin", "late_caffeine"). */
+  presleepSubstances: text('presleep_substances').notNull().default('[]'),
 });
 
 export const interpretations = sqliteTable('interpretations', {

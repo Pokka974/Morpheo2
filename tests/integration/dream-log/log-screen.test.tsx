@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { ServicesProvider } from '@services/ServicesProvider';
 import { MockAuthService } from '@services/auth/__mocks__/MockAuthService';
 import { MockLocalLockService } from '@services/auth/__mocks__/MockLocalLockService';
@@ -27,9 +27,13 @@ jest.mock('expo-router', () => ({
 jest.mock('@react-native-community/datetimepicker', () => 'DateTimePicker');
 
 const mockSaveDream = jest.fn().mockResolvedValue({ id: 'mock-id' });
+const mockGetTagSuggestions = jest.fn().mockResolvedValue([]);
+const mockGetRecentDreamsForLinking = jest.fn().mockResolvedValue([]);
 jest.mock('@features/dream-log/dreamRepository', () => ({
   saveDream: (...args: unknown[]) => mockSaveDream(...args),
   validateForInterpretation: jest.fn(),
+  getTagSuggestions: (...args: unknown[]) => mockGetTagSuggestions(...args),
+  getRecentDreamsForLinking: (...args: unknown[]) => mockGetRecentDreamsForLinking(...args),
 }));
 
 const mockSyncPendingDreams = jest.fn().mockResolvedValue({ syncedIds: [], failures: [] });
@@ -109,13 +113,17 @@ describe('DreamLogScreen', () => {
       fireEvent.changeText(getByLabelText('Dream description'), LONG_ENOUGH);
       fireEvent.press(getByLabelText('Emotion: calm'));
       fireEvent.press(getByLabelText('Emotion: freedom'));
-      fireEvent.press(getByLabelText('Lucid dream'));
+      // The boolean lucid toggle is gone — lucidity is now a 4-level control inside
+      // the collapsed "The dream itself" section.
+      fireEvent.press(getByText('The dream itself'));
+      fireEvent.press(getByText('Lucid'));
       fireEvent.press(getByText('Save draft'));
 
       await waitFor(() => expect(mockSaveDream).toHaveBeenCalledTimes(1));
       const saved = mockSaveDream.mock.calls[0][0];
       expect(JSON.parse(saved.emotions)).toEqual(['calm', 'freedom']);
       expect(saved.isLucid).toBe(true);
+      expect(saved.lucidity).toBe('lucid');
     });
 
     it('defaults to no emotions and a non-lucid dream when neither is touched', async () => {
@@ -161,6 +169,148 @@ describe('DreamLogScreen', () => {
       expect(
         getByRole('button', { name: 'Save draft' }).props.accessibilityState?.disabled
       ).toBeFalsy();
+    });
+  });
+
+  describe('night summary / date picker', () => {
+    it('describes the dream date as a night, not a single day', () => {
+      const { getByText } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      // Exact day/month depend on "today", but the phrasing itself — a night
+      // spanning two days, not the bare single-day pill this replaces — is fixed.
+      expect(getByText(/^Night of /)).toBeTruthy();
+      expect(getByText('logged today')).toBeTruthy();
+      expect(getByText('edit')).toBeTruthy();
+    });
+
+    it('opens the picker on a single press anywhere on the night summary, not just the "edit" label', () => {
+      const { getByText, queryByTestId, getByTestId } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      expect(queryByTestId('date-time-picker')).toBeNull();
+      fireEvent.press(getByText(/^Night of /));
+      expect(getByTestId('date-time-picker')).toBeTruthy();
+    });
+
+    it('updates the night label once a new date is confirmed', () => {
+      const { getByText, getByTestId } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      fireEvent.press(getByText(/^Night of /));
+      act(() => {
+        getByTestId('date-time-picker').props.onChange(
+          { type: 'set' },
+          new Date('2026-01-05T12:00:00.000Z')
+        );
+      });
+      // The sheet holds the scrolled value as a draft until it is confirmed —
+      // see DateTimePickerSheet: committing on the picker's own onChange is the
+      // exact bug this replaced.
+      fireEvent.press(getByText('Save'));
+
+      expect(getByText('Night of 5–6 January')).toBeTruthy();
+    });
+
+    it('saves the confirmed occurredAt date, not the date the screen happened to mount with', async () => {
+      const { getByText, getByTestId, getByLabelText } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      fireEvent.press(getByText(/^Night of /));
+      act(() => {
+        getByTestId('date-time-picker').props.onChange(
+          { type: 'set' },
+          new Date('2026-01-05T12:00:00.000Z')
+        );
+      });
+      fireEvent.press(getByText('Save'));
+
+      fireEvent.changeText(getByLabelText('Dream description'), LONG_ENOUGH);
+      fireEvent.press(getByText('Save draft'));
+
+      await waitFor(() => expect(mockSaveDream).toHaveBeenCalledTimes(1));
+      expect(mockSaveDream.mock.calls[0][0].occurredAt).toBe('2026-01-05');
+    });
+  });
+
+  describe('sleep time pickers', () => {
+    it('keeps an in-progress bedtime scroll when something elsewhere on the screen re-renders it', async () => {
+      // Regression test: `bedtime ?? new Date()` used to create a brand-new Date
+      // object on every render, which reset the picker's in-progress value on
+      // whatever unrelated re-render (e.g. typing) happened to land mid-scroll —
+      // reported as the bedtime/wake-time pickers "not working at all".
+      const { getByText, getByLabelText, getByTestId } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      fireEvent.press(getByText('Sleep'));
+      fireEvent.press(getByLabelText('Bedtime'));
+
+      const scrolled = new Date(2026, 0, 1, 23, 15);
+      act(() => {
+        getByTestId('date-time-picker').props.onChange({ type: 'set' }, scrolled);
+      });
+
+      // An unrelated state update elsewhere on the same screen, re-rendering it
+      // while the bedtime sheet is still open and uncommitted.
+      fireEvent.changeText(getByLabelText('Dream description'), 'A re-render mid-scroll.');
+
+      fireEvent.press(getByText('Save'));
+      fireEvent.changeText(getByLabelText('Dream description'), LONG_ENOUGH);
+      fireEvent.press(getByText('Save draft'));
+
+      await waitFor(() => expect(mockSaveDream).toHaveBeenCalledTimes(1));
+      expect(mockSaveDream.mock.calls[0][0].bedtime).toBe('23:15');
+    });
+
+    it('keeps bedtime and wake time independent of each other', async () => {
+      const { getByText, getByLabelText, getByTestId } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      fireEvent.press(getByText('Sleep'));
+
+      fireEvent.press(getByLabelText('Bedtime'));
+      act(() => {
+        getByTestId('date-time-picker').props.onChange(
+          { type: 'set' },
+          new Date(2026, 0, 1, 23, 0)
+        );
+      });
+      fireEvent.press(getByText('Save'));
+
+      fireEvent.press(getByLabelText('Wake time'));
+      act(() => {
+        getByTestId('date-time-picker').props.onChange(
+          { type: 'set' },
+          new Date(2026, 0, 2, 7, 30)
+        );
+      });
+      fireEvent.press(getByText('Save'));
+
+      fireEvent.changeText(getByLabelText('Dream description'), LONG_ENOUGH);
+      fireEvent.press(getByText('Save draft'));
+
+      await waitFor(() => expect(mockSaveDream).toHaveBeenCalledTimes(1));
+      const saved = mockSaveDream.mock.calls[0][0];
+      expect(saved.bedtime).toBe('23:00');
+      expect(saved.wakeTime).toBe('07:30');
     });
   });
 
