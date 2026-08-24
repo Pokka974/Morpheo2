@@ -46,13 +46,23 @@ export default function JournalListScreen() {
       }>(
         `
         SELECT d.id, d.description, d.occurred_at, d.sync_status,
-               m.storage_key as thumbnail_uri,
+               m.local_cache_path as thumbnail_uri,
                d.emotions as dream_emotions,
                i.emotions as emotions,
                i.id as interpretation_id
         FROM dreams d
-        LEFT JOIN media m ON m.dream_id = d.id AND m.media_type = 'image' AND m.generation_status = 'complete'
-        LEFT JOIN interpretations i ON i.dream_id = d.id
+        LEFT JOIN media m ON m.id = (
+          SELECT id FROM media
+          WHERE dream_id = d.id AND media_type = 'image' AND generation_status = 'complete'
+          ORDER BY created_at DESC
+          LIMIT 1
+        )
+        LEFT JOIN interpretations i ON i.id = (
+          SELECT id FROM interpretations
+          WHERE dream_id = d.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        )
         WHERE d.is_deleted = 0
         ORDER BY d.occurred_at DESC
         LIMIT ?
@@ -191,15 +201,7 @@ export default function JournalListScreen() {
         <FlashList
           data={displayEntries}
           keyExtractor={item => item.id}
-          renderItem={({ item, index }) => (
-            <DreamCard
-              entry={item}
-              // The newest dream leads with the full card; the rest stay compact so
-              // the list scans quickly.
-              variant={index === 0 ? 'full' : 'compact'}
-              onPress={openDream}
-            />
-          )}
+          renderItem={({ item }) => <DreamCard entry={item} variant="full" onPress={openDream} />}
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={Separator}
           ListFooterComponent={displayEntries.length > 0 ? <WeeklyInsight /> : null}

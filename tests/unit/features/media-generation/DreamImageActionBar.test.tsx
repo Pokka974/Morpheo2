@@ -1,7 +1,7 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
 
-import { DreamMediaView } from '@features/media-generation/DreamMediaView';
+import { DreamImageActionBar } from '@features/media-generation/DreamImageActionBar';
 import type { MediaResult } from '@services/ai/image/ImageGenerationService';
 
 const FAILED_MEDIA: MediaResult = {
@@ -18,15 +18,17 @@ const FAILED_MEDIA: MediaResult = {
   updatedAt: '2026-08-14T00:00:00Z',
 };
 
-describe('DreamMediaView', () => {
+describe('DreamImageActionBar', () => {
   it('shows a generic placeholder when there is no media and no error', () => {
-    const { getByText } = render(<DreamMediaView media={null} isGenerating={false} canRegenerate={false} />);
+    const { getByText } = render(
+      <DreamImageActionBar media={null} isGenerating={false} canRegenerate={false} />
+    );
     expect(getByText('No illustration yet')).toBeTruthy();
   });
 
   it('prioritizes the caller-supplied errorMessage over media.errorMessage', () => {
     const { getByText, queryByText } = render(
-      <DreamMediaView
+      <DreamImageActionBar
         media={FAILED_MEDIA}
         isGenerating={false}
         errorMessage="a safety block or limit reason"
@@ -39,14 +41,14 @@ describe('DreamMediaView', () => {
 
   it('falls back to media.errorMessage when no errorMessage prop is passed', () => {
     const { getByText } = render(
-      <DreamMediaView media={FAILED_MEDIA} isGenerating={false} canRegenerate={false} />
+      <DreamImageActionBar media={FAILED_MEDIA} isGenerating={false} canRegenerate={false} />
     );
     expect(getByText('stored error message')).toBeTruthy();
   });
 
   it('labels the button "Retry" once a failure reason is known, not "Generate image"', () => {
     const { getByText } = render(
-      <DreamMediaView
+      <DreamImageActionBar
         media={null}
         isGenerating={false}
         errorMessage="something went wrong"
@@ -59,14 +61,19 @@ describe('DreamMediaView', () => {
 
   it('labels the button "Generate image" when there has been no attempt yet', () => {
     const { getByText } = render(
-      <DreamMediaView media={null} isGenerating={false} canRegenerate={false} onGenerate={jest.fn()} />
+      <DreamImageActionBar
+        media={null}
+        isGenerating={false}
+        canRegenerate={false}
+        onGenerate={jest.fn()}
+      />
     );
     expect(getByText('Generate image')).toBeTruthy();
   });
 
   it('shows the illustrating hint while generating, ignoring any stale errorMessage', () => {
     const { getByText, queryByText } = render(
-      <DreamMediaView
+      <DreamImageActionBar
         media={null}
         isGenerating={true}
         errorMessage="a leftover error from a previous attempt"

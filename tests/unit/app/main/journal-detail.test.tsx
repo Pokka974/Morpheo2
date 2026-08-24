@@ -137,7 +137,9 @@ describe('DreamDetailScreen', () => {
   });
 
   it('renders the interpretation result when an interpretation row exists', async () => {
-    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(INTERP_ROW);
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW)
+      .mockResolvedValueOnce(INTERP_ROW);
     const { getByText, queryByText } = renderScreen();
 
     await waitFor(() => expect(getByText('Interpretation')).toBeTruthy());
@@ -172,30 +174,53 @@ describe('DreamDetailScreen', () => {
     await waitFor(() => expect(getByText(/low confidence/)).toBeTruthy());
   });
 
-  it('auto-triggers image generation once dream + interpretation exist and no image is cached yet', async () => {
-    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(INTERP_ROW);
+  it('does not auto-trigger image generation; only fires when the Generate button is pressed', async () => {
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW)
+      .mockResolvedValueOnce(INTERP_ROW);
     imageService.configure('failure'); // getImage() resolves null in this mode
-    renderScreen();
+    const { getByText } = renderScreen();
 
-    await waitFor(() =>
-      expect(mockGenerate).toHaveBeenCalledWith({
-        dreamId: 'dream-1',
-        description: DREAM_ROW.description,
-        keywords: ['forest', 'mist'],
-      })
-    );
+    await waitFor(() => expect(getByText('Generate image')).toBeTruthy());
+    expect(mockGenerate).not.toHaveBeenCalled();
+
+    fireEvent.press(getByText('Generate image'));
+    expect(mockGenerate).toHaveBeenCalledWith({
+      dreamId: 'dream-1',
+      description: DREAM_ROW.description,
+      keywords: ['forest', 'mist'],
+    });
   });
 
   it('renders the cached dream illustration when imageGeneration.getImage returns media', async () => {
-    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(INTERP_ROW);
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW)
+      .mockResolvedValueOnce(INTERP_ROW);
     imageService.configure('success');
     const { getByLabelText } = renderScreen();
 
     await waitFor(() => expect(getByLabelText('Dream illustration')).toBeTruthy());
   });
 
+  it('opens a fullscreen viewer when the hero image is pressed, and closes it', async () => {
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW)
+      .mockResolvedValueOnce(INTERP_ROW);
+    imageService.configure('success');
+    const { getAllByLabelText, getByLabelText, queryByLabelText } = renderScreen();
+
+    await waitFor(() => expect(getAllByLabelText('Dream illustration').length).toBeGreaterThan(0));
+    fireEvent.press(getAllByLabelText('Dream illustration')[0]);
+
+    await waitFor(() => expect(getByLabelText('Close')).toBeTruthy());
+    fireEvent.press(getByLabelText('Close'));
+    await waitFor(() => expect(queryByLabelText('Close')).toBeNull());
+  });
+
   it('prefers the live generation-hook image over the cached one once it succeeds', async () => {
-    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(INTERP_ROW);
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW)
+      .mockResolvedValueOnce(INTERP_ROW);
     imageService.configure('failure');
     mockImageState = {
       status: 'success',
@@ -217,7 +242,6 @@ describe('DreamDetailScreen', () => {
 
     await waitFor(() => expect(getByLabelText('Dream illustration')).toBeTruthy());
   });
-
 
   it('soft-deletes the dream and navigates back when confirming delete', async () => {
     (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
@@ -242,7 +266,9 @@ describe('DreamDetailScreen', () => {
   });
 
   it('submits a video generation request when pressing "Generate Dream Video"', async () => {
-    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(INTERP_ROW);
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW)
+      .mockResolvedValueOnce(INTERP_ROW);
     const { getByText } = renderScreen();
 
     await waitFor(() => expect(getByText('Generate a dream video')).toBeTruthy());
@@ -265,14 +291,18 @@ describe('DreamDetailScreen', () => {
   });
 
   it('surfaces the real reason an image failed instead of a generic placeholder', async () => {
-    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(INTERP_ROW);
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW)
+      .mockResolvedValueOnce(INTERP_ROW);
     imageService.configure('failure'); // getImage resolves null, so the fallback text would otherwise win
     mockImageState = { status: 'safety_blocked' };
     const { getByText, queryByText } = renderScreen();
 
     await waitFor(() =>
       expect(
-        getByText("This dream couldn't be illustrated — its description was flagged by content safety filtering.")
+        getByText(
+          "This dream couldn't be illustrated — its description was flagged by content safety filtering."
+        )
       ).toBeTruthy()
     );
     expect(queryByText('No illustration yet')).toBeNull();

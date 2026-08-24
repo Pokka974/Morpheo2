@@ -222,6 +222,12 @@ export const gradients = {
     colors: ['transparent', 'rgba(13,13,26,0.85)'] as const,
     locations: [0.4, 1] as const,
   },
+  /** Dream-detail hero: fades the image fully into the page background, rather
+   * than cutting to a hard edge where the content sheet begins below it. */
+  heroFade: {
+    colors: ['transparent', palette.night900] as const,
+    locations: [0.3, 1] as const,
+  },
 } as const;
 
 /** Constellation card ground — a radial in the design, approximated as a diagonal. */

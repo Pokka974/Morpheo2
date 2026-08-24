@@ -46,9 +46,13 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'limit_reached', resetDate: nextMonth.toISOString() }), { status: 429, headers: corsHeaders });
   }
 
-  // Check regeneration limit if applicable
+  // Check regeneration limit if applicable. Each call inserts a new media row
+  // rather than updating one in place, so the running count has to be read off
+  // the most recent row and carried forward below -- it cannot live on the row
+  // being checked here.
+  let existingMedia: { regeneration_count: number; max_regenerations: number } | null = null;
   if (isRegeneration) {
-    const { data: existingMedia } = await supabase
+    const { data } = await supabase
       .from('media')
       .select('regeneration_count, max_regenerations')
       .eq('dream_id', dreamId)
@@ -56,6 +60,7 @@ serve(async (req: Request) => {
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
+    existingMedia = data;
 
     if (existingMedia && existingMedia.regeneration_count >= existingMedia.max_regenerations) {
       return new Response(
@@ -119,6 +124,16 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'upload_failed' }), { status: 503, headers: corsHeaders });
   }
 
+  // 3 regenerations per entry for free users, 5 for premium (data-model.md,
+  // FR-029). A regeneration carries forward the limit + count the entry already
+  // had -- the limit is only derived fresh from the current tier on the first
+  // generation for this dream -- so a mid-cycle tier change doesn't retroactively
+  // change an in-progress entry's allowance, and the count actually climbs
+  // instead of resetting to 1 on every regenerate.
+  const maxRegenerations =
+    existingMedia?.max_regenerations ?? (entitlement?.subscription_tier === 'premium' ? 5 : 3);
+  const regenerationCount = isRegeneration ? (existingMedia?.regeneration_count ?? 0) + 1 : 0;
+
   // Insert media record
   const { data: media, error: insertError } = await supabase
     .from('media')
@@ -128,8 +143,8 @@ serve(async (req: Request) => {
       media_type: 'image',
       storage_key: storagePath,
       generation_status: 'complete',
-      regeneration_count: isRegeneration ? 1 : 0,
-      max_regenerations: 3,
+      regeneration_count: regenerationCount,
+      max_regenerations: maxRegenerations,
     })
     .select()
     .single();
