@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 
 import { sqlite as db } from '@db/client';
+import { deleteDream } from '@features/dream-log/dreamRepository';
 import { LoadingState } from '@shared/components/LoadingState';
 import { ErrorState } from '@shared/components/ErrorState';
 import { Button } from '@shared/components/Button';
@@ -123,10 +124,7 @@ export default function DreamDetailScreen() {
   }, [dream, interpretation, imageMedia, isLoading, imageState.status, generate]);
 
   const confirmDelete = async () => {
-    await db.runAsync(
-      "UPDATE dreams SET is_deleted = 1, last_modified_at = datetime('now') WHERE id = ?",
-      dreamId
-    );
+    await deleteDream(dreamId);
     router.back();
   };
 

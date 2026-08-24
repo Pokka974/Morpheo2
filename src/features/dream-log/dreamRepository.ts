@@ -52,12 +52,16 @@ export async function updateDream(
 }
 
 export async function deleteDream(id: string): Promise<void> {
-  await db.update(dreams).set({ isDeleted: true, syncStatus: 'local' }).where(eq(dreams.id, id));
+  const now = new Date().toISOString();
+  await db
+    .update(dreams)
+    .set({ isDeleted: true, lastModifiedAt: now, syncStatus: 'local' })
+    .where(eq(dreams.id, id));
 }
 
 export async function getPendingDreams(): Promise<Dream[]> {
   const allDreams = await db.select().from(dreams);
-  return allDreams.filter(d => d.syncStatus !== 'synced' && !d.isDeleted);
+  return allDreams.filter(d => d.syncStatus !== 'synced');
 }
 
 export async function markSynced(id: string): Promise<void> {

@@ -28,6 +28,26 @@ jest.mock('@services/../supabase/client', () => ({
   supabase: { auth: { getSession: (...args: unknown[]) => mockGetSession(...args) } },
 }));
 
+const mockNetInfoAddEventListener = jest.fn();
+jest.mock('@react-native-community/netinfo', () => ({
+  __esModule: true,
+  default: { addEventListener: (...args: unknown[]) => mockNetInfoAddEventListener(...args) },
+}));
+
+const mockSyncPendingDreams = jest.fn();
+jest.mock('@features/dream-log/syncService', () => ({
+  AuthExpiredError: class AuthExpiredError extends Error {},
+  syncPendingDreams: (...args: unknown[]) => mockSyncPendingDreams(...args),
+}));
+
+const mockPullRemoteChanges = jest.fn();
+jest.mock('@features/sync/pullService', () => ({
+  pullRemoteChanges: (...args: unknown[]) => mockPullRemoteChanges(...args),
+}));
+
+const mockAuthServiceGetSession = jest.fn();
+const mockOnAuthStateChange = jest.fn();
+
 const mockIsLockRequired = jest.fn();
 jest.mock('@services/auth/ExpoLocalLockService', () => ({
   ExpoLocalLockService: jest.fn().mockImplementation(() => ({
@@ -53,7 +73,10 @@ jest.mock('@services/subscription/RevenueCatEntitlementService', () => ({
 }));
 
 jest.mock('@services/auth/SupabaseAuthService', () => ({
-  SupabaseAuthService: jest.fn().mockImplementation(() => ({})),
+  SupabaseAuthService: jest.fn().mockImplementation(() => ({
+    getSession: (...args: unknown[]) => mockAuthServiceGetSession(...args),
+    onAuthStateChange: (...args: unknown[]) => mockOnAuthStateChange(...args),
+  })),
 }));
 jest.mock('@services/ai/interpretation/ClaudeInterpretationService', () => ({
   ClaudeInterpretationService: jest.fn().mockImplementation(() => ({})),
@@ -65,7 +88,9 @@ jest.mock('@services/ai/video/LumaVideoGenerationService', () => ({
   LumaVideoGenerationService: jest.fn().mockImplementation(() => ({})),
 }));
 jest.mock('@services/notifications/ExpoNotificationService', () => ({
-  ExpoNotificationService: jest.fn().mockImplementation(() => ({})),
+  ExpoNotificationService: jest.fn().mockImplementation(() => ({
+    registerPushToken: jest.fn().mockResolvedValue(undefined),
+  })),
 }));
 
 import RootLayout from '@app/_layout';
@@ -79,6 +104,14 @@ describe('RootLayout / AppNavigator', () => {
     mockIsLockRequired.mockReturnValue(false);
     mockGetItem.mockResolvedValue('true');
     mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
+    mockNetInfoAddEventListener.mockReturnValue(jest.fn());
+    mockOnAuthStateChange.mockReturnValue(jest.fn());
+    mockSyncPendingDreams.mockResolvedValue(undefined);
+    mockPullRemoteChanges.mockResolvedValue(undefined);
+    // No session by default, so the foreground/reconnect/login sync hooks are no-ops
+    // for the existing lock/navigation/cache-eviction tests below; the dedicated
+    // foreground-sync test overrides this.
+    mockAuthServiceGetSession.mockResolvedValue(null);
     delete process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'];
   });
 
@@ -158,5 +191,39 @@ describe('RootLayout / AppNavigator', () => {
     render(<RootLayout />);
     await waitFor(() => expect(mockReplace).toHaveBeenCalled());
     expect(mockConfigureRC).not.toHaveBeenCalled();
+  });
+
+  it('pushes pending dreams then pulls remote changes when the app foregrounds with an active session', async () => {
+    let activeHandler: ((state: string) => void) | undefined;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(((_event: string, cb: (state: string) => void) => {
+      activeHandler = cb;
+      return { remove: jest.fn() };
+    }) as typeof AppState.addEventListener);
+
+    mockAuthServiceGetSession.mockResolvedValue({ user: { id: 'u1' }, accessToken: 't', expiresAt: 0 });
+    render(<RootLayout />);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalled());
+
+    activeHandler?.('active');
+
+    await waitFor(() => expect(mockSyncPendingDreams).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockPullRemoteChanges).toHaveBeenCalledWith('u1'));
+  });
+
+  it('does not push or pull on foreground when there is no active session', async () => {
+    let activeHandler: ((state: string) => void) | undefined;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(((_event: string, cb: (state: string) => void) => {
+      activeHandler = cb;
+      return { remove: jest.fn() };
+    }) as typeof AppState.addEventListener);
+
+    render(<RootLayout />);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalled());
+
+    activeHandler?.('active');
+
+    await waitFor(() => expect(mockEvictToLimit).toHaveBeenCalled());
+    expect(mockSyncPendingDreams).not.toHaveBeenCalled();
+    expect(mockPullRemoteChanges).not.toHaveBeenCalled();
   });
 });

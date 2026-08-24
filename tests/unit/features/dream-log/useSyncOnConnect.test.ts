@@ -20,6 +20,11 @@ jest.mock('@features/dream-log/syncService', () => {
   };
 });
 
+const mockPullRemoteChanges = jest.fn();
+jest.mock('@features/sync/pullService', () => ({
+  pullRemoteChanges: (...args: unknown[]) => mockPullRemoteChanges(...args),
+}));
+
 import { renderHook } from '@testing-library/react-native';
 import { useSyncOnConnect } from '@features/dream-log/useSyncOnConnect';
 import { AuthExpiredError } from '@features/dream-log/syncService';
@@ -44,6 +49,7 @@ describe('useSyncOnConnect', () => {
   beforeEach(() => {
     mockAddEventListener.mockReset();
     mockSyncPendingDreams.mockReset();
+    mockPullRemoteChanges.mockReset();
     unsubscribe = jest.fn();
     mockAddEventListener.mockReturnValue(unsubscribe);
     auth = { getSession: jest.fn() } as unknown as AuthService;
@@ -114,8 +120,12 @@ describe('useSyncOnConnect', () => {
     handler({ isConnected: true, isInternetReachable: true });
     await flush();
 
-    expect(auth.getSession).toHaveBeenCalledTimes(1);
+    // Once to refresh the session inside the AuthExpiredError retry, once more
+    // afterward to look up the userId for the pull step.
+    expect(auth.getSession).toHaveBeenCalledTimes(2);
     expect(mockSyncPendingDreams).toHaveBeenCalledTimes(2);
+    // getSession resolved null both times, so there's no userId to pull with.
+    expect(mockPullRemoteChanges).not.toHaveBeenCalled();
   });
 
   it('silently gives up when the session refresh itself fails after an AuthExpiredError', async () => {
@@ -133,7 +143,7 @@ describe('useSyncOnConnect', () => {
     expect(mockSyncPendingDreams).toHaveBeenCalledTimes(1);
   });
 
-  it('swallows a non-auth sync error without retrying via getSession', async () => {
+  it('swallows a non-auth sync error without retrying the push via getSession', async () => {
     mockSyncPendingDreams.mockRejectedValueOnce(new Error('generic failure'));
 
     renderHook(() => useSyncOnConnect(auth));
@@ -144,6 +154,62 @@ describe('useSyncOnConnect', () => {
     expect(() => handler({ isConnected: true, isInternetReachable: true })).not.toThrow();
     await flush();
 
-    expect(auth.getSession).not.toHaveBeenCalled();
+    // Still called exactly once — for the pull step's userId lookup — even though
+    // the push failed with a non-auth error and skipped its own retry path.
+    expect(auth.getSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('pulls remote changes for the current user once reconnected', async () => {
+    mockSyncPendingDreams.mockResolvedValue(undefined);
+    (auth.getSession as jest.Mock).mockResolvedValue({
+      user: { id: 'user-42' },
+      accessToken: 't',
+      expiresAt: 0,
+    });
+    mockPullRemoteChanges.mockResolvedValue(undefined);
+
+    renderHook(() => useSyncOnConnect(auth));
+    const handler = getNetInfoHandler();
+
+    handler({ isConnected: false, isInternetReachable: null });
+    await flush();
+    handler({ isConnected: true, isInternetReachable: true });
+    await flush();
+
+    expect(mockPullRemoteChanges).toHaveBeenCalledWith('user-42');
+  });
+
+  it('does not pull when there is no active session after reconnecting', async () => {
+    mockSyncPendingDreams.mockResolvedValue(undefined);
+
+    renderHook(() => useSyncOnConnect(auth));
+    const handler = getNetInfoHandler();
+
+    handler({ isConnected: false, isInternetReachable: null });
+    await flush();
+    handler({ isConnected: true, isInternetReachable: true });
+    await flush();
+
+    expect(mockPullRemoteChanges).not.toHaveBeenCalled();
+  });
+
+  it('logs and swallows a pull failure without throwing', async () => {
+    mockSyncPendingDreams.mockResolvedValue(undefined);
+    (auth.getSession as jest.Mock).mockResolvedValue({
+      user: { id: 'user-1' },
+      accessToken: 't',
+      expiresAt: 0,
+    });
+    mockPullRemoteChanges.mockRejectedValue(new Error('pull failed'));
+
+    renderHook(() => useSyncOnConnect(auth));
+    const handler = getNetInfoHandler();
+
+    handler({ isConnected: false, isInternetReachable: null });
+    await flush();
+    expect(() => handler({ isConnected: true, isInternetReachable: true })).not.toThrow();
+    await flush();
+
+    expect(mockPullRemoteChanges).toHaveBeenCalled();
   });
 });

@@ -17,6 +17,10 @@ import type { ServiceRegistry } from '@services/registry';
 import { initI18n } from '@i18n/index';
 import { useAppFonts } from '@theme/useAppFonts';
 import { colors } from '@theme/tokens';
+import { useSyncOnConnect } from '@features/dream-log/useSyncOnConnect';
+import { syncPendingDreams } from '@features/dream-log/syncService';
+import { useAuthSync } from '@features/auth/useAuthSync';
+import { pullRemoteChanges } from '@features/sync/pullService';
 
 // Resolve the device language before the first render so no screen flashes English
 // on its way to French.
@@ -68,6 +72,9 @@ function AppNavigator() {
   const insets = useSafeAreaInsets();
   const [authState, setAuthState] = useState<AuthState>('loading');
 
+  useSyncOnConnect(services.auth);
+  useAuthSync(services.auth, services.notifications);
+
   useEffect(() => {
     const rcKey = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'] as string | undefined;
     if (rcKey) RevenueCatEntitlementService.configure(rcKey);
@@ -117,6 +124,34 @@ function AppNavigator() {
       services.storage.evictToLimit(MAX_CACHE_BYTES).catch((err: unknown) => {
         console.error('Cache eviction on foreground failed:', err);
       });
+
+      void syncOnForeground();
+    }
+  }
+
+  // Checked directly against the session rather than the `authState` value closed
+  // over by this handler's subscription (`AppState.addEventListener` below fires
+  // with whichever closure was live when it was registered), so this can't fire
+  // with a stale "not ready yet" reading.
+  async function syncOnForeground() {
+    let session;
+    try {
+      session = await services.auth.getSession();
+    } catch (err) {
+      console.error('Session lookup for foreground sync failed:', err);
+      return;
+    }
+    if (!session) return;
+
+    try {
+      await syncPendingDreams();
+    } catch (err) {
+      console.error('Push sync on foreground failed:', err);
+    }
+    try {
+      await pullRemoteChanges(session.user.id);
+    } catch (err) {
+      console.error('Pull sync on foreground failed:', err);
     }
   }
 
