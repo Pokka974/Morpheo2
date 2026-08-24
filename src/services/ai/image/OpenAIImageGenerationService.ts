@@ -8,6 +8,7 @@ import {
   ContentSafetyError,
   RegenerationLimitError,
   ImageLimitError,
+  ImageGenerationProviderError,
 } from './ImageGenerationService';
 import type { StorageService } from '../../storage/StorageService';
 
@@ -34,7 +35,8 @@ export class OpenAIImageGenerationService implements ImageGenerationService {
           )
         );
       }
-      throw error;
+      if (status === 503 || status === 500) throw new ImageGenerationProviderError(true);
+      throw new ImageGenerationProviderError(false);
     }
 
     const result = data as MediaResult;

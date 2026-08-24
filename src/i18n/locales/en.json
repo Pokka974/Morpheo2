@@ -73,7 +73,16 @@
     "waitingDuration": "~15 s",
     "continueInBackground": "Continue in the background",
     "dreamNotSyncedTitle": "This dream is still on your device",
-    "dreamNotSyncedBody": "We could not reach the server, so it cannot be interpreted yet. Your dream is safe — try again once you are back online."
+    "dreamNotSyncedBody": "We could not reach the server, so it cannot be interpreted yet. Your dream is safe — try again once you are back online.",
+    "imageIllustrating": "Illustrating your dream…",
+    "imageNoneYet": "No illustration yet",
+    "imageRetry": "Retry",
+    "imageGenerateButton": "Generate image",
+    "imageRegenerate": "Regenerate ({{count}} left)",
+    "imageRegenerate_other": "Regenerate ({{count}} left)",
+    "imageSafetyBlockedBody": "This dream couldn't be illustrated — its description was flagged by content safety filtering.",
+    "imageRegenLimitBody": "You've used all {{max}} regenerations for this image.",
+    "imageLimitReachedBody": "Your free images reset on {{date}}."
   },
   "insights": {
     "title": "Insights",

@@ -150,6 +150,25 @@ export default function DreamDetailScreen() {
   // Prefer the on-device copy so an opened dream never re-fetches from the provider
   // (FR-013); fall back to the signed URL until the cache is warm.
   const heroUri = activeImage?.localCachePath ?? activeImage?.signedUrl ?? null;
+
+  // Every non-success, non-generating imageState was previously dropped on the
+  // floor — DreamMediaView fell back to a generic "No illustration yet" no matter
+  // why generation actually failed. Surface the real reason.
+  const imageErrorMessage =
+    imageState.status === 'error'
+      ? imageState.message
+      : imageState.status === 'safety_blocked'
+        ? t('dream.imageSafetyBlockedBody')
+        : imageState.status === 'regeneration_limit'
+          ? t('dream.imageRegenLimitBody', { max: imageState.max })
+          : imageState.status === 'image_limit'
+            ? t('dream.imageLimitReachedBody', {
+                date: imageState.resetDate.toLocaleDateString(i18n.language, {
+                  day: 'numeric',
+                  month: 'long',
+                }),
+              })
+            : null;
   const occurred = new Date(dream.occurredAt);
   const dateLabel = occurred.toLocaleDateString(i18n.language, {
     weekday: 'long',
@@ -273,6 +292,7 @@ export default function DreamDetailScreen() {
         <DreamMediaView
           media={activeImage}
           isGenerating={imageState.status === 'generating'}
+          errorMessage={imageErrorMessage}
           canRegenerate={true}
           onGenerate={() => {
             void generate({

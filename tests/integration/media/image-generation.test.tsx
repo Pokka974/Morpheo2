@@ -200,7 +200,7 @@ describe('Image generation integration', () => {
     expect(getByLabelText('Dream illustration')).toBeTruthy();
   });
 
-  it('renders a Generate Image button (not Regenerate) when no image exists yet, and calls onGenerate', () => {
+  it('renders a Generate image button (not Regenerate) when no image exists yet, and calls onGenerate', () => {
     const onGenerate = jest.fn();
     const onRegenerate = jest.fn();
     const { getByText, queryByText } = render(
@@ -214,7 +214,7 @@ describe('Image generation integration', () => {
     );
 
     expect(queryByText(/Regenerate/)).toBeNull();
-    fireEvent.press(getByText('Generate Image'));
+    fireEvent.press(getByText('Generate image'));
     expect(onGenerate).toHaveBeenCalled();
     expect(onRegenerate).not.toHaveBeenCalled();
   });

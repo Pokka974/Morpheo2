@@ -73,7 +73,16 @@
     "waitingDuration": "~15 s",
     "continueInBackground": "Continuer en arrière-plan",
     "dreamNotSyncedTitle": "Ce rêve est encore sur votre appareil",
-    "dreamNotSyncedBody": "Le serveur est injoignable, l'interprétation n'est donc pas encore possible. Votre rêve est en sécurité — réessayez une fois de retour en ligne."
+    "dreamNotSyncedBody": "Le serveur est injoignable, l'interprétation n'est donc pas encore possible. Votre rêve est en sécurité — réessayez une fois de retour en ligne.",
+    "imageIllustrating": "Illustration de votre rêve…",
+    "imageNoneYet": "Pas encore d'illustration",
+    "imageRetry": "Réessayer",
+    "imageGenerateButton": "Générer une image",
+    "imageRegenerate": "Regénérer ({{count}} restant)",
+    "imageRegenerate_other": "Regénérer ({{count}} restants)",
+    "imageSafetyBlockedBody": "Ce rêve n'a pas pu être illustré — sa description a été signalée par le filtrage de sécurité.",
+    "imageRegenLimitBody": "Vous avez utilisé les {{max}} régénérations disponibles pour cette image.",
+    "imageLimitReachedBody": "Vos images gratuites se renouvellent le {{date}}."
   },
   "insights": {
     "title": "Insights",

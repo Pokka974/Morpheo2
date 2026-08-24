@@ -1,11 +1,19 @@
 import React from 'react';
 import { View, Image, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import type { MediaResult } from '@services/ai/image/ImageGenerationService';
 import { colors, spacing } from '@theme/tokens';
 
 interface DreamMediaViewProps {
   media: MediaResult | null;
   isGenerating: boolean;
+  /**
+   * The reason the last generation attempt failed (safety block, limit reached,
+   * provider error, etc.), derived by the caller from `useImageGeneration()`'s
+   * state. Takes priority over `media?.errorMessage` since a failed attempt often
+   * has no `media` row at all.
+   */
+  errorMessage?: string | null;
   onGenerate?: () => void;
   onRegenerate?: () => void;
   canRegenerate: boolean;
@@ -14,30 +22,36 @@ interface DreamMediaViewProps {
 export function DreamMediaView({
   media,
   isGenerating,
+  errorMessage,
   onGenerate,
   onRegenerate,
   canRegenerate,
 }: DreamMediaViewProps) {
+  const { t } = useTranslation();
+
   if (isGenerating) {
     return (
       <View style={styles.placeholder}>
         <ActivityIndicator color={colors.accent} size="large" />
-        <Text style={styles.hint}>Illustrating your dream...</Text>
+        <Text style={styles.hint}>{t('dream.imageIllustrating')}</Text>
       </View>
     );
   }
 
   if (!media || media.generationStatus === 'failed') {
+    const failureMessage = errorMessage ?? media?.errorMessage ?? null;
     return (
       <View style={styles.placeholder}>
-        <Text style={styles.hint}>{media?.errorMessage ?? 'No illustration yet'}</Text>
+        <Text style={styles.hint}>{failureMessage ?? t('dream.imageNoneYet')}</Text>
         {onGenerate && (
           <TouchableOpacity
             style={styles.regenButton}
             onPress={onGenerate}
             accessibilityRole="button"
           >
-            <Text style={styles.regenText}>{media?.errorMessage ? 'Retry' : 'Generate Image'}</Text>
+            <Text style={styles.regenText}>
+              {failureMessage ? t('dream.imageRetry') : t('dream.imageGenerateButton')}
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -68,7 +82,9 @@ export function DreamMediaView({
           accessibilityRole="button"
         >
           <Text style={styles.regenText}>
-            Regenerate ({media.maxRegenerations - media.regenerationCount} left)
+            {t('dream.imageRegenerate', {
+              count: media.maxRegenerations - media.regenerationCount,
+            })}
           </Text>
         </TouchableOpacity>
       )}

@@ -1,5 +1,10 @@
 import { OpenAIImageGenerationService } from '@services/ai/image/OpenAIImageGenerationService';
-import { ContentSafetyError, RegenerationLimitError, ImageLimitError } from '@services/ai/image/ImageGenerationService';
+import {
+  ContentSafetyError,
+  RegenerationLimitError,
+  ImageLimitError,
+  ImageGenerationProviderError,
+} from '@services/ai/image/ImageGenerationService';
 import { MockStorageService } from '@services/storage/__mocks__/MockStorageService';
 
 const mockInvoke = jest.fn();
@@ -75,10 +80,37 @@ describe('OpenAIImageGenerationService', () => {
     await expect(service.generateImage(testRequest)).rejects.toThrow(ImageLimitError);
   });
 
-  it('rethrows the raw error for an unrecognized error status', async () => {
-    const rawError = { status: 500, message: 'server error' };
-    mockInvoke.mockResolvedValueOnce({ data: null, error: rawError });
-    await expect(service.generateImage(testRequest)).rejects.toEqual(rawError);
+  it('throws a retryable ImageGenerationProviderError on a 503 response', async () => {
+    mockInvoke.mockResolvedValueOnce({ data: null, error: { status: 503 } });
+    try {
+      await service.generateImage(testRequest);
+      throw new Error('expected generateImage() to throw');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ImageGenerationProviderError);
+      expect((e as ImageGenerationProviderError).retryable).toBe(true);
+    }
+  });
+
+  it('throws a retryable ImageGenerationProviderError on a 500 response', async () => {
+    mockInvoke.mockResolvedValueOnce({ data: null, error: { status: 500 } });
+    try {
+      await service.generateImage(testRequest);
+      throw new Error('expected generateImage() to throw');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ImageGenerationProviderError);
+      expect((e as ImageGenerationProviderError).retryable).toBe(true);
+    }
+  });
+
+  it('throws a non-retryable ImageGenerationProviderError on an unrecognized error status', async () => {
+    mockInvoke.mockResolvedValueOnce({ data: null, error: { status: 418 } });
+    try {
+      await service.generateImage(testRequest);
+      throw new Error('expected generateImage() to throw');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ImageGenerationProviderError);
+      expect((e as ImageGenerationProviderError).retryable).toBe(false);
+    }
   });
 
   it('returns the plain result (no localCachePath) when caching throws', async () => {
