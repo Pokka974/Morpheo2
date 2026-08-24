@@ -172,7 +172,9 @@ async function reconcileDreamDeletions(userId: string): Promise<void> {
     return;
   }
 
-  const remoteActiveIds = new Set((data as Array<{ id: string }> | null ?? []).map(row => row.id));
+  const remoteActiveIds = new Set(
+    ((data as Array<{ id: string }> | null) ?? []).map(row => row.id)
+  );
 
   // Only rows this device already believes are synced and active are candidates —
   // a not-yet-pushed local dream simply doesn't exist remotely yet, which must not
