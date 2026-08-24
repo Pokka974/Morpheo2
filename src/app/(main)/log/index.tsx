@@ -29,15 +29,7 @@ import {
   syncPendingDreams,
 } from '@features/dream-log/syncService';
 import { useServices } from '@services/useServices';
-import {
-  colors,
-  glow,
-  MIN_TOUCH_TARGET,
-  radius,
-  sizes,
-  spacing,
-  typography,
-} from '@theme/tokens';
+import { colors, glow, MIN_TOUCH_TARGET, radius, sizes, spacing, typography } from '@theme/tokens';
 
 const MIN_DESCRIPTION = 20;
 

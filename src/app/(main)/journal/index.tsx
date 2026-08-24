@@ -213,7 +213,10 @@ function parseEmotions(raw: string | null): string[] {
 }
 
 /** The dreamer's own emotions where there are any, the AI's reading otherwise. */
-function pickEmotions(dreamEmotions: string | null, interpretationEmotions: string | null): string[] {
+function pickEmotions(
+  dreamEmotions: string | null,
+  interpretationEmotions: string | null
+): string[] {
   const own = parseEmotions(dreamEmotions);
   return own.length > 0 ? own : parseEmotions(interpretationEmotions);
 }

@@ -4,15 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 
 import type { Entitlement } from '@services/entitlement/EntitlementService';
-import {
-  colors,
-  glow,
-  gradients,
-  radius,
-  sizes,
-  spacing,
-  typography,
-} from '@theme/tokens';
+import { colors, glow, gradients, radius, sizes, spacing, typography } from '@theme/tokens';
 
 /**
  * The upgrade link sits on one line of metadata, so it cannot be 44px tall without

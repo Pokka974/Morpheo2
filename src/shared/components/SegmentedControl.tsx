@@ -45,7 +45,11 @@ export function SegmentedControl<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={segment.accessibilityLabel ?? segment.label}
-            style={[styles.segment, fullWidth && styles.segmentWide, active && styles.segmentActive]}
+            style={[
+              styles.segment,
+              fullWidth && styles.segmentWide,
+              active && styles.segmentActive,
+            ]}
           >
             <Text style={[styles.label, active ? styles.labelActive : styles.labelIdle]}>
               {segment.label}

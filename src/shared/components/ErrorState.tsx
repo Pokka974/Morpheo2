@@ -28,13 +28,7 @@ interface Props {
  * rather than a modal, so a failed interpretation sits calmly in the flow next to
  * the dream that is still safely saved.
  */
-export function ErrorState({
-  message,
-  onRetry,
-  retryLabel,
-  title,
-  fullScreen = false,
-}: Props) {
+export function ErrorState({ message, onRetry, retryLabel, title, fullScreen = false }: Props) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 

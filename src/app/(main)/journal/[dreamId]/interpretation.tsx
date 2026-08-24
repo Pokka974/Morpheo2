@@ -13,10 +13,7 @@ import { deriveTitle } from '@features/journal/DreamCard';
 import { ConsentPromptModal } from '@features/auth/ConsentPromptModal';
 import { useInterpretation } from '@features/interpretation/useInterpretation';
 import { recordRecurrence } from '@features/recurrence/recurrenceRepository';
-import {
-  DreamNotSyncedError,
-  syncDreamForInterpretation,
-} from '@features/dream-log/syncService';
+import { DreamNotSyncedError, syncDreamForInterpretation } from '@features/dream-log/syncService';
 import { useServices } from '@services/useServices';
 import { colors } from '@theme/tokens';
 

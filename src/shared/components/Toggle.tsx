@@ -21,14 +21,7 @@ interface Props {
  * A labelled row switch on its own card surface. Not RN's `Switch`: that renders the
  * platform control, which carries iOS system green and ignores the palette entirely.
  */
-export function Toggle({
-  label,
-  value,
-  onValueChange,
-  hint,
-  highlight = false,
-  testID,
-}: Props) {
+export function Toggle({ label, value, onValueChange, hint, highlight = false, testID }: Props) {
   const on = highlight ? colors.highlight : colors.accent;
 
   return (
