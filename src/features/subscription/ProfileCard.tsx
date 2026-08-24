@@ -80,7 +80,7 @@ export function ProfileCard({ email, dreamCount, since, entitlement, onUpgrade }
         </View>
       </View>
 
-      {limit === null ? (
+      {isPremium || limit === null ? (
         <Text style={styles.quotaUnlimited}>{t('settings.quotaUnlimited')}</Text>
       ) : (
         <View style={styles.quota}>

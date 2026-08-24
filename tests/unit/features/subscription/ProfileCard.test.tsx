@@ -85,6 +85,19 @@ describe('ProfileCard', () => {
     expect(queryByTestId('quota-meter')).toBeNull();
   });
 
+  it('shows unlimited for a premium tier even when the limit column is a stale non-null value', () => {
+    // The RevenueCat webhook only ever writes subscription_tier; it never nulls out
+    // monthly_interpretation_limit, so a premium row commonly still carries the
+    // free-tier default (or a manually edited value). The meter must key off the
+    // tier, not assume the limit column was cleared on upgrade.
+    const { getByText, queryByTestId } = renderCard({
+      entitlement: { ...PREMIUM, monthlyInterpretationLimit: 5, interpretationsUsedThisMonth: 5 },
+    });
+
+    expect(getByText('Unlimited interpretations')).toBeTruthy();
+    expect(queryByTestId('quota-meter')).toBeNull();
+  });
+
   it('offers the upgrade route from the quota line', () => {
     const onUpgrade = jest.fn();
     const { getByLabelText } = renderCard({ onUpgrade });
