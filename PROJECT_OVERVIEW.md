@@ -15,7 +15,7 @@ Morpheo is a mobile app (iOS/Android, one codebase) where a user logs their drea
 | Local DB | expo-sqlite ~15 + drizzle-orm ^0.45 | Offline-first store, schema in `src/db/schema.ts` (`dreams`, `interpretations`, `media`, `recurrence_patterns`) |
 | State/data sync | Custom sync queue (`syncStatus` field + `useSyncOnConnect`) | Last-write-wins sync between SQLite and Supabase |
 | AI — text | Anthropic Claude (`claude-sonnet-4-6`) via `@anthropic-ai/sdk` in Deno Edge Function | `supabase/functions/interpret/index.ts` — structured output via a `format_interpretation` tool call |
-| AI — image | OpenAI DALL-E 3 | `supabase/functions/generate-image`, client-side `DallEImageGenerationService` |
+| AI — image | OpenAI gpt-image-2 | `supabase/functions/generate-image`, client-side `OpenAIImageGenerationService` |
 | AI — video | Luma Dream Machine | `supabase/functions/generate-video`, client-side `LumaVideoGenerationService` |
 | Payments | RevenueCat (`react-native-purchases`) | `RevenueCatEntitlementService`, webhook handler in `supabase/functions/webhooks` |
 | Auth | Supabase Auth + `expo-apple-authentication` + `@react-native-google-signin/google-signin` | Sign-in/sign-up screens, `SupabaseAuthService` |
@@ -97,7 +97,7 @@ Inferred from `src/app` route files and feature modules:
 - Dream journal: list/search/filter past dream entries (`useJournalFilters`, `useJournalSearch`)
 - Dream logging by text or voice dictation
 - AI dream interpretation (symbolic / mythological / psychological style) with keywords, emotions, and cultural references, gated by monthly entitlement limit and user consent
-- AI-generated dream image (DALL-E 3) and optional video (Luma) per dream entry, with a capped regeneration count
+- AI-generated dream image (gpt-image-2) and optional video (Luma) per dream entry, with a capped regeneration count
 - Recurrence insights: top recurring keywords/emotions/symbols over time, with a premium-only deeper analytics view
 - Subscription/paywall via RevenueCat, with a usage indicator for free-tier limits
 - Settings: cache size display/management, data export, privacy info, notification preferences, interpretation style, account deletion (exact-phrase confirmation)
@@ -127,7 +127,7 @@ flowchart LR
     Supabase["Supabase\n(Postgres + Auth + Storage)"]
     Edge["Supabase Edge Functions\n(Deno)"]
     Claude["Anthropic Claude\nclaude-sonnet-4-6"]
-    DallE["OpenAI DALL-E 3"]
+    ImgGen["OpenAI gpt-image-2"]
     Luma["Luma Dream Machine"]
     RC["RevenueCat"]
 
@@ -137,7 +137,7 @@ flowchart LR
     App -- "invoke: interpret/generate-image/generate-video/account-delete/export-data" --> Edge
     Edge -- "check consent + entitlement" --> Supabase
     Edge -- "tool_use: format_interpretation" --> Claude
-    Edge -- "image generation request" --> DallE
+    Edge -- "image generation request" --> ImgGen
     Edge -- "video generation request" --> Luma
     App -- "purchase/entitlement check" --> RC
     RC -- "webhook: subscription events" --> Edge

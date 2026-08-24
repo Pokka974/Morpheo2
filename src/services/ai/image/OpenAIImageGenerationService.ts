@@ -11,7 +11,7 @@ import {
 } from './ImageGenerationService';
 import type { StorageService } from '../../storage/StorageService';
 
-export class DallEImageGenerationService implements ImageGenerationService {
+export class OpenAIImageGenerationService implements ImageGenerationService {
   constructor(private readonly storage: StorageService) {}
 
   async generateImage(request: ImageGenerationRequest): Promise<MediaResult> {

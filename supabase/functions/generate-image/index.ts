@@ -69,16 +69,17 @@ serve(async (req: Request) => {
   const keywordStr = keywords?.length ? ` Key symbols: ${keywords.slice(0, 5).join(', ')}.` : '';
   const prompt = `Dreamlike, surreal illustration of: ${description.slice(0, 300)}${keywordStr} Artistic, imaginative, non-photorealistic style. No text.`;
 
-  // Call DALL-E 3
+  // Call OpenAI's gpt-image-2 (dall-e-3 was removed from the API on 2026-05-12)
   const openAiResponse = await fetch('https://api.openai.com/v1/images/generations', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'dall-e-3', prompt, n: 1, size: '1024x1024', quality: 'standard' }),
+    body: JSON.stringify({ model: 'gpt-image-2', prompt, n: 1, size: '1024x1024', quality: 'high' }),
   });
 
   if (!openAiResponse.ok) {
     const err = await openAiResponse.json();
-    const isSafetyBlock = err?.error?.code === 'content_policy_violation';
+    console.error('OpenAI image generation failed:', JSON.stringify(err));
+    const isSafetyBlock = err?.error?.code === 'moderation_blocked';
     if (isSafetyBlock) {
       return new Response(JSON.stringify({ error: 'safety_blocked' }), { status: 400, headers: corsHeaders });
     }
@@ -86,11 +87,8 @@ serve(async (req: Request) => {
   }
 
   const openAiData = await openAiResponse.json();
-  const imageUrl = openAiData.data[0].url;
-
-  // Download and upload to Supabase Storage
-  const imageResponse = await fetch(imageUrl);
-  const imageBuffer = await imageResponse.arrayBuffer();
+  const b64Image = openAiData.data[0].b64_json;
+  const imageBuffer = Uint8Array.from(atob(b64Image), (c) => c.charCodeAt(0));
   const storagePath = `${user.id}/${dreamId}/image-${Date.now()}.png`;
 
   const { error: uploadError } = await supabase.storage

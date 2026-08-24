@@ -1,4 +1,4 @@
-import { DallEImageGenerationService } from '@services/ai/image/DallEImageGenerationService';
+import { OpenAIImageGenerationService } from '@services/ai/image/OpenAIImageGenerationService';
 import { ContentSafetyError, RegenerationLimitError, ImageLimitError } from '@services/ai/image/ImageGenerationService';
 import { MockStorageService } from '@services/storage/__mocks__/MockStorageService';
 
@@ -20,11 +20,11 @@ const testRequest = {
   keywords: ['ocean', 'night', 'flying'],
 };
 
-describe('DallEImageGenerationService', () => {
-  let service: DallEImageGenerationService;
+describe('OpenAIImageGenerationService', () => {
+  let service: OpenAIImageGenerationService;
 
   beforeEach(() => {
-    service = new DallEImageGenerationService(mockStorage);
+    service = new OpenAIImageGenerationService(mockStorage);
     jest.clearAllMocks();
   });
 

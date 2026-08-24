@@ -183,7 +183,7 @@ Generate an AI image for a dream. Enforces entitlement and content safety.
 
 **Entitlement check**: Same pattern as interpret — checks `images_used < monthly_image_limit`.
 
-**Content safety check**: Input description is evaluated against a blocklist + Claude content safety heuristic before calling DALL-E.
+**Content safety check**: Input description is evaluated against a blocklist + Claude content safety heuristic before calling OpenAI.
 
 **Success response** `200`:
 ```json
@@ -203,7 +203,7 @@ Generate an AI image for a dream. Enforces entitlement and content safety.
 - `400` — content safety block `{ "error": "safety_blocked", "reason": "input" | "output" }`
 - `429` — monthly image limit exceeded
 - `409` — regeneration limit reached `{ "error": "regen_limit_reached", "max": 3 }`
-- `503` — DALL-E unavailable
+- `503` — OpenAI image API unavailable
 
 ---
 

@@ -3,7 +3,7 @@
 **Branch**: `001-morpheo-app` | **Date**: 2026-08-14
 
 These TypeScript interfaces define the adapter boundaries mandated by constitution Principle I.
-Feature code MUST call these interfaces only. Concrete implementations (Claude, DALL-E, Luma,
+Feature code MUST call these interfaces only. Concrete implementations (Claude, OpenAI image, Luma,
 Supabase Auth, etc.) live in `src/services/{domain}/` and are injected via a service registry.
 Swapping a provider means replacing the concrete class — zero feature code changes.
 

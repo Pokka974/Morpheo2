@@ -18,7 +18,7 @@ over time. A free tier (5 interpretations + 3 images/month) and a premium subscr
 
 **Technical approach**: Expo managed workflow React Native client → Supabase backend
 (PostgreSQL + Auth + Storage + Edge Functions) → Claude claude-sonnet-4-6 for structured
-interpretation → DALL-E 3 for synchronous image generation → Luma Dream Machine for async
+interpretation → gpt-image-2 for synchronous image generation → Luma Dream Machine for async
 premium video generation. All AI providers wrapped behind TypeScript service interfaces
 (constitution adapter mandate). See `research.md` for full decision rationale.
 
@@ -111,7 +111,7 @@ premium video generation. All AI providers wrapped behind TypeScript service int
 | Explicit consent before AI call | `profiles.ai_consent_granted` checked server-side in every AI Edge Function (FR-002, FR-025) |
 | Full export from Settings | `POST /functions/v1/export-data`; available at all times |
 | Irreversible account deletion | `DELETE /functions/v1/account`; permanent within 30 days; no soft-delete flag |
-| AI provider model-training opt-out by default | Anthropic: no training on API content by default ✓. OpenAI DALL-E: no training on API content per OpenAI data policy ✓. Luma: opt-out configured in API request parameters ✓ |
+| AI provider model-training opt-out by default | Anthropic: no training on API content by default ✓. OpenAI gpt-image: no training on API content per OpenAI data policy ✓. Luma: opt-out configured in API request parameters ✓ |
 
 **Status**: PASS (one pragmatic tradeoff documented in Complexity Tracking)
 
@@ -122,7 +122,7 @@ premium video generation. All AI providers wrapped behind TypeScript service int
 | System prompt versioned + server-side | `system_prompts` table in Supabase; Edge Function fetches active row at call time; client never sees prompt |
 | Non-clinical framing in base prompt (cannot be overridden) | Base prompt in `system_prompts.base_prompt` enforces non-clinical framing; user style layers are in separate columns (`style_symbolic`, etc.) appended after the base — they cannot override it |
 | Graceful degradation on low-quality output | `confidence` field in Claude tool schema; Edge Function sets `is_degraded = true` when confidence = low or tool_use fails; client renders honest degraded state |
-| Content-safety filtering on image/video input + output | DALL-E 3: built-in input + output safety ✓. Luma: input safety check before submission + output review before Storage write. Additional input pre-check heuristic in Edge Function for both. |
+| Content-safety filtering on image/video input + output | gpt-image-2: built-in input + output safety ✓. Luma: input safety check before submission + output review before Storage write. Additional input pre-check heuristic in Edge Function for both. |
 
 **Status**: PASS
 
@@ -208,7 +208,7 @@ src/
 │   │   │   └── __mocks__/MockInterpretationService.ts
 │   │   ├── image/
 │   │   │   ├── ImageGenerationService.ts
-│   │   │   ├── DallEImageGenerationService.ts
+│   │   │   ├── OpenAIImageGenerationService.ts
 │   │   │   └── __mocks__/MockImageGenerationService.ts
 │   │   └── video/
 │   │       ├── VideoGenerationService.ts
@@ -250,7 +250,7 @@ src/
 └── supabase/                     # Backend (co-located for solo dev convenience)
     ├── functions/
     │   ├── interpret/            # Claude interpretation Edge Function
-    │   ├── generate-image/       # DALL-E 3 Edge Function
+    │   ├── generate-image/       # gpt-image-2 Edge Function
     │   ├── generate-video/       # Luma async job Edge Function
     │   ├── media-url/            # Signed URL refresh
     │   ├── export-data/          # Data export
@@ -289,7 +289,7 @@ Instruction: Respond in the same language the user used to write their dream des
 
 **Degraded state trigger**: `stop_reason !== 'tool_use'` OR `confidence === 'low'`
 
-### Image Generation: DALL-E 3
+### Image Generation: gpt-image-2
 
 **Call pattern**: Supabase Edge Function (`generate-image/`) → OpenAI API (synchronous)
 
@@ -300,9 +300,9 @@ Rendered in a dreamlike, surreal, cinematic style. Watercolor and digital art ae
 Key symbols: [keywords.slice(0,3).join(', ')]
 ```
 
-**Parameters**: `model: "dall-e-3"`, `size: "1024x1024"`, `quality: "standard"`, `n: 1`
+**Parameters**: `model: "gpt-image-2"`, `size: "1024x1024"`, `quality: "high"`, `n: 1`
 
-**Content safety**: DALL-E 3 built-in filtering; a 400 content_policy_violation error is caught and mapped to `ContentSafetyError('output')`.
+**Content safety**: gpt-image-2 built-in filtering; a 400 moderation_blocked error is caught and mapped to `ContentSafetyError('output')`.
 
 ### Video Generation: Luma Dream Machine v2
 
