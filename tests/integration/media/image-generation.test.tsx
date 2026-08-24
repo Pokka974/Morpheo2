@@ -10,7 +10,7 @@ import { MockStorageService } from '@services/storage/__mocks__/MockStorageServi
 import { MockEntitlementService } from '@services/entitlement/__mocks__/MockEntitlementService';
 import { MockNotificationService } from '@services/notifications/__mocks__/MockNotificationService';
 import type { ServiceRegistry } from '@services/registry';
-import { DreamMediaView } from '@features/media-generation/DreamMediaView';
+import { DreamImageActionBar } from '@features/media-generation/DreamImageActionBar';
 import { useImageGeneration } from '@features/media-generation/useImageGeneration';
 import { renderHook, act } from '@testing-library/react-native';
 
@@ -118,7 +118,9 @@ describe('Image generation integration', () => {
     const denyingWrapper = ({ children }: { children: React.ReactNode }) => (
       <ServicesProvider services={denyingRegistry}>{children}</ServicesProvider>
     );
-    const { result: deniedResult } = renderHook(() => useImageGeneration(), { wrapper: denyingWrapper });
+    const { result: deniedResult } = renderHook(() => useImageGeneration(), {
+      wrapper: denyingWrapper,
+    });
 
     await act(async () => {
       deniedResult.current.generate(testParams);
@@ -130,7 +132,9 @@ describe('Image generation integration', () => {
 
   it('still attempts generation if the entitlement pre-check itself throws (server is the real gate)', async () => {
     const registry = buildRegistry();
-    jest.spyOn(registry.entitlement, 'canGenerateImage').mockRejectedValue(new Error('network down'));
+    jest
+      .spyOn(registry.entitlement, 'canGenerateImage')
+      .mockRejectedValue(new Error('network down'));
     const localWrapper = ({ children }: { children: React.ReactNode }) => (
       <ServicesProvider services={registry}>{children}</ServicesProvider>
     );
@@ -173,38 +177,11 @@ describe('Image generation integration', () => {
     expect(result.current.state.status).toBe('idle');
   });
 
-  it('renders DreamMediaView with image on success', async () => {
-    const successMedia = {
-      id: 'media-001',
-      dreamId: 'dream-001',
-      mediaType: 'image' as const,
-      generationStatus: 'complete' as const,
-      signedUrl: 'https://example.com/img.jpg',
-      localCachePath: null,
-      regenerationCount: 0,
-      maxRegenerations: 3,
-      errorMessage: null,
-      createdAt: '2026-08-14T00:00:00Z',
-      updatedAt: '2026-08-14T00:00:00Z',
-    };
-
-    const { getByLabelText } = render(
-      <DreamMediaView
-        media={successMedia}
-        isGenerating={false}
-        canRegenerate={true}
-        onRegenerate={() => {}}
-      />
-    );
-
-    expect(getByLabelText('Dream illustration')).toBeTruthy();
-  });
-
   it('renders a Generate image button (not Regenerate) when no image exists yet, and calls onGenerate', () => {
     const onGenerate = jest.fn();
     const onRegenerate = jest.fn();
     const { getByText, queryByText } = render(
-      <DreamMediaView
+      <DreamImageActionBar
         media={null}
         isGenerating={false}
         canRegenerate={true}
@@ -235,7 +212,7 @@ describe('Image generation integration', () => {
     };
     const onGenerate = jest.fn();
     const { getByText } = render(
-      <DreamMediaView
+      <DreamImageActionBar
         media={failedMedia}
         isGenerating={false}
         canRegenerate={true}
@@ -265,7 +242,7 @@ describe('Image generation integration', () => {
 
     const onRegenerate = jest.fn();
     const { getByText } = render(
-      <DreamMediaView
+      <DreamImageActionBar
         media={media}
         isGenerating={false}
         canRegenerate={true}

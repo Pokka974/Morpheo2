@@ -6,6 +6,7 @@ import {
   ImageGenerationProviderError,
 } from '@services/ai/image/ImageGenerationService';
 import { MockStorageService } from '@services/storage/__mocks__/MockStorageService';
+import { sqlite } from '@db/client';
 
 const mockInvoke = jest.fn();
 const mockFrom = jest.fn();
@@ -31,6 +32,10 @@ describe('OpenAIImageGenerationService', () => {
   beforeEach(() => {
     service = new OpenAIImageGenerationService(mockStorage);
     jest.clearAllMocks();
+    (sqlite.runAsync as jest.Mock)
+      .mockReset()
+      .mockResolvedValue({ lastInsertRowId: 1, changes: 1 });
+    (sqlite.getFirstAsync as jest.Mock).mockReset().mockResolvedValue(null);
   });
 
   it('returns MediaResult on success', async () => {
@@ -117,9 +122,17 @@ describe('OpenAIImageGenerationService', () => {
     jest.spyOn(mockStorage, 'cacheMedia').mockRejectedValueOnce(new Error('disk full'));
     mockInvoke.mockResolvedValueOnce({
       data: {
-        id: 'media-001', dreamId: 'dream-001', mediaType: 'image', generationStatus: 'complete',
-        signedUrl: 'https://example.com/img.jpg', localCachePath: null, regenerationCount: 0,
-        maxRegenerations: 3, errorMessage: null, createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z',
+        id: 'media-001',
+        dreamId: 'dream-001',
+        mediaType: 'image',
+        generationStatus: 'complete',
+        signedUrl: 'https://example.com/img.jpg',
+        localCachePath: null,
+        regenerationCount: 0,
+        maxRegenerations: 3,
+        errorMessage: null,
+        createdAt: '2026-08-14T00:00:00Z',
+        updatedAt: '2026-08-14T00:00:00Z',
       },
       error: null,
     });
@@ -132,9 +145,17 @@ describe('OpenAIImageGenerationService', () => {
     const cacheSpy = jest.spyOn(mockStorage, 'cacheMedia');
     mockInvoke.mockResolvedValueOnce({
       data: {
-        id: 'media-001', dreamId: 'dream-001', mediaType: 'image', generationStatus: 'processing',
-        signedUrl: null, localCachePath: null, regenerationCount: 0,
-        maxRegenerations: 3, errorMessage: null, createdAt: '2026-08-14T00:00:00Z', updatedAt: '2026-08-14T00:00:00Z',
+        id: 'media-001',
+        dreamId: 'dream-001',
+        mediaType: 'image',
+        generationStatus: 'processing',
+        signedUrl: null,
+        localCachePath: null,
+        regenerationCount: 0,
+        maxRegenerations: 3,
+        errorMessage: null,
+        createdAt: '2026-08-14T00:00:00Z',
+        updatedAt: '2026-08-14T00:00:00Z',
       },
       error: null,
     });
@@ -143,7 +164,91 @@ describe('OpenAIImageGenerationService', () => {
     expect(cacheSpy).not.toHaveBeenCalled();
   });
 
+  it('mirrors a successful generation into the local media table, keyed by media id', async () => {
+    jest.spyOn(mockStorage, 'cacheMedia').mockResolvedValueOnce('/local/path/img.jpg');
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        id: 'media-001',
+        dreamId: 'dream-001',
+        mediaType: 'image',
+        generationStatus: 'complete',
+        signedUrl: 'https://example.com/img.jpg',
+        localCachePath: null,
+        regenerationCount: 0,
+        maxRegenerations: 3,
+        errorMessage: null,
+        createdAt: '2026-08-14T00:00:00Z',
+        updatedAt: '2026-08-14T00:00:00Z',
+      },
+      error: null,
+    });
+
+    await service.generateImage(testRequest);
+
+    expect(sqlite.runAsync).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO media'), [
+      'media-001',
+      'dream-001',
+      'image',
+      'complete',
+      '/local/path/img.jpg',
+      0,
+      3,
+      null,
+      '2026-08-14T00:00:00Z',
+      '2026-08-14T00:00:00Z',
+    ]);
+  });
+
+  it('does not let a local persistence failure surface as a generateImage() rejection', async () => {
+    jest.spyOn(mockStorage, 'cacheMedia').mockResolvedValueOnce('/local/path/img.jpg');
+    (sqlite.runAsync as jest.Mock).mockRejectedValueOnce(new Error('disk full'));
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        id: 'media-001',
+        dreamId: 'dream-001',
+        mediaType: 'image',
+        generationStatus: 'complete',
+        signedUrl: 'https://example.com/img.jpg',
+        localCachePath: null,
+        regenerationCount: 0,
+        maxRegenerations: 3,
+        errorMessage: null,
+        createdAt: '2026-08-14T00:00:00Z',
+        updatedAt: '2026-08-14T00:00:00Z',
+      },
+      error: null,
+    });
+
+    const result = await service.generateImage(testRequest);
+    expect(result.localCachePath).toBe('/local/path/img.jpg');
+  });
+
   describe('getImage', () => {
+    it('returns the local row when the device already has one, without querying Supabase', async () => {
+      (sqlite.getFirstAsync as jest.Mock).mockResolvedValueOnce({
+        id: 'media-001',
+        dream_id: 'dream-001',
+        media_type: 'image',
+        generation_status: 'complete',
+        local_cache_path: '/local/path/img.jpg',
+        regeneration_count: 0,
+        max_regenerations: 3,
+        error_message: null,
+        created_at: '2026-08-14T00:00:00Z',
+        updated_at: '2026-08-14T00:00:00Z',
+      });
+
+      const result = await service.getImage('dream-001');
+      expect(result).toEqual(
+        expect.objectContaining({
+          id: 'media-001',
+          dreamId: 'dream-001',
+          localCachePath: '/local/path/img.jpg',
+        })
+      );
+      expect(mockFrom).not.toHaveBeenCalled();
+    });
+
     it('maps a found row to a MediaResult', async () => {
       const mockSelect = jest.fn().mockReturnThis();
       const mockEq = jest.fn().mockReturnThis();
@@ -151,13 +256,25 @@ describe('OpenAIImageGenerationService', () => {
       const mockLimit = jest.fn().mockReturnThis();
       const mockMaybeSingle = jest.fn().mockResolvedValue({
         data: {
-          id: 'media-001', dream_id: 'dream-001', media_type: 'image', generation_status: 'complete',
-          regeneration_count: 0, max_regenerations: 3, error_message: null,
-          created_at: '2026-08-14T00:00:00Z', updated_at: '2026-08-14T00:00:00Z',
+          id: 'media-001',
+          dream_id: 'dream-001',
+          media_type: 'image',
+          generation_status: 'complete',
+          regeneration_count: 0,
+          max_regenerations: 3,
+          error_message: null,
+          created_at: '2026-08-14T00:00:00Z',
+          updated_at: '2026-08-14T00:00:00Z',
         },
         error: null,
       });
-      mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq, order: mockOrder, limit: mockLimit, maybeSingle: mockMaybeSingle });
+      mockFrom.mockReturnValue({
+        select: mockSelect,
+        eq: mockEq,
+        order: mockOrder,
+        limit: mockLimit,
+        maybeSingle: mockMaybeSingle,
+      });
       mockSelect.mockReturnValue({ eq: mockEq });
       mockEq.mockReturnValue({ eq: mockEq, order: mockOrder });
       mockOrder.mockReturnValue({ limit: mockLimit });
@@ -165,7 +282,12 @@ describe('OpenAIImageGenerationService', () => {
 
       const result = await service.getImage('dream-001');
       expect(result).toEqual(
-        expect.objectContaining({ id: 'media-001', dreamId: 'dream-001', mediaType: 'image', generationStatus: 'complete' })
+        expect.objectContaining({
+          id: 'media-001',
+          dreamId: 'dream-001',
+          mediaType: 'image',
+          generationStatus: 'complete',
+        })
       );
     });
 
@@ -177,7 +299,13 @@ describe('OpenAIImageGenerationService', () => {
       // maybeSingle() resolves 0 rows as { data: null, error: null }, unlike single()
       // which would surface a PGRST116 error — this is the regression this test guards.
       const mockMaybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
-      mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq, order: mockOrder, limit: mockLimit, maybeSingle: mockMaybeSingle });
+      mockFrom.mockReturnValue({
+        select: mockSelect,
+        eq: mockEq,
+        order: mockOrder,
+        limit: mockLimit,
+        maybeSingle: mockMaybeSingle,
+      });
       mockSelect.mockReturnValue({ eq: mockEq });
       mockEq.mockReturnValue({ eq: mockEq, order: mockOrder });
       mockOrder.mockReturnValue({ limit: mockLimit });
@@ -189,7 +317,10 @@ describe('OpenAIImageGenerationService', () => {
 
   describe('getSignedUrl', () => {
     it('returns the signed URL on success', async () => {
-      mockInvoke.mockResolvedValueOnce({ data: { signedUrl: 'https://example.com/signed.jpg' }, error: null });
+      mockInvoke.mockResolvedValueOnce({
+        data: { signedUrl: 'https://example.com/signed.jpg' },
+        error: null,
+      });
       const url = await service.getSignedUrl('media-001');
       expect(url).toBe('https://example.com/signed.jpg');
       expect(mockInvoke).toHaveBeenCalledWith('media-url', { body: { mediaId: 'media-001' } });

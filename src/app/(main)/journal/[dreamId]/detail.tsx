@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -12,12 +21,13 @@ import { LoadingState } from '@shared/components/LoadingState';
 import { ErrorState } from '@shared/components/ErrorState';
 import { Button } from '@shared/components/Button';
 import { Chip, ChipRow } from '@shared/components/Chip';
-import { DreamMediaView } from '@features/media-generation/DreamMediaView';
+import { CloseIcon } from '@shared/components/icons';
+import { DreamImageActionBar } from '@features/media-generation/DreamImageActionBar';
 import { useImageGeneration } from '@features/media-generation/useImageGeneration';
 import { useVideoGeneration } from '@features/media-generation/useVideoGeneration';
 import { VideoGenerationButton } from '@features/media-generation/VideoGenerationButton';
 import { useServices } from '@services/useServices';
-import { colors, gradients, radius, spacing, typography } from '@theme/tokens';
+import { colors, gradients, radius, sizes, spacing, typography } from '@theme/tokens';
 import type {
   CulturalReference,
   InterpretationResult,
@@ -30,9 +40,9 @@ interface DreamDetail {
   occurredAt: string;
 }
 
-const HERO_HEIGHT = 206;
+const HERO_HEIGHT = 320;
 /** How far the content sheet rides up over the hero image. */
-const CONTENT_OVERLAP = 42;
+const CONTENT_OVERLAP = 56;
 
 export default function DreamDetailScreen() {
   const { dreamId } = useLocalSearchParams<{ dreamId: string }>();
@@ -45,6 +55,7 @@ export default function DreamDetailScreen() {
   const [interpretation, setInterpretation] = useState<InterpretationResult | null>(null);
   const [imageMedia, setImageMedia] = useState<MediaResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFullscreenOpen, setFullscreenOpen] = useState(false);
 
   const { state: imageState, generate, regenerate } = useImageGeneration();
   const { state: videoState, submit: submitVideo } = useVideoGeneration();
@@ -111,18 +122,6 @@ export default function DreamDetailScreen() {
     void load();
   }, [dreamId, imageGeneration]);
 
-  // Auto-trigger image generation once an interpretation exists and no image
-  // has been generated yet (per US5: image auto-generates after interpretation).
-  useEffect(() => {
-    if (!dream || !interpretation || imageMedia || isLoading) return;
-    if (imageState.status !== 'idle') return;
-    void generate({
-      dreamId: dream.id,
-      description: dream.description,
-      keywords: interpretation.keywords,
-    });
-  }, [dream, interpretation, imageMedia, isLoading, imageState.status, generate]);
-
   const confirmDelete = async () => {
     await deleteDream(dreamId);
     router.back();
@@ -149,8 +148,10 @@ export default function DreamDetailScreen() {
   // (FR-013); fall back to the signed URL until the cache is warm.
   const heroUri = activeImage?.localCachePath ?? activeImage?.signedUrl ?? null;
 
+  const isImageGenerating = imageState.status === 'generating';
+
   // Every non-success, non-generating imageState was previously dropped on the
-  // floor — DreamMediaView fell back to a generic "No illustration yet" no matter
+  // floor — the action bar fell back to a generic "No illustration yet" no matter
   // why generation actually failed. Surface the real reason.
   const imageErrorMessage =
     imageState.status === 'error'
@@ -179,158 +180,202 @@ export default function DreamDetailScreen() {
   });
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.hero}>
-        {heroUri ? (
-          <Image
-            source={{ uri: heroUri }}
+    <>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.hero}>
+          {isImageGenerating ? (
+            <View style={styles.heroPlaceholder}>
+              <ActivityIndicator color={colors.accent} size="large" />
+            </View>
+          ) : heroUri ? (
+            <Pressable
+              onPress={() => setFullscreenOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t('dream.imageIllustrationLabel')}
+              style={StyleSheet.absoluteFill}
+            >
+              <Image
+                source={{ uri: heroUri }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                transition={300}
+                accessibilityIgnoresInvertColors
+              />
+            </Pressable>
+          ) : (
+            <View style={styles.heroPlaceholder}>
+              <Text style={styles.heroPlaceholderText}>{t('journal.generatedVisual')}</Text>
+            </View>
+          )}
+          <LinearGradient
+            colors={[...gradients.heroFade.colors]}
+            locations={[...gradients.heroFade.locations]}
             style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            transition={300}
-            accessibilityIgnoresInvertColors
+            pointerEvents="none"
           />
-        ) : null}
-        <LinearGradient
-          colors={[...gradients.imageScrim.colors]}
-          locations={[...gradients.imageScrim.locations]}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-        <Pressable
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          style={[styles.heroButton, { top: insets.top + spacing.sm }]}
-        >
-          <Text style={styles.heroGlyph}>‹</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.sheet}>
-        <View style={styles.metaRow}>
-          <Text style={styles.meta}>
-            {dateLabel} · {timeLabel}
-          </Text>
+          <Pressable
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            style={[styles.heroButton, { top: insets.top + spacing.sm }]}
+          >
+            <Text style={styles.heroGlyph}>‹</Text>
+          </Pressable>
         </View>
 
-        <Text style={styles.title}>{firstLine(dream.description)}</Text>
-
-        {interpretation?.emotions.length ? (
-          <ChipRow>
-            {interpretation.emotions.slice(0, 3).map(emotion => (
-              <Chip key={emotion} label={emotion} />
-            ))}
-          </ChipRow>
-        ) : null}
-
-        <Text style={styles.narrative}>{dream.description}</Text>
-
-        {interpretation ? (
-          <LinearGradient
-            colors={[...gradients.interpretation.colors]}
-            locations={[...gradients.interpretation.locations]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.interpretationCard}
-          >
-            <View style={styles.interpretationHeader}>
-              <View style={styles.interpretationBrand}>
-                <LinearGradient
-                  colors={[...gradients.fab.colors]}
-                  locations={[...gradients.fab.locations]}
-                  style={styles.interpretationMark}
-                />
-                <Text style={styles.interpretationTitle}>{t('dream.interpretation')}</Text>
-              </View>
-            </View>
-
-            {interpretation.isDegraded ? (
-              <Text style={styles.degraded}>{t('dream.degradedNotice')}</Text>
-            ) : null}
-
-            <Text style={styles.interpretationBody}>{interpretation.overallReading}</Text>
-
-            {interpretation.keywords.length ? (
-              <ChipRow>
-                {interpretation.keywords.map(keyword => (
-                  <Chip key={keyword} label={keyword} variant="keyword" />
-                ))}
-              </ChipRow>
-            ) : null}
-
-            <View style={styles.interpretationActions}>
-              <Button
-                label={t('dream.anotherAngle')}
-                variant="secondary"
-                onPress={() =>
-                  router.push(
-                    `/(main)/journal/${dream.id}/interpretation?dreamId=${dream.id}&description=${encodeURIComponent(dream.description)}`
-                  )
-                }
-                style={styles.flexAction}
-              />
-            </View>
-          </LinearGradient>
-        ) : (
-          <Button
-            label={t('dream.interpretButton')}
-            onPress={() =>
-              router.push(
-                `/(main)/journal/${dream.id}/interpretation?dreamId=${dream.id}&description=${encodeURIComponent(dream.description)}`
-              )
-            }
-            fullWidth
+        <View style={styles.sheet}>
+          <DreamImageActionBar
+            media={activeImage}
+            isGenerating={isImageGenerating}
+            errorMessage={imageErrorMessage}
+            canRegenerate={true}
+            onGenerate={() => {
+              void generate({
+                dreamId: dream.id,
+                description: dream.description,
+                keywords: interpretation?.keywords ?? [],
+              });
+            }}
+            onRegenerate={() => {
+              void regenerate({
+                dreamId: dream.id,
+                description: dream.description,
+                keywords: interpretation?.keywords ?? [],
+              });
+            }}
           />
-        )}
 
-        <DreamMediaView
-          media={activeImage}
-          isGenerating={imageState.status === 'generating'}
-          errorMessage={imageErrorMessage}
-          canRegenerate={true}
-          onGenerate={() => {
-            void generate({
-              dreamId: dream.id,
-              description: dream.description,
-              keywords: interpretation?.keywords ?? [],
-            });
-          }}
-          onRegenerate={() => {
-            void regenerate({
-              dreamId: dream.id,
-              description: dream.description,
-              keywords: interpretation?.keywords ?? [],
-            });
-          }}
-        />
+          <View style={styles.metaRow}>
+            <Text style={styles.meta}>
+              {dateLabel} · {timeLabel}
+            </Text>
+          </View>
 
-        <VideoGenerationButton
-          state={videoState}
-          onSubmit={() => {
-            void submitVideo({
-              dreamId: dream.id,
-              description: dream.description,
-              keywords: interpretation?.keywords ?? [],
-            });
-          }}
-          onUpgrade={() => router.push('/(main)/paywall')}
-        />
+          <Text style={styles.title}>{firstLine(dream.description)}</Text>
 
-        {/* The "Edit dream" affordance from the design is intentionally absent: the
+          {interpretation?.emotions.length ? (
+            <ChipRow>
+              {interpretation.emotions.slice(0, 3).map(emotion => (
+                <Chip key={emotion} label={emotion} />
+              ))}
+            </ChipRow>
+          ) : null}
+
+          <Text style={styles.narrative}>{dream.description}</Text>
+
+          {interpretation ? (
+            <LinearGradient
+              colors={[...gradients.interpretation.colors]}
+              locations={[...gradients.interpretation.locations]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.interpretationCard}
+            >
+              <View style={styles.interpretationHeader}>
+                <View style={styles.interpretationBrand}>
+                  <LinearGradient
+                    colors={[...gradients.fab.colors]}
+                    locations={[...gradients.fab.locations]}
+                    style={styles.interpretationMark}
+                  />
+                  <Text style={styles.interpretationTitle}>{t('dream.interpretation')}</Text>
+                </View>
+              </View>
+
+              {interpretation.isDegraded ? (
+                <Text style={styles.degraded}>{t('dream.degradedNotice')}</Text>
+              ) : null}
+
+              <Text style={styles.interpretationBody}>{interpretation.overallReading}</Text>
+
+              {interpretation.keywords.length ? (
+                <ChipRow>
+                  {interpretation.keywords.map(keyword => (
+                    <Chip key={keyword} label={keyword} variant="keyword" />
+                  ))}
+                </ChipRow>
+              ) : null}
+
+              <View style={styles.interpretationActions}>
+                <Button
+                  label={t('dream.anotherAngle')}
+                  variant="secondary"
+                  onPress={() =>
+                    router.push(
+                      `/(main)/journal/${dream.id}/interpretation?dreamId=${dream.id}&description=${encodeURIComponent(dream.description)}`
+                    )
+                  }
+                  style={styles.flexAction}
+                />
+              </View>
+            </LinearGradient>
+          ) : (
+            <Button
+              label={t('dream.interpretButton')}
+              onPress={() =>
+                router.push(
+                  `/(main)/journal/${dream.id}/interpretation?dreamId=${dream.id}&description=${encodeURIComponent(dream.description)}`
+                )
+              }
+              fullWidth
+            />
+          )}
+
+          <VideoGenerationButton
+            state={videoState}
+            onSubmit={() => {
+              void submitVideo({
+                dreamId: dream.id,
+                description: dream.description,
+                keywords: interpretation?.keywords ?? [],
+              });
+            }}
+            onUpgrade={() => router.push('/(main)/paywall')}
+          />
+
+          {/* The "Edit dream" affordance from the design is intentionally absent: the
             log screen does not yet accept an editId, so the button led nowhere.
             Tracked as the FR-031 edit-flow ticket. */}
-        <Button
-          label={t('dream.delete')}
-          variant="ghost"
-          onPress={handleDelete}
-          style={styles.delete}
-        />
-      </View>
-    </ScrollView>
+          <Button
+            label={t('dream.delete')}
+            variant="ghost"
+            onPress={handleDelete}
+            style={styles.delete}
+          />
+        </View>
+      </ScrollView>
+
+      <Modal
+        visible={isFullscreenOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFullscreenOpen(false)}
+      >
+        <View style={styles.fullscreenOverlay}>
+          {heroUri ? (
+            <Image
+              source={{ uri: heroUri }}
+              style={styles.fullscreenImage}
+              contentFit="contain"
+              accessibilityIgnoresInvertColors
+              accessibilityLabel={t('dream.imageIllustrationLabel')}
+            />
+          ) : null}
+          <Pressable
+            onPress={() => setFullscreenOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
+            style={[styles.fullscreenClose, { top: insets.top + spacing.sm }]}
+          >
+            <CloseIcon size={20} color={colors.textPrimary} />
+          </Pressable>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -352,11 +397,21 @@ const styles = StyleSheet.create({
     height: HERO_HEIGHT,
     backgroundColor: colors.surfaceElevated,
   },
+  heroPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroPlaceholderText: {
+    ...typography.meta,
+    fontSize: 10.5,
+    letterSpacing: 0.6,
+  },
   heroButton: {
     position: 'absolute',
     left: spacing.md,
-    width: 38,
-    height: 38,
+    width: sizes.circleButton,
+    height: sizes.circleButton,
     borderRadius: radius.full,
     backgroundColor: colors.background,
     borderWidth: 1,
@@ -437,5 +492,27 @@ const styles = StyleSheet.create({
   },
   delete: {
     alignSelf: 'center',
+  },
+  fullscreenOverlay: {
+    flex: 1,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullscreenImage: {
+    width: '100%',
+    height: '100%',
+  },
+  fullscreenClose: {
+    position: 'absolute',
+    right: spacing.md,
+    width: sizes.circleButton,
+    height: sizes.circleButton,
+    borderRadius: radius.full,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.borderElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -75,6 +75,7 @@
     "dreamNotSyncedTitle": "This dream is still on your device",
     "dreamNotSyncedBody": "We could not reach the server, so it cannot be interpreted yet. Your dream is safe — try again once you are back online.",
     "imageIllustrating": "Illustrating your dream…",
+    "imageIllustrationLabel": "Dream illustration",
     "imageNoneYet": "No illustration yet",
     "imageRetry": "Retry",
     "imageGenerateButton": "Generate image",

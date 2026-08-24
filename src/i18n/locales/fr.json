@@ -75,6 +75,7 @@
     "dreamNotSyncedTitle": "Ce rêve est encore sur votre appareil",
     "dreamNotSyncedBody": "Le serveur est injoignable, l'interprétation n'est donc pas encore possible. Votre rêve est en sécurité — réessayez une fois de retour en ligne.",
     "imageIllustrating": "Illustration de votre rêve…",
+    "imageIllustrationLabel": "Illustration du rêve",
     "imageNoneYet": "Pas encore d'illustration",
     "imageRetry": "Réessayer",
     "imageGenerateButton": "Générer une image",
