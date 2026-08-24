@@ -56,7 +56,7 @@ describe('Morpheo Constitution Verification (T133)', () => {
         'src/services/auth/SupabaseAuthService.ts',
         'src/services/auth/ExpoLocalLockService.ts',
         'src/services/ai/interpretation/ClaudeInterpretationService.ts',
-        'src/services/ai/image/DallEImageGenerationService.ts',
+        'src/services/ai/image/OpenAIImageGenerationService.ts',
         'src/services/ai/video/LumaVideoGenerationService.ts',
         'src/services/storage/ExpoStorageService.ts',
         'src/services/subscription/RevenueCatEntitlementService.ts',

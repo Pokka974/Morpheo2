@@ -8,7 +8,7 @@ AI dream interpretation app for iOS and Android. Solo-built, portfolio-grade.
 - **Expo Router v4** — file-based navigation (`(auth)/`, `(main)/`)
 - **Supabase** — PostgreSQL + Auth + Storage + Edge Functions + Realtime
 - **Claude claude-sonnet-4-6** — text interpretation via `tool_use` (`format_interpretation`)
-- **DALL-E 3** — synchronous image generation
+- **OpenAI gpt-image-2** — synchronous image generation
 - **Luma Dream Machine v2** — async video generation
 - **RevenueCat** — cross-platform IAP
 - **expo-sqlite + drizzle-orm** — offline-first local persistence

@@ -179,8 +179,8 @@ One dream can have one image and one video (separate rows by `media_type`).
 | `media_type` | `text` | NOT NULL CHECK IN ('image','video') | |
 | `storage_path` | `text` | NULLABLE | Supabase Storage path; null until generation complete |
 | `generation_status` | `text` | NOT NULL DEFAULT `'pending'` CHECK IN ('pending','processing','complete','failed','safety_blocked') | |
-| `generation_job_id` | `text` | NULLABLE | External job ID (DALL-E request ID / Luma generation ID) |
-| `provider` | `text` | NULLABLE | `'dalle3'` \| `'luma_dream_machine'` |
+| `generation_job_id` | `text` | NULLABLE | External job ID (OpenAI image request ID / Luma generation ID) |
+| `provider` | `text` | NULLABLE | `'gpt-image-2'` \| `'luma_dream_machine'` |
 | `safety_input_passed` | `boolean` | NULLABLE | Null until evaluated |
 | `safety_output_passed` | `boolean` | NULLABLE | Null until output received |
 | `regeneration_count` | `integer` | NOT NULL DEFAULT `0` | |
@@ -207,7 +207,7 @@ Tracks async job state for interpretation, image, and video generation.
 | `dream_id` | `uuid` | NOT NULL FK → `dreams.id` ON DELETE CASCADE | |
 | `job_type` | `text` | NOT NULL CHECK IN ('interpretation','image','video') | |
 | `status` | `text` | NOT NULL DEFAULT `'queued'` CHECK IN ('queued','processing','complete','failed') | |
-| `external_job_id` | `text` | NULLABLE | Luma `generation_id`; null for DALL-E (sync) and Claude (sync) |
+| `external_job_id` | `text` | NULLABLE | Luma `generation_id`; null for OpenAI image gen (sync) and Claude (sync) |
 | `result_id` | `uuid` | NULLABLE | FK to `interpretations.id` or `media.id` on completion |
 | `error_message` | `text` | NULLABLE | |
 | `created_at` | `timestamptz` | NOT NULL DEFAULT `now()` | |

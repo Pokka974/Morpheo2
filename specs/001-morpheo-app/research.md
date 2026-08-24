@@ -156,6 +156,15 @@ All decisions below are resolved. No NEEDS CLARIFICATION items remain.
 
 ## 6. AI Image Generation: DALL-E 3
 
+> **2026-08-24 migration note**: `dall-e-3` was removed from the OpenAI API on
+> 2026-05-12. The service now calls `gpt-image-2` (`1024×1024`, `high` quality),
+> which returns base64 image data (`b64_json`) instead of a fetchable URL, and
+> reports safety rejections via `error.code === 'moderation_blocked'` rather
+> than `content_policy_violation`. The rationale below — synchronous API,
+> content-safety filtering, no-training data policy — still holds for the
+> gpt-image family; only the model id, response shape, and error code changed.
+> See GitHub issue #32.
+
 **Decision**: DALL-E 3 via OpenAI API (`dall-e-3`, `1024×1024`, `standard` quality).
 
 **Cost**: $0.040/image at standard quality.

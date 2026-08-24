@@ -21,7 +21,7 @@ All three AI services MUST be testable via mocks. Each service interface (see
 | Real service | Mock | Location |
 |---|---|---|
 | `ClaudeInterpretationService` | `MockInterpretationService` | `src/services/ai/interpretation/__mocks__/` |
-| `DallEImageGenerationService` | `MockImageGenerationService` | `src/services/ai/image/__mocks__/` |
+| `OpenAIImageGenerationService` | `MockImageGenerationService` | `src/services/ai/image/__mocks__/` |
 | `LumaVideoGenerationService` | `MockVideoGenerationService` | `src/services/ai/video/__mocks__/` |
 
 Mock implementations must support configurable response scenarios:
@@ -226,7 +226,7 @@ Mock implementations must support configurable response scenarios:
 
 **Expected outcomes**:
 - Image loading state shown
-- Image displayed after generation (~10-20s with DALL-E 3)
+- Image displayed after generation (~10-20s with gpt-image-2)
 - Image cached locally; reopening the entry does not trigger a network request (SC-013 equivalent; see FR-013)
 
 ### Scenario 4.2: Content safety block (input)
