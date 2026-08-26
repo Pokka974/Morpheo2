@@ -511,7 +511,7 @@ describe('pullRemoteChanges', () => {
       confidence: 0.8,
       is_degraded: false,
       prompt_version: 'v1',
-      model_used: 'claude-sonnet-4-6',
+      model_used: 'claude-haiku-4-5',
       created_at: '2026-08-02T00:00:00.000Z',
       archetype: null,
       themes: null,

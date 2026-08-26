@@ -7,9 +7,9 @@ AI dream interpretation app for iOS and Android. Solo-built, portfolio-grade.
 - **React Native / Expo SDK 53+** (managed workflow) — TypeScript strict mode
 - **Expo Router v4** — file-based navigation (`(auth)/`, `(main)/`)
 - **Supabase** — PostgreSQL + Auth + Storage + Edge Functions + Realtime
-- **Claude claude-sonnet-4-6** — text interpretation via `tool_use` (`format_interpretation`)
-- **OpenAI gpt-image-2** — synchronous image generation
-- **Luma Dream Machine v2** — async video generation
+- **Claude Haiku 4.5** (`claude-haiku-4-5`) — text interpretation via `tool_use` (`format_interpretation`)
+- **Black Forest Labs FLUX.1 Kontext [pro]** — image generation (submit + poll, inside one Edge Function invocation)
+- **Luma Dream Machine v2** — async video generation (**postponed — no UI; backend dormant**)
 - **RevenueCat** — cross-platform IAP
 - **expo-sqlite + drizzle-orm** — offline-first local persistence
 - **Zustand** (planned) — global state
@@ -139,9 +139,9 @@ EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=
 ```
 
 Edge Function secrets (set via `supabase secrets set`):
-- `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
-- `LUMA_API_KEY`
+- `FLUX_API_KEY`
+- `LUMA_API_KEY` (unused while video is postponed)
 - `REVENUECAT_WEBHOOK_AUTH_HEADER`
 
 ## Supabase Local Development
@@ -177,12 +177,15 @@ supabase functions serve  # Serve Edge Functions locally
 | `src/services/registry.ts` | ServiceRegistry type |
 | `src/db/schema.ts` | Drizzle ORM SQLite schema |
 | `src/db/client.ts` | SQLite singleton |
-| `supabase/functions/interpret/index.ts` | Claude interpretation Edge Function |
+| `supabase/functions/interpret/index.ts` | Claude Haiku 4.5 interpretation Edge Function — also authors each dream's Flux `image_prompt` |
+| `supabase/functions/generate-image/index.ts` | FLUX.1 Kontext [pro] image Edge Function — submit, poll, copy into `dream-media` |
+| `supabase/seed/system_prompts.sql` | **The interpretation prompt and the Flux art direction — both versioned data, not code** |
 | `supabase/migrations/005_rls.sql` | All RLS policies |
 | `supabase/migrations/006_triggers.sql` | Signup bootstrap + recurrence trigger |
 | `supabase/migrations/007_pg_cron.sql` | Monthly reset + deletion cleanup + expiry |
 | `supabase/migrations/011_schema_reconciliation.sql` | Missing `profiles` columns; column-level write grants |
 | `supabase/migrations/012_entitlement_credit_rpc.sql` | Atomic interpretation-credit consume/refund |
+| `supabase/migrations/017_flux_image_prompt.sql` | `interpretations.image_prompt` + `system_prompts.image_prompt_directive` |
 | `tests/integration/schema-contract.test.ts` | Asserts every queried column exists in the migrations |
 | `specs/001-morpheo-app/` | Full specification, plan, tasks |
 | `.specify/memory/constitution.md` | Morpheo governance constitution |

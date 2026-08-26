@@ -109,6 +109,10 @@ describe('InterpretationScreen', () => {
           dream_type: '["recurring"]',
           characters: '["ma mere"]',
           places: '["une foret"]',
+          emotions: '["peur","soulagement"]',
+          is_lucid: 1,
+          occurred_at: '2026-03-17T02:30:00.000Z',
+          sleep_quality: 3,
         });
       }
       return Promise.resolve({ user_id: 'user-1' });
@@ -130,7 +134,31 @@ describe('InterpretationScreen', () => {
       dreamType: ['recurring'],
       characters: ['ma mere'],
       places: ['une foret'],
+      emotions: ['peur', 'soulagement'],
+      isLucid: true,
+      occurredAt: '2026-03-17T02:30:00.000Z',
+      sleepQuality: 3,
     });
+    interpretSpy.mockRestore();
+  });
+
+  // `style` used to be hardcoded to 'symbolic' here, which silently overrode the
+  // dreamer's own profiles.interpretation_style on every request — the settings screen
+  // wrote a preference that could never take effect. Leaving it off the request is what
+  // lets the Edge Function fall back to the profile.
+  it('sends no style override, so the dreamer profile preference decides, and passes the app language', async () => {
+    withDreamOwner('user-1');
+    const interpretSpy = jest.spyOn(interpretationService, 'interpret');
+
+    render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(interpretSpy).toHaveBeenCalled());
+    expect(interpretSpy.mock.calls[0]?.[0].style).toBeUndefined();
+    expect(interpretSpy.mock.calls[0]?.[0].languageHint).toBe('en');
     interpretSpy.mockRestore();
   });
 

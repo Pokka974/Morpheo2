@@ -26,9 +26,13 @@ describe('Onboarding Flow', () => {
     expect(getByText('Morpheo')).toBeTruthy();
   });
 
-  it('consent screen contains AI provider category mention', () => {
+  // Every provider that receives dream-derived text has to be named here, or the consent
+  // the user gives does not cover what actually happens: Anthropic reads the dream, and Black
+  // Forest Labs receives a visual description of it in order to illustrate it.
+  it('consent screen names both AI providers that receive dream text', () => {
     const { getByText } = render(<OnboardingConsentScreen />);
-    expect(getByText(/AI provider/i)).toBeTruthy();
+    expect(getByText(/Anthropic/i)).toBeTruthy();
+    expect(getByText(/Black Forest Labs/i)).toBeTruthy();
   });
 
   it('consent screen blocks with modal on No Thanks', async () => {

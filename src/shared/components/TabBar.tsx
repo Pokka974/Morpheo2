@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { StackActions } from '@react-navigation/native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
 import { ActionButton } from '@shared/components/Button';
@@ -123,6 +124,40 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   // rather than offering a second, competing way out mid-telling.
   if (activeName === CENTRE_ROUTE) return null;
 
+  /**
+   * A tab press has to do something even when its tab is already selected.
+   *
+   * `journal` owns a nested Stack, so standing on a dream's detail screen still reports
+   * `journal` as the active tab — the old `if (!active) navigate(...)` guard therefore made
+   * the press a silent no-op, stranding the user on the detail screen with no way back to
+   * the list except the header chevron. Pressing the active tab now returns it to its root,
+   * which is what every other tabbed app does.
+   *
+   * The `tabPress` event is emitted either way, and before the navigation, so a screen can
+   * react to its own tab being pressed — the journal list uses it to scroll back to the top.
+   * Emitting it also restores the standard React Navigation contract that a custom tab bar
+   * is expected to honour, including `preventDefault()`.
+   */
+  const handleTabPress = (name: string, active: boolean) => {
+    const route = state.routes.find(r => r.name === name);
+    if (!route) return;
+
+    const event = navigation.emit({
+      type: 'tabPress',
+      target: route.key,
+      canPreventDefault: true,
+    });
+    if (event.defaultPrevented) return;
+
+    if (active) {
+      // Unhandled by the tab navigator itself, so it bubbles to the focused nested
+      // stack. A no-op when that stack is already at its root.
+      navigation.dispatch(StackActions.popToTop());
+    } else {
+      navigation.navigate(name);
+    }
+  };
+
   const renderTab = (name: string) => {
     const Icon = ICONS[name];
     if (!Icon) return null;
@@ -132,9 +167,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
     return (
       <Pressable
         key={name}
-        onPress={() => {
-          if (!active) navigation.navigate(name);
-        }}
+        onPress={() => handleTabPress(name, active)}
         accessibilityRole="tab"
         accessibilityState={{ selected: active }}
         accessibilityLabel={t('a11y.tab', { label })}

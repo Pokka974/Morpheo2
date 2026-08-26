@@ -83,8 +83,8 @@ jest.mock('@services/auth/SupabaseAuthService', () => ({
 jest.mock('@services/ai/interpretation/ClaudeInterpretationService', () => ({
   ClaudeInterpretationService: jest.fn().mockImplementation(() => ({})),
 }));
-jest.mock('@services/ai/image/OpenAIImageGenerationService', () => ({
-  OpenAIImageGenerationService: jest.fn().mockImplementation(() => ({})),
+jest.mock('@services/ai/image/FluxImageGenerationService', () => ({
+  FluxImageGenerationService: jest.fn().mockImplementation(() => ({})),
 }));
 jest.mock('@services/ai/video/LumaVideoGenerationService', () => ({
   LumaVideoGenerationService: jest.fn().mockImplementation(() => ({})),

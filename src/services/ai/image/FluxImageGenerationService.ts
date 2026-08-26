@@ -26,7 +26,16 @@ interface LocalMediaRow {
   updated_at: string;
 }
 
-export class OpenAIImageGenerationService implements ImageGenerationService {
+/**
+ * Talks to the `generate-image` Edge Function, which generates through Black Forest Labs
+ * FLUX.1 Kontext [pro]. The provider never appears client-side — no key, no endpoint, no
+ * prompt assembly — so this adapter is unchanged in shape from the OpenAI implementation it
+ * replaced; only the name and the provider behind the function differ.
+ *
+ * `getSignedUrl` here is also the generic media-URL provider used by `mediaCache`, which is
+ * why it invokes `media-url` rather than anything image-specific.
+ */
+export class FluxImageGenerationService implements ImageGenerationService {
   constructor(private readonly storage: StorageService) {}
 
   async generateImage(request: ImageGenerationRequest): Promise<MediaResult> {

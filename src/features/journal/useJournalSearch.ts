@@ -37,7 +37,9 @@ export function useJournalSearch() {
               d.description LIKE ${like}
               OR i.keywords LIKE ${like}
             )
-          ORDER BY d.occurred_at DESC
+          -- Tie-break on logged_at: occurred_at is date-only, so same-night dreams
+          -- would otherwise come back in arbitrary order.
+          ORDER BY d.occurred_at DESC, d.logged_at DESC
           LIMIT 50
         `);
         setResults(rows as unknown as SearchResult[]);

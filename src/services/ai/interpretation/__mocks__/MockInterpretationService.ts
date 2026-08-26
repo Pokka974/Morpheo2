@@ -26,6 +26,7 @@ const SUCCESS_RESULT: InterpretationResult = {
   archetype: 'The Seeker',
   themes: ['transformation', 'threshold'],
   symbolicDensity: 3,
+  imagePrompt: 'A moonlit staircase spiralling into still water, seen from below, deep indigo shadow and one amber lamp.',
 };
 
 export class MockInterpretationService implements InterpretationService {

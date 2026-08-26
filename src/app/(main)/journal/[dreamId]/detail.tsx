@@ -33,8 +33,6 @@ import { CloseIcon, SymbolIcon } from '@shared/components/icons';
 import { ordinal } from '@shared/ordinal';
 import { DreamImageActionBar } from '@features/media-generation/DreamImageActionBar';
 import { useImageGeneration } from '@features/media-generation/useImageGeneration';
-import { useVideoGeneration } from '@features/media-generation/useVideoGeneration';
-import { VideoGenerationButton } from '@features/media-generation/VideoGenerationButton';
 import { useServices } from '@services/useServices';
 import {
   colors,
@@ -108,7 +106,6 @@ export default function DreamDetailScreen() {
   const [isFullscreenOpen, setFullscreenOpen] = useState(false);
 
   const { state: imageState, generate, regenerate } = useImageGeneration();
-  const { state: videoState, submit: submitVideo } = useVideoGeneration();
 
   useEffect(() => {
     async function load() {
@@ -166,8 +163,9 @@ export default function DreamDetailScreen() {
           archetype: string | null;
           themes: string | null;
           symbolic_density: number | null;
+          image_prompt: string | null;
         }>(
-          'SELECT id, overall_reading, keywords, emotions, cultural_references, confidence, prompt_version, model_used, created_at, archetype, themes, symbolic_density FROM interpretations WHERE dream_id = ? ORDER BY created_at DESC LIMIT 1',
+          'SELECT id, overall_reading, keywords, emotions, cultural_references, confidence, prompt_version, model_used, created_at, archetype, themes, symbolic_density, image_prompt FROM interpretations WHERE dream_id = ? ORDER BY created_at DESC LIMIT 1',
           dreamId
         );
         if (interpRow) {
@@ -189,6 +187,7 @@ export default function DreamDetailScreen() {
             archetype: interpRow.archetype,
             themes: parseStringArray(interpRow.themes),
             symbolicDensity: interpRow.symbolic_density,
+            imagePrompt: interpRow.image_prompt,
           });
         }
 
@@ -621,18 +620,6 @@ export default function DreamDetailScreen() {
               ))}
             </View>
           ) : null}
-
-          <VideoGenerationButton
-            state={videoState}
-            onSubmit={() => {
-              void submitVideo({
-                dreamId: dream.id,
-                description: dream.description,
-                keywords: interpretation?.keywords ?? [],
-              });
-            }}
-            onUpgrade={() => router.push('/(main)/paywall')}
-          />
 
           {/* The "Edit dream" affordance from the design is intentionally absent: the
             log screen does not yet accept an editId, so the button led nowhere.

@@ -27,24 +27,14 @@ let mockImageState: {
   max?: number;
   resetDate?: Date;
 } = { status: 'idle' };
-let mockVideoState: { status: string; job?: unknown; message?: string } = { status: 'idle' };
 const mockGenerate = jest.fn();
 const mockRegenerate = jest.fn();
-const mockSubmitVideo = jest.fn();
 
 jest.mock('@features/media-generation/useImageGeneration', () => ({
   useImageGeneration: () => ({
     state: mockImageState,
     generate: mockGenerate,
     regenerate: mockRegenerate,
-    reset: jest.fn(),
-  }),
-}));
-
-jest.mock('@features/media-generation/useVideoGeneration', () => ({
-  useVideoGeneration: () => ({
-    state: mockVideoState,
-    submit: mockSubmitVideo,
     reset: jest.fn(),
   }),
 }));
@@ -110,7 +100,7 @@ const INTERP_ROW = {
   cultural_references: JSON.stringify([]),
   confidence: 'high',
   prompt_version: 'v1',
-  model_used: 'claude-sonnet-4-6',
+  model_used: 'claude-haiku-4-5',
   created_at: '2026-01-05T01:00:00.000Z',
   archetype: null,
   themes: null,
@@ -141,9 +131,7 @@ describe('DreamDetailScreen', () => {
     mockBack.mockClear();
     mockGenerate.mockClear();
     mockRegenerate.mockClear();
-    mockSubmitVideo.mockClear();
     mockImageState = { status: 'idle' };
-    mockVideoState = { status: 'idle' };
     imageService.configure('success');
     (db.getFirstAsync as jest.Mock).mockReset();
     (db.getAllAsync as jest.Mock).mockReset().mockResolvedValue([]);
@@ -302,31 +290,6 @@ describe('DreamDetailScreen', () => {
     // also becomes eligible for the sync queue instead of staying purely local.
     expect(mockDeleteDream).toHaveBeenCalledWith('dream-1');
     expect(mockBack).toHaveBeenCalled();
-  });
-
-  it('submits a video generation request when pressing "Generate Dream Video"', async () => {
-    (db.getFirstAsync as jest.Mock)
-      .mockResolvedValueOnce(DREAM_ROW)
-      .mockResolvedValueOnce(INTERP_ROW);
-    const { getByText } = renderScreen();
-
-    await waitFor(() => expect(getByText('Generate a dream video')).toBeTruthy());
-    fireEvent.press(getByText('Generate a dream video'));
-    expect(mockSubmitVideo).toHaveBeenCalledWith({
-      dreamId: 'dream-1',
-      description: DREAM_ROW.description,
-      keywords: ['forest', 'mist'],
-    });
-  });
-
-  it('navigates to the paywall when the video button requires premium', async () => {
-    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
-    mockVideoState = { status: 'premium_required' };
-    const { getByText } = renderScreen();
-
-    await waitFor(() => expect(getByText('Upgrade to generate video')).toBeTruthy());
-    fireEvent.press(getByText('Upgrade to generate video'));
-    expect(mockPush).toHaveBeenCalledWith('/(main)/paywall');
   });
 
   it('surfaces the real reason an image failed instead of a generic placeholder', async () => {

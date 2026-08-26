@@ -22,7 +22,8 @@ describe('ConsentPromptModal', () => {
       <ConsentPromptModal visible={true} onGranted={() => {}} onDismiss={() => {}} />
     );
     expect(getByText('Enable AI Interpretation')).toBeTruthy();
-    expect(getByText(/Anthropic Claude/)).toBeTruthy();
+    expect(getByText(/Anthropic/)).toBeTruthy();
+    expect(getByText(/Black Forest Labs/)).toBeTruthy();
     expect(getByText('Grant Consent')).toBeTruthy();
     expect(getByText('Not Now')).toBeTruthy();
   });

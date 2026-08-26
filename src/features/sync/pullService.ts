@@ -60,6 +60,7 @@ interface RemoteInterpretation {
   archetype: string | null;
   themes: string[] | null;
   symbolic_density: number | null;
+  image_prompt: string | null;
 }
 
 interface RemoteMedia {
@@ -378,7 +379,7 @@ async function pullInterpretations(userId: string): Promise<void> {
     const { data, error } = await supabase
       .from('interpretations')
       .select(
-        'id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at, archetype, themes, symbolic_density'
+        'id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at, archetype, themes, symbolic_density, image_prompt'
       )
       .eq('user_id', userId)
       .gt('created_at', cursor)
@@ -395,8 +396,8 @@ async function pullInterpretations(userId: string): Promise<void> {
     for (const row of data as RemoteInterpretation[]) {
       await sqlite.runAsync(
         `INSERT OR IGNORE INTO interpretations
-          (id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at, archetype, themes, symbolic_density)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at, archetype, themes, symbolic_density, image_prompt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id,
           row.dream_id,
@@ -412,6 +413,7 @@ async function pullInterpretations(userId: string): Promise<void> {
           row.archetype,
           JSON.stringify(row.themes ?? []),
           row.symbolic_density,
+          row.image_prompt,
         ]
       );
     }

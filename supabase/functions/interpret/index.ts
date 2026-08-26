@@ -1,22 +1,51 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.20.0';
+import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.120.0';
 
 const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 
-const FORMAT_INTERPRETATION_TOOL: Anthropic.Tool = {
+/**
+ * Single source of truth for the model id — it is written both to the API call and to
+ * `interpretations.model_used`, which used to be two independently hardcoded literals that
+ * could drift apart silently. The client mirrors this constant in
+ * `src/app/(main)/journal/[dreamId]/interpretation.tsx` for the waiting-screen label only.
+ *
+ * Haiku 4.5 rather than a Sonnet tier: dream interpretation is creative pattern-reading, not
+ * reasoning. The quality lever is the active `system_prompts` row, not the model tier — which
+ * is why the version is deliberately not named here. It moves without touching this file.
+ */
+const INTERPRETATION_MODEL = 'claude-haiku-4-5';
+
+/**
+ * `strict: true` is GA on the Messages API but is not in the SDK's exported `Tool` type at
+ * this pin, so the field is widened here rather than dropped. It guarantees `toolUse.input`
+ * validates against the schema, which matters more on a smaller model.
+ */
+type StrictTool = Anthropic.Tool & { strict?: boolean };
+
+const FORMAT_INTERPRETATION_TOOL: StrictTool = {
   name: 'format_interpretation',
   description: 'Format a structured dream interpretation.',
+  strict: true,
   input_schema: {
     type: 'object' as const,
+    additionalProperties: false,
     properties: {
-      overall_reading: { type: 'string', description: 'A 2-4 sentence overall reading of the dream.' },
-      keywords: { type: 'array', items: { type: 'string' }, description: 'List of symbolic keywords found in the dream (3-8 items).' },
-      emotions: { type: 'array', items: { type: 'string' }, description: 'List of emotions present in the dream (2-5 items).' },
+      overall_reading: {
+        type: 'string',
+        description:
+          'The interpretation itself: 5-6 sentences of flowing prose that name what the dream is ' +
+          'doing, read the 2-3 heaviest symbols as they function *in this dream* specifically, and ' +
+          'close on what the dream appears to be surfacing for the dreamer. This is the product — ' +
+          'a short or generic reading is a failed one.',
+      },
+      keywords: { type: 'array', items: { type: 'string' }, description: 'Concrete nouns and images actually present in the dream (6-8 items; give 8 unless the dream truly holds fewer).' },
+      emotions: { type: 'array', items: { type: 'string' }, description: 'Emotions carried by the dream itself (3-5 items).' },
       cultural_references: {
         type: 'array',
         items: {
           type: 'object',
+          additionalProperties: false,
           properties: {
             symbol: { type: 'string' },
             tradition: { type: 'string' },
@@ -24,7 +53,11 @@ const FORMAT_INTERPRETATION_TOOL: Anthropic.Tool = {
           },
           required: ['symbol', 'tradition', 'meaning'],
         },
-        description: 'Cultural or mythological references for symbols in the dream (1-4 items).',
+        description:
+          'Symbols that genuinely appear in this dream, each paired with a precisely named tradition ' +
+          '("Norse mythology", "Japanese folklore" — never "many cultures") and what that tradition ' +
+          'holds it to mean. Three entries, or four when the dream supports it. Each `meaning` is one ' +
+          'or two substantial sentences that teach the dreamer something, not a four-word gloss.',
       },
       confidence: {
         type: 'string',
@@ -38,13 +71,21 @@ const FORMAT_INTERPRETATION_TOOL: Anthropic.Tool = {
       themes: {
         type: 'array',
         items: { type: 'string' },
-        description: 'The 2-4 dominant recurring themes/motifs of this dream, as short tags (e.g. "flying", "family conflict"), distinct from `keywords` which lists concrete symbols.',
+        description: 'The 3-4 dominant recurring themes/motifs of this dream, as short tags (e.g. "flying", "family conflict"), distinct from `keywords` which lists concrete symbols.',
       },
       symbolic_density: {
         type: 'integer',
-        minimum: 1,
-        maximum: 4,
+        // `enum`, not `minimum`/`maximum`: numeric range keywords are not supported under
+        // strict tool use and are rejected. The enum enforces the same 1-4 range the
+        // `symbolic_density BETWEEN 1 AND 4` CHECK in 016_interpretation_archetype.sql needs,
+        // and does it as a hard guarantee rather than a hint.
+        enum: [1, 2, 3, 4],
         description: 'How symbolically dense/layered this dream is, 1 (literal, few symbols) to 4 (highly symbolic, many layered meanings).',
+      },
+      image_prompt: {
+        type: 'string',
+        description:
+          'An English text-to-image prompt (one paragraph, max 60 words) illustrating this dream for the Flux image model. Concrete visual nouns from the dream, one focal subject, a named light source and palette drawn from the emotional tone, and a stated composition. No style or medium words — the app appends its own art direction. Never any text, letters, watermarks, real named people, injury or nudity.',
       },
     },
     required: [
@@ -56,6 +97,7 @@ const FORMAT_INTERPRETATION_TOOL: Anthropic.Tool = {
       'archetype',
       'themes',
       'symbolic_density',
+      'image_prompt',
     ],
   },
 };
@@ -68,6 +110,27 @@ interface RequestMetadata {
   dreamEnding?: string | null;
   characters?: string[];
   places?: string[];
+  emotions?: string[];
+  isLucid?: boolean;
+  occurredAt?: string | null;
+  sleepQuality?: number | null;
+}
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/**
+ * Day-of-week and month only, never a season: the hemisphere is unknown, so "winter" would be
+ * a coin flip stated as fact. The model can weigh a month against whatever the dream itself
+ * says about weather or light.
+ */
+function formatOccurredAt(iso: string): string | null {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${WEEKDAYS[date.getUTCDay()]} night, ${MONTHS[date.getUTCMonth()]}`;
 }
 
 /**
@@ -75,12 +138,17 @@ interface RequestMetadata {
  * which prompt template produced a reading, a separate axis from what per-request data
  * that reading was informed by. Only mentions fields actually present, so a dream
  * logged without extra metadata doesn't get a prompt full of "not specified" noise.
+ *
+ * `dayStress` and `presleepSubstances` are deliberately absent: 015_dream_metadata.sql keeps
+ * those local-SQLite-only and they never leave the device.
  */
 function formatMetadataBlock(m?: RequestMetadata): string {
   if (!m) return '';
   const lines: string[] = [];
   if (m.tone) lines.push(`- Tone the dreamer assigned: ${m.tone}`);
+  if (m.emotions?.length) lines.push(`- Emotions the dreamer tagged: ${m.emotions.join(', ')}`);
   if (m.lucidity && m.lucidity !== 'none') lines.push(`- Lucidity: ${m.lucidity}`);
+  else if (m.isLucid) lines.push('- The dreamer marked this dream as lucid');
   if (m.clarity != null) lines.push(`- Dream clarity/vividness (1-5): ${m.clarity}`);
   // The enum values are glossed rather than passed bare: 'fragmented' in particular
   // reads ambiguously on its own, and this field is meant to carry real weight in the
@@ -94,8 +162,22 @@ function formatMetadataBlock(m?: RequestMetadata): string {
   if (m.dreamType?.length) lines.push(`- Dreamer-tagged type(s): ${m.dreamType.join(', ')}`);
   if (m.characters?.length) lines.push(`- Characters present: ${m.characters.join(', ')}`);
   if (m.places?.length) lines.push(`- Places/settings: ${m.places.join(', ')}`);
+  if (m.sleepQuality != null) lines.push(`- Sleep quality that night (1-5): ${m.sleepQuality}`);
+  if (m.occurredAt) {
+    const when = formatOccurredAt(m.occurredAt);
+    if (when) lines.push(`- When the dream occurred: ${when}`);
+  }
   if (!lines.length) return '';
   return `\n\nAdditional context the dreamer noted (use this to inform your reading of tone, archetype and themes — the ending in particular shapes the narrative arc the archetype names — do not simply restate it back):\n${lines.join('\n')}`;
+}
+
+/**
+ * Tiebreaker for descriptions too short to language-detect. The base prompt already tells the
+ * model to match the dream's own language first; this only decides the coin flip.
+ */
+function formatLanguageHint(hint?: string): string {
+  if (!hint) return '';
+  return `\n\nDreamer's app language: ${hint}`;
 }
 
 serve(async (req: Request) => {
@@ -201,17 +283,25 @@ serve(async (req: Request) => {
 
     const systemPrompt = `${promptRow.base_prompt}\n\nStyle focus: ${stylePrompt}`;
 
-    // Call Claude claude-sonnet-4-6
+    // Call Claude Haiku 4.5. No `thinking` and no `output_config.effort`: Haiku 4.5 predates
+    // the adaptive-thinking family, `effort` errors on it, and thinking would spend the
+    // latency win this model was chosen for. Temperature is left at the API default (1.0),
+    // the creative end, which is what a dream reading wants.
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
+      model: INTERPRETATION_MODEL,
+      max_tokens: 3072,
       system: systemPrompt,
       tools: [FORMAT_INTERPRETATION_TOOL],
-      tool_choice: { type: 'any' },
+      // Naming the tool rather than `{ type: 'any' }`: there is exactly one tool, and being
+      // explicit removes the "no tool_use block" 503 path below on a smaller model.
+      tool_choice: { type: 'tool', name: 'format_interpretation' },
       messages: [
         {
           role: 'user',
-          content: `Please interpret this dream:\n\n${body.description}${formatMetadataBlock(body.metadata)}`,
+          content:
+            `Please interpret this dream:\n\n${body.description}` +
+            formatMetadataBlock(body.metadata) +
+            formatLanguageHint(body.languageHint),
         },
       ],
     });
@@ -231,6 +321,7 @@ serve(async (req: Request) => {
       archetype: string;
       themes: string[];
       symbolic_density: number;
+      image_prompt: string;
     };
 
     const isDegraded = input.confidence === 'low';
@@ -248,10 +339,11 @@ serve(async (req: Request) => {
         confidence: input.confidence,
         is_degraded: isDegraded,
         prompt_version: promptRow.version,
-        model_used: 'claude-sonnet-4-6',
+        model_used: INTERPRETATION_MODEL,
         archetype: input.archetype,
         themes: input.themes,
         symbolic_density: input.symbolic_density,
+        image_prompt: input.image_prompt,
       })
       .select()
       .single();
@@ -278,6 +370,7 @@ serve(async (req: Request) => {
         archetype: interpretation.archetype,
         themes: interpretation.themes,
         symbolicDensity: interpretation.symbolic_density,
+        imagePrompt: interpretation.image_prompt,
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );

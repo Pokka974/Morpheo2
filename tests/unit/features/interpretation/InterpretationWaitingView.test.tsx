@@ -39,9 +39,9 @@ describe('InterpretationWaitingView', () => {
   });
 
   it('shows the model and expected duration when a model is given', () => {
-    const { getByText } = render(<InterpretationWaitingView modelLabel="claude-sonnet-4-6" />);
+    const { getByText } = render(<InterpretationWaitingView modelLabel="claude-haiku-4-5" />);
 
-    expect(getByText('claude-sonnet-4-6 · ~15 s')).toBeTruthy();
+    expect(getByText('claude-haiku-4-5 · ~15 s')).toBeTruthy();
   });
 
   it('omits the escape hatches entirely when no handler is supplied', () => {

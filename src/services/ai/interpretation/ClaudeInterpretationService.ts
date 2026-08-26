@@ -63,6 +63,7 @@ export class ClaudeInterpretationService implements InterpretationService {
       archetype: (row['archetype'] as string | null) ?? null,
       themes: (row['themes'] as string[] | null) ?? [],
       symbolicDensity: (row['symbolic_density'] as number | null) ?? null,
+      imagePrompt: (row['image_prompt'] as string | null) ?? null,
     };
   }
 }

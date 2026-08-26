@@ -130,7 +130,7 @@ const SEED_DREAMS: SeedDream[] = [
 /**
  * Dev-only: writes realistic dreams + interpretations + recurrence data directly to
  * local SQLite so the Insights page has something to render. Bypasses the real
- * interpret Edge Function entirely (no Claude/OpenAI image cost) — this is synthetic local
+ * interpret Edge Function entirely (no Claude/Flux image cost) — this is synthetic local
  * data, not a real interpretation.
  */
 export async function seedSampleDreams(userId: string): Promise<{ count: number }> {

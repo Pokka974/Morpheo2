@@ -13,10 +13,24 @@ import { MockNotificationService } from '@services/notifications/__mocks__/MockN
 import type { ServiceRegistry } from '@services/registry';
 
 const mockNavigate = jest.fn();
+// The screen listens on the *parent* (tab) navigator for `tabPress`, so the mock has to
+// expose getParent(). `mockTabPressListeners` captures what it registers, letting a test
+// fire the event the real TabBar emits.
+const mockTabPressListeners: Array<() => void> = [];
+const mockRemoveListener = jest.fn();
+
 jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
     useRouter: () => ({ navigate: mockNavigate, push: jest.fn(), replace: jest.fn() }),
+    useNavigation: () => ({
+      getParent: () => ({
+        addListener: (event: string, cb: () => void) => {
+          if (event === 'tabPress') mockTabPressListeners.push(cb);
+          return mockRemoveListener;
+        },
+      }),
+    }),
     useFocusEffect: (cb: () => void) => {
       ReactActual.useEffect(() => {
         cb();
@@ -66,16 +80,20 @@ jest.mock('@features/sync/pullService', () => ({
 // The pull-to-refresh props are captured on the module-level ref below so a test
 // can trigger `onRefresh` directly, the way a real pull gesture would.
 let capturedFlashListProps: { onRefresh?: () => void; refreshing?: boolean } = {};
+// The screen holds a ref to scroll the list back to the top on a tab press, so the stand-in
+// has to forward one and expose scrollToOffset for the assertion.
+const mockScrollToOffset = jest.fn();
 jest.mock('@shopify/flash-list', () => {
   const ReactActual = require('react');
   return {
-    FlashList: (props: {
+    FlashList: ReactActual.forwardRef((props: {
       data: unknown[];
       renderItem: (info: { item: unknown; index: number }) => React.ReactElement;
       keyExtractor?: (item: unknown, index: number) => string;
       onRefresh?: () => void;
       refreshing?: boolean;
-    }) => {
+    }, ref: unknown) => {
+      ReactActual.useImperativeHandle(ref, () => ({ scrollToOffset: mockScrollToOffset }));
       capturedFlashListProps = { onRefresh: props.onRefresh, refreshing: props.refreshing };
       return ReactActual.createElement(
         ReactActual.Fragment,
@@ -88,7 +106,7 @@ jest.mock('@shopify/flash-list', () => {
           )
         )
       );
-    },
+    }),
   };
 });
 
@@ -125,6 +143,8 @@ describe('JournalListScreen', () => {
     mockSyncPendingDreams.mockReset().mockResolvedValue(undefined);
     mockPullRemoteChanges.mockReset().mockResolvedValue(undefined);
     capturedFlashListProps = {};
+    mockScrollToOffset.mockClear();
+    mockTabPressListeners.length = 0;
   });
 
   it('shows a loading state before entries resolve', () => {
@@ -234,6 +254,32 @@ describe('JournalListScreen', () => {
 
     fireEvent.changeText(getByLabelText('Search dreams'), '');
     expect(mockClearSearch).toHaveBeenCalled();
+  });
+
+  // Pressing the Journal tab while already inside the Journal stack used to be a silent
+  // no-op — `journal` reports as the active tab even from a dream's detail screen, so the
+  // TabBar's `if (!active)` guard swallowed the press. It now emits `tabPress` and pops the
+  // stack; this screen's half of that contract is returning to the top of the list.
+  describe('tab press', () => {
+    it('scrolls back to the top of the list when its own tab is pressed', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue([
+        {
+          id: 'dream-1',
+          description: 'I was flying over a forest.',
+          occurred_at: '2026-01-01T00:00:00.000Z',
+          sync_status: 'synced',
+          thumbnail_uri: null,
+        },
+      ]);
+      renderScreen();
+      await waitFor(() => expect(mockTabPressListeners.length).toBeGreaterThan(0));
+
+      expect(mockScrollToOffset).not.toHaveBeenCalled();
+      act(() => {
+        mockTabPressListeners.forEach(fire => fire());
+      });
+      expect(mockScrollToOffset).toHaveBeenCalledWith({ offset: 0, animated: true });
+    });
   });
 
   describe('pull-to-refresh', () => {

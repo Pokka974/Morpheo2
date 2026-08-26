@@ -62,7 +62,9 @@ export function useJournalFilters() {
         FROM dreams d
         LEFT JOIN interpretations i ON i.dream_id = d.id
         WHERE ${whereClause}
-        ORDER BY d.occurred_at DESC
+        -- Tie-break on logged_at: occurred_at is date-only, so same-night dreams
+        -- would otherwise come back in arbitrary order.
+        ORDER BY d.occurred_at DESC, d.logged_at DESC
         LIMIT 100
       `;
 

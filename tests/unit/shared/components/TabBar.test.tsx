@@ -1,10 +1,11 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
+import { StackActions } from '@react-navigation/native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
 import { TabBar } from '@shared/components/TabBar';
 
-function buildProps(activeIndex = 0): BottomTabBarProps {
+function buildProps(activeIndex = 0, defaultPrevented = false): BottomTabBarProps {
   const routes = [
     { key: 'journal-1', name: 'journal' },
     { key: 'insights-1', name: 'insights' },
@@ -14,7 +15,11 @@ function buildProps(activeIndex = 0): BottomTabBarProps {
   ];
   return {
     state: { index: activeIndex, routes },
-    navigation: { navigate: jest.fn() },
+    navigation: {
+      navigate: jest.fn(),
+      dispatch: jest.fn(),
+      emit: jest.fn().mockReturnValue({ defaultPrevented }),
+    },
     descriptors: {},
     insets: { top: 0, right: 0, bottom: 0, left: 0 },
   } as unknown as BottomTabBarProps;
@@ -80,13 +85,40 @@ describe('<TabBar />', () => {
     expect(props.navigation.navigate).toHaveBeenCalledWith('readings');
   });
 
-  it('does not re-navigate to the tab already showing', () => {
+  // `journal` owns a nested Stack, so a dream's detail screen still reports `journal` as
+  // the active tab. Pressing it used to do nothing at all, stranding the user on the detail
+  // screen with only the header chevron as a way back to the list.
+  it('pops the nested stack to its root when the tab already showing is pressed', () => {
     const props = buildProps(0);
     const { getByLabelText } = render(<TabBar {...props} />);
 
     fireEvent.press(getByLabelText('Journal tab'));
 
     expect(props.navigation.navigate).not.toHaveBeenCalled();
+    expect(props.navigation.dispatch).toHaveBeenCalledWith(StackActions.popToTop());
+  });
+
+  it('emits tabPress against the pressed route, so a screen can react to its own tab', () => {
+    const props = buildProps(0);
+    const { getByLabelText } = render(<TabBar {...props} />);
+
+    fireEvent.press(getByLabelText('Insights tab'));
+
+    expect(props.navigation.emit).toHaveBeenCalledWith({
+      type: 'tabPress',
+      target: 'insights-1',
+      canPreventDefault: true,
+    });
+  });
+
+  it('honours preventDefault on the tabPress event', () => {
+    const props = buildProps(0, true);
+    const { getByLabelText } = render(<TabBar {...props} />);
+
+    fireEvent.press(getByLabelText('Insights tab'));
+
+    expect(props.navigation.navigate).not.toHaveBeenCalled();
+    expect(props.navigation.dispatch).not.toHaveBeenCalled();
   });
 
   it('routes the centre action to the log screen', () => {

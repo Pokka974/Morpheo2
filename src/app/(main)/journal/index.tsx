@@ -1,8 +1,8 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FlashList } from '@shopify/flash-list';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +22,8 @@ const PAGE_SIZE = 20;
 
 export default function JournalListScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const listRef = useRef<FlashListRef<JournalEntry>>(null);
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const services = useServices();
@@ -71,7 +73,11 @@ export default function JournalListScreen() {
           LIMIT 1
         )
         WHERE d.is_deleted = 0
-        ORDER BY d.occurred_at DESC
+        -- occurred_at is date-only ('2026-08-26'), so every dream logged on the same
+        -- night sorts equal and SQLite is free to return them in any order. logged_at
+        -- is a full timestamp and breaks the tie, which is what makes "most recent
+        -- first" actually true within a day.
+        ORDER BY d.occurred_at DESC, d.logged_at DESC
         LIMIT ?
       `,
         PAGE_SIZE
@@ -107,6 +113,24 @@ export default function JournalListScreen() {
       void loadEntries();
     }, [loadEntries])
   );
+
+  /**
+   * Pressing the Journal tab while already inside the Journal stack returns here and lands
+   * at the top of the list, rather than wherever the user had scrolled to before opening a
+   * dream. The TabBar emits `tabPress` before it pops the stack, and this list stays mounted
+   * underneath the detail screen, so by the time the pop reveals it the offset is already
+   * reset.
+   *
+   * The listener goes on the parent (tab) navigator: `tabPress` is emitted there, not on this
+   * screen's own Stack.
+   */
+  useEffect(() => {
+    const parent = navigation.getParent();
+    if (!parent) return;
+    return parent.addListener('tabPress' as never, () => {
+      listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
+  }, [navigation]);
 
   // Pull-to-refresh: reconcile with Supabase on demand (push this device's pending
   // changes, then pull remote ones — including deletions made elsewhere, which
@@ -210,6 +234,7 @@ export default function JournalListScreen() {
         />
       ) : (
         <FlashList
+          ref={listRef}
           data={displayEntries}
           keyExtractor={item => item.id}
           renderItem={({ item }) => <DreamCard entry={item} variant="full" onPress={openDream} />}

@@ -75,6 +75,8 @@ export const interpretations = sqliteTable('interpretations', {
   themes: text('themes').notNull().default('[]'),
   /** 1 (literal, few symbols) to 4 (highly symbolic, densely layered). */
   symbolicDensity: integer('symbolic_density'),
+  /** English text-to-image prompt the interpretation model wrote for this dream. */
+  imagePrompt: text('image_prompt'),
 });
 
 export const media = sqliteTable('media', {

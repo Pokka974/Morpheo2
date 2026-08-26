@@ -54,5 +54,4 @@ Manual checklist for AI-dependent screens:
 - [ ] Error states use `accessibilityLiveRegion="assertive"`
 - [ ] InterpretationScreen: loading spinner has accessible label
 - [ ] DreamMediaView: image has `accessibilityLabel="Dream illustration"`
-- [ ] VideoGenerationButton: all states have accessible labels
 - [ ] InsightsScreen: charts have text alternatives

@@ -41,7 +41,6 @@
     "interpretButton": "Interpréter ce rêve",
     "saveDraft": "Enregistrer le brouillon",
     "anotherAngle": "Autre angle",
-    "generateVideo": "Générer une vidéo",
     "monthlyThemeNote": "{{ordinal}} rêve de {{term}} ce mois-ci",
     "seeConstellation": "voir la constellation",
     "aiMetadataTitle": "Généré par Morpheo",
@@ -221,13 +220,6 @@
     "clarityValue": "Netteté : {{value}} sur {{max}}",
     "symbolicDensityValue": "Densité symbolique : {{value}} sur {{max}}",
     "themeChip": "Thème : {{label}}"
-  },
-  "video": {
-    "generate": "Générer une vidéo du rêve",
-    "submitting": "Envoi…",
-    "processingEstimate": "Génération de votre vidéo (~{{minutes}} min)…",
-    "ready": "Vidéo prête !",
-    "upgradeCta": "Passez à premium pour générer une vidéo"
   },
   "settings": {
     "title": "Paramètres",
