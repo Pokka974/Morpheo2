@@ -13,10 +13,24 @@ import { MockNotificationService } from '@services/notifications/__mocks__/MockN
 import type { ServiceRegistry } from '@services/registry';
 
 const mockNavigate = jest.fn();
+// The screen listens on the *parent* (tab) navigator for `tabPress`, so the mock has to
+// expose getParent(). `mockTabPressListeners` captures what it registers, letting a test
+// fire the event the real TabBar emits.
+const mockTabPressListeners: Array<() => void> = [];
+const mockRemoveListener = jest.fn();
+
 jest.mock('expo-router', () => {
   const ReactActual = require('react');
   return {
     useRouter: () => ({ navigate: mockNavigate, push: jest.fn(), replace: jest.fn() }),
+    useNavigation: () => ({
+      getParent: () => ({
+        addListener: (event: string, cb: () => void) => {
+          if (event === 'tabPress') mockTabPressListeners.push(cb);
+          return mockRemoveListener;
+        },
+      }),
+    }),
     useFocusEffect: (cb: () => void) => {
       ReactActual.useEffect(() => {
         cb();
@@ -40,13 +54,19 @@ jest.mock('@features/journal/useJournalSearch', () => ({
   }),
 }));
 
+const mockApplyFilters = jest.fn();
+const mockClearFilters = jest.fn();
+let mockFilterState: {
+  filters: { emotion?: string; startDate?: string };
+  results: unknown[] | null;
+} = { filters: {}, results: null };
 jest.mock('@features/journal/useJournalFilters', () => ({
   useJournalFilters: () => ({
-    filters: {},
-    results: null,
+    filters: mockFilterState.filters,
+    results: mockFilterState.results,
     isFiltering: false,
-    applyFilters: jest.fn(),
-    clearFilters: jest.fn(),
+    applyFilters: mockApplyFilters,
+    clearFilters: mockClearFilters,
   }),
 }));
 
@@ -66,29 +86,38 @@ jest.mock('@features/sync/pullService', () => ({
 // The pull-to-refresh props are captured on the module-level ref below so a test
 // can trigger `onRefresh` directly, the way a real pull gesture would.
 let capturedFlashListProps: { onRefresh?: () => void; refreshing?: boolean } = {};
+// The screen holds a ref to scroll the list back to the top on a tab press, so the stand-in
+// has to forward one and expose scrollToOffset for the assertion.
+const mockScrollToOffset = jest.fn();
 jest.mock('@shopify/flash-list', () => {
   const ReactActual = require('react');
   return {
-    FlashList: (props: {
-      data: unknown[];
-      renderItem: (info: { item: unknown; index: number }) => React.ReactElement;
-      keyExtractor?: (item: unknown, index: number) => string;
-      onRefresh?: () => void;
-      refreshing?: boolean;
-    }) => {
-      capturedFlashListProps = { onRefresh: props.onRefresh, refreshing: props.refreshing };
-      return ReactActual.createElement(
-        ReactActual.Fragment,
-        null,
-        props.data.map((item, index) =>
-          ReactActual.createElement(
-            ReactActual.Fragment,
-            { key: props.keyExtractor ? props.keyExtractor(item, index) : index },
-            props.renderItem({ item, index })
+    FlashList: ReactActual.forwardRef(
+      (
+        props: {
+          data: unknown[];
+          renderItem: (info: { item: unknown; index: number }) => React.ReactElement;
+          keyExtractor?: (item: unknown, index: number) => string;
+          onRefresh?: () => void;
+          refreshing?: boolean;
+        },
+        ref: unknown
+      ) => {
+        ReactActual.useImperativeHandle(ref, () => ({ scrollToOffset: mockScrollToOffset }));
+        capturedFlashListProps = { onRefresh: props.onRefresh, refreshing: props.refreshing };
+        return ReactActual.createElement(
+          ReactActual.Fragment,
+          null,
+          props.data.map((item, index) =>
+            ReactActual.createElement(
+              ReactActual.Fragment,
+              { key: props.keyExtractor ? props.keyExtractor(item, index) : index },
+              props.renderItem({ item, index })
+            )
           )
-        )
-      );
-    },
+        );
+      }
+    ),
   };
 });
 
@@ -121,10 +150,15 @@ describe('JournalListScreen', () => {
     mockSearch.mockClear();
     mockClearSearch.mockClear();
     mockSearchState = { results: null, isSearching: false };
+    mockApplyFilters.mockClear();
+    mockClearFilters.mockClear();
+    mockFilterState = { filters: {}, results: null };
     (db.getAllAsync as jest.Mock).mockReset();
     mockSyncPendingDreams.mockReset().mockResolvedValue(undefined);
     mockPullRemoteChanges.mockReset().mockResolvedValue(undefined);
     capturedFlashListProps = {};
+    mockScrollToOffset.mockClear();
+    mockTabPressListeners.length = 0;
   });
 
   it('shows a loading state before entries resolve', () => {
@@ -234,6 +268,32 @@ describe('JournalListScreen', () => {
 
     fireEvent.changeText(getByLabelText('Search dreams'), '');
     expect(mockClearSearch).toHaveBeenCalled();
+  });
+
+  // Pressing the Journal tab while already inside the Journal stack used to be a silent
+  // no-op — `journal` reports as the active tab even from a dream's detail screen, so the
+  // TabBar's `if (!active)` guard swallowed the press. It now emits `tabPress` and pops the
+  // stack; this screen's half of that contract is returning to the top of the list.
+  describe('tab press', () => {
+    it('scrolls back to the top of the list when its own tab is pressed', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue([
+        {
+          id: 'dream-1',
+          description: 'I was flying over a forest.',
+          occurred_at: '2026-01-01T00:00:00.000Z',
+          sync_status: 'synced',
+          thumbnail_uri: null,
+        },
+      ]);
+      renderScreen();
+      await waitFor(() => expect(mockTabPressListeners.length).toBeGreaterThan(0));
+
+      expect(mockScrollToOffset).not.toHaveBeenCalled();
+      act(() => {
+        mockTabPressListeners.forEach(fire => fire());
+      });
+      expect(mockScrollToOffset).toHaveBeenCalledWith({ offset: 0, animated: true });
+    });
   });
 
   describe('pull-to-refresh', () => {
@@ -376,6 +436,82 @@ describe('JournalListScreen', () => {
       });
 
       expect(capturedFlashListProps.refreshing).toBe(false);
+    });
+  });
+
+  describe('filters', () => {
+    const ONE_DREAM = [
+      {
+        id: 'dream-1',
+        description: 'I was flying over a forest.',
+        occurred_at: '2026-01-01T00:00:00.000Z',
+        sync_status: 'synced',
+        thumbnail_uri: null,
+      },
+    ];
+
+    it('opens the filter sheet from the header button', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue(ONE_DREAM);
+      const { getByTestId, queryByText } = renderScreen();
+      await waitFor(() => expect(getByTestId('journal-filter-button')).toBeTruthy());
+
+      expect(queryByText('Apply')).toBeNull();
+      fireEvent.press(getByTestId('journal-filter-button'));
+      expect(getByTestId('journal-filter-apply')).toBeTruthy();
+    });
+
+    it('applies the chosen emotion and period to the filter engine', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue(ONE_DREAM);
+      const { getByTestId, getByText } = renderScreen();
+      await waitFor(() => expect(getByTestId('journal-filter-button')).toBeTruthy());
+
+      fireEvent.press(getByTestId('journal-filter-button'));
+      fireEvent.press(getByText('fear'));
+      fireEvent.press(getByText('30 d'));
+      fireEvent.press(getByTestId('journal-filter-apply'));
+
+      expect(mockApplyFilters).toHaveBeenCalledTimes(1);
+      const applied = mockApplyFilters.mock.calls[0][0];
+      expect(applied.emotion).toBe('fear');
+      expect(applied.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('leaves startDate undefined when the period stays on "All"', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue(ONE_DREAM);
+      const { getByTestId, getByText } = renderScreen();
+      await waitFor(() => expect(getByTestId('journal-filter-button')).toBeTruthy());
+
+      fireEvent.press(getByTestId('journal-filter-button'));
+      fireEvent.press(getByText('fear'));
+      fireEvent.press(getByTestId('journal-filter-apply'));
+
+      expect(mockApplyFilters).toHaveBeenCalledWith({ emotion: 'fear', startDate: undefined });
+    });
+
+    it('names the filters in force as chips, and clears them on demand', async () => {
+      mockFilterState = { filters: { emotion: 'fear' }, results: [] };
+      (db.getAllAsync as jest.Mock).mockResolvedValue(ONE_DREAM);
+      const { getByTestId, getByText } = renderScreen();
+
+      await waitFor(() => expect(getByText('fear')).toBeTruthy());
+      fireEvent.press(getByTestId('journal-filters-clear'));
+      expect(mockClearFilters).toHaveBeenCalled();
+    });
+
+    it('distinguishes a filtered-to-nothing list from an empty journal', async () => {
+      mockFilterState = { filters: { emotion: 'fear' }, results: [] };
+      (db.getAllAsync as jest.Mock).mockResolvedValue(ONE_DREAM);
+      const { getByText, queryByText } = renderScreen();
+
+      await waitFor(() => expect(getByText('No dreams match these filters')).toBeTruthy());
+      expect(queryByText('Your dream journal is empty')).toBeNull();
+    });
+
+    it('shows no filter chips when nothing is filtered', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue(ONE_DREAM);
+      const { queryByTestId } = renderScreen();
+      await waitFor(() => expect(queryByTestId('journal-filter-button')).toBeTruthy());
+      expect(queryByTestId('journal-filters-clear')).toBeNull();
     });
   });
 });

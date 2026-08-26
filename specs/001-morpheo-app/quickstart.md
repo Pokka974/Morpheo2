@@ -35,7 +35,7 @@ Mock implementations must support configurable response scenarios:
 
 - Supabase project running (local via `supabase start` or hosted)
 - `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `.env`
-- `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `LUMA_API_KEY` in Supabase Edge Function secrets
+- `ANTHROPIC_API_KEY`, `FLUX_API_KEY` in Supabase Edge Function secrets (`LUMA_API_KEY` too, once video is un-postponed)
 - `REVENUECAT_API_KEY` in Supabase Edge Function secrets (for webhook validation)
 - Expo Go or development build on a physical device (biometric requires real hardware)
 
@@ -226,7 +226,7 @@ Mock implementations must support configurable response scenarios:
 
 **Expected outcomes**:
 - Image loading state shown
-- Image displayed after generation (~10-20s with gpt-image-2)
+- Image displayed after generation (~7-10s with FLUX.1 Kontext [pro])
 - Image cached locally; reopening the entry does not trigger a network request (SC-013 equivalent; see FR-013)
 
 ### Scenario 4.2: Content safety block (input)

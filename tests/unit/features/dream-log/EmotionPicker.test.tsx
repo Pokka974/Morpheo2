@@ -57,4 +57,56 @@ describe('EmotionPicker', () => {
     expect(getByLabelText('Emotion: calm').props.accessibilityState.checked).toBe(true);
     expect(getByLabelText('Emotion: joy').props.accessibilityState.checked).toBe(false);
   });
+
+  it('asks the dream-log question unless the caller supplies its own heading', () => {
+    const { getByText, queryByText, rerender } = render(
+      <EmotionPicker selected={[]} onChange={jest.fn()} />
+    );
+    expect(getByText('What you felt')).toBeTruthy();
+
+    rerender(<EmotionPicker selected={[]} onChange={jest.fn()} heading="Emotion" />);
+    expect(getByText('Emotion')).toBeTruthy();
+    expect(queryByText('What you felt')).toBeNull();
+  });
+
+  describe('singleSelect', () => {
+    it('replaces the current pick rather than adding to it', () => {
+      const onChange = jest.fn();
+      const { getByLabelText } = render(
+        <EmotionPicker selected={['calm']} onChange={onChange} singleSelect alwaysExpanded />
+      );
+
+      fireEvent.press(getByLabelText('Emotion: joy'));
+      expect(onChange).toHaveBeenCalledWith(['joy']);
+    });
+
+    it('still deselects when the current pick is pressed again', () => {
+      const onChange = jest.fn();
+      const { getByLabelText } = render(
+        <EmotionPicker selected={['calm']} onChange={onChange} singleSelect alwaysExpanded />
+      );
+
+      fireEvent.press(getByLabelText('Emotion: calm'));
+      expect(onChange).toHaveBeenCalledWith([]);
+    });
+
+    it('announces the chips as radios, since only one can hold', () => {
+      const { getByLabelText } = render(
+        <EmotionPicker selected={['calm']} onChange={jest.fn()} singleSelect alwaysExpanded />
+      );
+
+      expect(getByLabelText('Emotion: calm').props.accessibilityRole).toBe('radio');
+      expect(getByLabelText('Emotion: calm').props.accessibilityState.selected).toBe(true);
+      expect(getByLabelText('Emotion: joy').props.accessibilityState.selected).toBe(false);
+    });
+  });
+
+  it('shows every emotion with no reveal when alwaysExpanded', () => {
+    const { getByLabelText, queryByText } = render(
+      <EmotionPicker selected={[]} onChange={jest.fn()} alwaysExpanded />
+    );
+
+    expect(getByLabelText('Emotion: wonder')).toBeTruthy();
+    expect(queryByText('+ 6')).toBeNull();
+  });
 });

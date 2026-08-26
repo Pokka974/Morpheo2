@@ -71,7 +71,9 @@ export async function getReadings(
      )
      WHERE d.user_id = ? AND d.is_deleted = 0
      ${keywordFilter}
-     ORDER BY d.occurred_at DESC
+     -- Tie-break on logged_at: occurred_at is date-only, so same-night dreams
+     -- would otherwise come back in arbitrary order.
+     ORDER BY d.occurred_at DESC, d.logged_at DESC
      LIMIT ?`,
     keyword ? [userId, keyword, limit] : [userId, limit]
   );

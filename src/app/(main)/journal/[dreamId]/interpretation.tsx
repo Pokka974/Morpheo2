@@ -23,7 +23,7 @@ import { colors } from '@theme/tokens';
  * the user can see what is reading their dream; it must track
  * `supabase/functions/interpret/index.ts`.
  */
-const INTERPRETATION_MODEL = 'claude-sonnet-4-6';
+const INTERPRETATION_MODEL = 'claude-haiku-4-5';
 
 function parseStringArray(raw: string | null | undefined): string[] {
   if (!raw) return [];
@@ -36,10 +36,14 @@ function parseStringArray(raw: string | null | undefined): string[] {
 }
 
 /**
- * The dream's own metadata (tone, lucidity, clarity, ending, type tags, who/where) — passed to
- * the Edge Function so its archetype/themes reading is informed by more than the raw
+ * The dream's own metadata (tone, lucidity, clarity, ending, type tags, who/where, the
+ * dreamer's own emotion tags, the lucid marker, when it happened and how they slept) — passed
+ * to the Edge Function so its archetype/themes reading is informed by more than the raw
  * narrative text. Failure here degrades to "no metadata" rather than blocking the
  * interpretation, same spirit as the previous-dream-count query above.
+ *
+ * `day_stress` and `presleep_substances` are deliberately not selected: 015_dream_metadata.sql
+ * keeps those on-device only and nothing here may send them to an AI provider.
  */
 async function loadMetadata(dreamId: string): Promise<InterpretationRequestMetadata | undefined> {
   try {
@@ -51,8 +55,13 @@ async function loadMetadata(dreamId: string): Promise<InterpretationRequestMetad
       dream_type: string | null;
       characters: string | null;
       places: string | null;
+      emotions: string | null;
+      is_lucid: number | null;
+      occurred_at: string | null;
+      sleep_quality: number | null;
     }>(
-      `SELECT tone, lucidity, clarity, dream_ending, dream_type, characters, places
+      `SELECT tone, lucidity, clarity, dream_ending, dream_type, characters, places,
+              emotions, is_lucid, occurred_at, sleep_quality
          FROM dreams WHERE id = ?`,
       [dreamId]
     );
@@ -65,6 +74,10 @@ async function loadMetadata(dreamId: string): Promise<InterpretationRequestMetad
       dreamType: parseStringArray(row.dream_type),
       characters: parseStringArray(row.characters),
       places: parseStringArray(row.places),
+      emotions: parseStringArray(row.emotions),
+      isLucid: row.is_lucid === 1,
+      occurredAt: row.occurred_at,
+      sleepQuality: row.sleep_quality,
     };
   } catch (err) {
     console.error('Failed to load dream metadata for interpretation:', err);
@@ -87,7 +100,7 @@ async function loadMetadata(dreamId: string): Promise<InterpretationRequestMetad
  */
 export default function InterpretationScreen() {
   const { dreamId, description } = useLocalSearchParams<{ dreamId: string; description: string }>();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // `retry` from the hook is skipped deliberately: it re-fires the request alone,
   // which cannot fix the most common reason this screen fails.
   const { state, interpret } = useInterpretation();
@@ -129,10 +142,13 @@ export default function InterpretationScreen() {
         // classify — let the interpret call run and report it in the usual way.
         console.error('Pre-interpretation sync failed unexpectedly:', err);
       }
+      // `style` is deliberately omitted: the Edge Function falls back to the dreamer's own
+      // `profiles.interpretation_style`, which the settings screen already writes and which a
+      // hardcoded 'symbolic' here used to override on every single request.
       await interpret({
         dreamId,
         description,
-        style: 'symbolic',
+        languageHint: i18n.language,
         metadata: await loadMetadata(dreamId),
       });
     })();
@@ -168,8 +184,8 @@ export default function InterpretationScreen() {
     void db
       .runAsync(
         `INSERT OR REPLACE INTO interpretations
-        (id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at, archetype, themes, symbolic_density)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at, archetype, themes, symbolic_density, image_prompt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           result.id,
           dreamId,
@@ -185,6 +201,7 @@ export default function InterpretationScreen() {
           result.archetype ?? null,
           JSON.stringify(themes),
           result.symbolicDensity ?? null,
+          result.imagePrompt ?? null,
         ]
       )
       .then(async () => {

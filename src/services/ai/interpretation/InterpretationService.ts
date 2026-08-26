@@ -22,6 +22,12 @@ export interface InterpretationResult {
   themes: string[];
   /** 1 (literal, few symbols) to 4 (highly symbolic, densely layered). */
   symbolicDensity: number | null;
+  /**
+   * The English text-to-image prompt the interpretation model wrote for this dream, consumed
+   * server-side by the generate-image Edge Function. Null for interpretations produced before
+   * prompt version 2.0.0 — those fall back to a template built from description + keywords.
+   */
+  imagePrompt: string | null;
 }
 
 /** Dream metadata passed through so the Edge Function's reading — tone, archetype,
@@ -35,12 +41,24 @@ export interface InterpretationRequestMetadata {
   dreamType?: string[];
   characters?: string[];
   places?: string[];
+  /** The emotions the dreamer tagged themselves — read against, not merged with, the ones the model names. */
+  emotions?: string[];
+  /** The lucid marker from the log screen, distinct from the finer-grained `lucidity` enum. */
+  isLucid?: boolean;
+  /** ISO timestamp of the night the dream occurred — supplies day-of-week and month, never a season. */
+  occurredAt?: string | null;
+  sleepQuality?: number | null;
 }
 
 export interface InterpretationRequest {
   dreamId: string;
   description: string;
-  style: 'symbolic' | 'mythological' | 'psychological';
+  /**
+   * Omit to let the Edge Function fall back to the dreamer's own `profiles.interpretation_style`.
+   * Only set this to override that preference for a single request.
+   */
+  style?: 'symbolic' | 'mythological' | 'psychological';
+  /** BCP-47 language tag, used only to break the tie on dreams too short to language-detect. */
   languageHint?: string;
   metadata?: InterpretationRequestMetadata;
 }

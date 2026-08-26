@@ -43,7 +43,7 @@ describe('ClaudeInterpretationService (real class, mocked supabase)', () => {
       confidence: 'high',
       isDegraded: false,
       promptVersion: 'v1',
-      modelUsed: 'claude-sonnet-4-6',
+      modelUsed: 'claude-haiku-4-5',
       createdAt: '2026-08-14T00:00:00Z',
     };
     mockInvoke.mockResolvedValueOnce({ data: result, error: null });
@@ -122,7 +122,7 @@ describe('ClaudeInterpretationService (real class, mocked supabase)', () => {
         confidence: 'medium',
         is_degraded: false,
         prompt_version: 'v1',
-        model_used: 'claude-sonnet-4-6',
+        model_used: 'claude-haiku-4-5',
         created_at: '2026-08-14T00:00:00Z',
       },
       error: null,

@@ -7,7 +7,7 @@ import { supabase } from '@services/../supabase/client';
 import { SupabaseAuthService } from '@services/auth/SupabaseAuthService';
 import { ExpoLocalLockService } from '@services/auth/ExpoLocalLockService';
 import { ClaudeInterpretationService } from '@services/ai/interpretation/ClaudeInterpretationService';
-import { OpenAIImageGenerationService } from '@services/ai/image/OpenAIImageGenerationService';
+import { FluxImageGenerationService } from '@services/ai/image/FluxImageGenerationService';
 import { LumaVideoGenerationService } from '@services/ai/video/LumaVideoGenerationService';
 import { ExpoStorageService } from '@services/storage/ExpoStorageService';
 import { RevenueCatEntitlementService } from '@services/subscription/RevenueCatEntitlementService';
@@ -34,7 +34,7 @@ const services: ServiceRegistry = {
   auth: new SupabaseAuthService(),
   localLock: lockService,
   interpretation: new ClaudeInterpretationService(),
-  imageGeneration: new OpenAIImageGenerationService(storageService),
+  imageGeneration: new FluxImageGenerationService(storageService),
   videoGeneration: new LumaVideoGenerationService(),
   storage: storageService,
   entitlement: new RevenueCatEntitlementService(),

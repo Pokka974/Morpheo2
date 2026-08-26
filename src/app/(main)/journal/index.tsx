@@ -1,8 +1,8 @@
-import React, { useCallback, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FlashList } from '@shopify/flash-list';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 
@@ -10,18 +10,35 @@ import { sqlite as db } from '@db/client';
 import { LoadingState } from '@shared/components/LoadingState';
 import { EmptyState } from '@shared/components/EmptyState';
 import { DreamCard, type JournalEntry } from '@features/journal/DreamCard';
+import {
+  JournalFilterSheet,
+  PERIOD_KEYS,
+  type FilterPeriod,
+} from '@features/journal/JournalFilterSheet';
+import { Chip, ChipRow } from '@shared/components/Chip';
 import { useJournalSearch } from '@features/journal/useJournalSearch';
 import { useJournalFilters } from '@features/journal/useJournalFilters';
+import { FilterIcon, SearchIcon } from '@shared/components/icons';
 import { syncPendingDreams } from '@features/dream-log/syncService';
 import { pullRemoteChanges } from '@features/sync/pullService';
 import { makeMediaCache } from '@features/sync/mediaCache';
 import { useServices } from '@services/useServices';
-import { colors, gradients, radius, spacing, typography } from '@theme/tokens';
+import {
+  colors,
+  gradients,
+  MIN_TOUCH_TARGET,
+  radius,
+  sizes,
+  spacing,
+  typography,
+} from '@theme/tokens';
 
 const PAGE_SIZE = 20;
 
 export default function JournalListScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const listRef = useRef<FlashListRef<JournalEntry>>(null);
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const services = useServices();
@@ -32,7 +49,11 @@ export default function JournalListScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { results: searchResults, isSearching, search, clearSearch } = useJournalSearch();
-  const { results: filterResults } = useJournalFilters();
+  const { filters, results: filterResults, applyFilters, clearFilters } = useJournalFilters();
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
+  // The window that produced `filters.startDate`, kept alongside it so the chip and the
+  // sheet keep naming it correctly even after the date it was derived from has passed.
+  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('all');
 
   const loadEntries = useCallback(async () => {
     try {
@@ -71,7 +92,11 @@ export default function JournalListScreen() {
           LIMIT 1
         )
         WHERE d.is_deleted = 0
-        ORDER BY d.occurred_at DESC
+        -- occurred_at is date-only ('2026-08-26'), so every dream logged on the same
+        -- night sorts equal and SQLite is free to return them in any order. logged_at
+        -- is a full timestamp and breaks the tie, which is what makes "most recent
+        -- first" actually true within a day.
+        ORDER BY d.occurred_at DESC, d.logged_at DESC
         LIMIT ?
       `,
         PAGE_SIZE
@@ -107,6 +132,24 @@ export default function JournalListScreen() {
       void loadEntries();
     }, [loadEntries])
   );
+
+  /**
+   * Pressing the Journal tab while already inside the Journal stack returns here and lands
+   * at the top of the list, rather than wherever the user had scrolled to before opening a
+   * dream. The TabBar emits `tabPress` before it pops the stack, and this list stays mounted
+   * underneath the detail screen, so by the time the pop reveals it the offset is already
+   * reset.
+   *
+   * The listener goes on the parent (tab) navigator: `tabPress` is emitted there, not on this
+   * screen's own Stack.
+   */
+  useEffect(() => {
+    const parent = navigation.getParent();
+    if (!parent) return;
+    return parent.addListener('tabPress' as never, () => {
+      listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
+  }, [navigation]);
 
   // Pull-to-refresh: reconcile with Supabase on demand (push this device's pending
   // changes, then pull remote ones — including deletions made elsewhere, which
@@ -146,8 +189,14 @@ export default function JournalListScreen() {
         }
   );
 
+  const hasFilters = Boolean(filters.emotion || filters.startDate);
+
   const noResults = Boolean(searchQuery.trim()) && displayEntries.length === 0 && !isSearching;
   const noDreams = !searchQuery.trim() && !filterResults && entries.length === 0 && !isLoading;
+  // A filtered-to-nothing list is not an empty journal: the dreams are there, the
+  // filter just excludes them all. Without this the list rendered blank and silent.
+  const noFilterMatches =
+    !searchQuery.trim() && hasFilters && displayEntries.length === 0 && !isLoading;
 
   const openDream = useCallback(
     (id: string) => router.push(`/(main)/journal/${id}/detail`),
@@ -169,13 +218,25 @@ export default function JournalListScreen() {
           <Text style={styles.headerDate}>{today}</Text>
           <Text style={styles.headerTitle}>{t('common.appName')}</Text>
         </View>
-        <View style={styles.avatar}>
-          <View style={styles.moon} />
-        </View>
+        <Pressable
+          onPress={() => setIsFilterSheetOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t('journal.filterLabel')}
+          accessibilityState={{ expanded: isFilterSheetOpen }}
+          testID="journal-filter-button"
+          style={({ pressed }) => [
+            styles.filterButton,
+            hasFilters && styles.filterButtonActive,
+            pressed && styles.pressed,
+          ]}
+        >
+          <FilterIcon />
+          {hasFilters ? <View style={styles.filterDot} /> : null}
+        </Pressable>
       </View>
 
       <View style={styles.searchField}>
-        <View style={styles.searchGlyph} />
+        <SearchIcon />
         <TextInput
           style={styles.searchInput}
           placeholder={t('journal.searchPlaceholder')}
@@ -190,6 +251,29 @@ export default function JournalListScreen() {
           clearButtonMode="while-editing"
         />
       </View>
+
+      {hasFilters ? (
+        <View style={styles.activeFilters}>
+          <ChipRow style={styles.activeFilterChips}>
+            {filters.emotion ? <Chip label={t(`emotions.${filters.emotion}`)} /> : null}
+            {filters.startDate ? (
+              <Chip label={t(PERIOD_KEYS[filterPeriod])} variant="keyword" />
+            ) : null}
+          </ChipRow>
+          <Pressable
+            onPress={() => {
+              clearFilters();
+              setFilterPeriod('all');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={t('journal.filterClearLabel')}
+            hitSlop={spacing.sm}
+            testID="journal-filters-clear"
+          >
+            <Text style={styles.clearFilters}>{t('journal.filterClear')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {noDreams ? (
         <EmptyState
@@ -208,8 +292,19 @@ export default function JournalListScreen() {
             clearSearch();
           }}
         />
+      ) : noFilterMatches ? (
+        <EmptyState
+          title={t('journal.noFilterMatchesTitle')}
+          subtitle={t('journal.noFilterMatchesSubtitle')}
+          ctaLabel={t('journal.filterClear')}
+          onCta={() => {
+            clearFilters();
+            setFilterPeriod('all');
+          }}
+        />
       ) : (
         <FlashList
+          ref={listRef}
           data={displayEntries}
           keyExtractor={item => item.id}
           renderItem={({ item }) => <DreamCard entry={item} variant="full" onPress={openDream} />}
@@ -221,6 +316,23 @@ export default function JournalListScreen() {
           onRefresh={() => void onRefresh()}
         />
       )}
+
+      <JournalFilterSheet
+        visible={isFilterSheetOpen}
+        filters={filters}
+        period={filterPeriod}
+        onApply={(next, period) => {
+          applyFilters(next);
+          setFilterPeriod(period);
+          setIsFilterSheetOpen(false);
+        }}
+        onClear={() => {
+          clearFilters();
+          setFilterPeriod('all');
+          setIsFilterSheetOpen(false);
+        }}
+        onCancel={() => setIsFilterSheetOpen(false)}
+      />
     </View>
   );
 }
@@ -300,9 +412,9 @@ const styles = StyleSheet.create({
     fontSize: 30,
     lineHeight: 34,
   },
-  avatar: {
-    width: 42,
-    height: 42,
+  filterButton: {
+    width: sizes.avatar,
+    height: sizes.avatar,
     borderRadius: radius.full,
     backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
@@ -310,11 +422,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  moon: {
-    width: 16,
-    height: 16,
+  filterButtonActive: {
+    borderColor: colors.accent,
+  },
+  /**
+   * The active marker never carries the state on its own — the chips below the search
+   * field name every filter in force, so this only has to draw the eye back up.
+   */
+  filterDot: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
     borderRadius: radius.full,
     backgroundColor: colors.accentText,
+  },
+  pressed: {
+    opacity: 0.85,
+  },
+  activeFilters: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    minHeight: MIN_TOUCH_TARGET,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  activeFilterChips: {
+    flex: 1,
+    marginTop: 0,
+  },
+  clearFilters: {
+    ...typography.chip,
+    color: colors.accentText,
   },
   searchField: {
     flexDirection: 'row',
@@ -327,13 +469,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  searchGlyph: {
-    width: 13,
-    height: 13,
-    borderRadius: radius.full,
-    borderWidth: 1.6,
-    borderColor: colors.textMuted,
   },
   searchInput: {
     flex: 1,

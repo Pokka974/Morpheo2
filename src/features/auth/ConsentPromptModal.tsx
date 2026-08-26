@@ -43,9 +43,9 @@ export function ConsentPromptModal({ visible, onGranted, onDismiss }: Props) {
         <View style={styles.card}>
           <Text style={styles.title}>Enable AI Interpretation</Text>
           <Text style={styles.body}>
-            To interpret your dreams, Morpheo sends your dream text to Anthropic Claude (an AI
-            provider). Your dreams are never used to train AI models. Interpretations are symbolic,
-            not clinical advice.
+            To interpret your dreams and illustrate them, Morpheo sends your dream text to two AI
+            providers: Anthropic (Claude) and Black Forest Labs (FLUX). Your dreams are never used
+            to train AI models. Interpretations are symbolic, not clinical advice.
           </Text>
           <Button
             label={loading ? 'Granting...' : 'Grant Consent'}

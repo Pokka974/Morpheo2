@@ -14,9 +14,9 @@ Morpheo is a mobile app (iOS/Android, one codebase) where a user logs their drea
 | Backend | Supabase (PostgreSQL, Auth, Storage, Edge Functions, Realtime) | `@supabase/supabase-js`; Edge Functions in `supabase/functions/*` (Deno) |
 | Local DB | expo-sqlite ~15 + drizzle-orm ^0.45 | Offline-first store, schema in `src/db/schema.ts` (`dreams`, `interpretations`, `media`, `recurrence_patterns`) |
 | State/data sync | Custom sync queue (`syncStatus` field + `useSyncOnConnect`) | Last-write-wins sync between SQLite and Supabase |
-| AI — text | Anthropic Claude (`claude-sonnet-4-6`) via `@anthropic-ai/sdk` in Deno Edge Function | `supabase/functions/interpret/index.ts` — structured output via a `format_interpretation` tool call |
-| AI — image | OpenAI gpt-image-2 | `supabase/functions/generate-image`, client-side `OpenAIImageGenerationService` |
-| AI — video | Luma Dream Machine | `supabase/functions/generate-video`, client-side `LumaVideoGenerationService` |
+| AI — text | Anthropic Claude (`claude-haiku-4-5`) via `@anthropic-ai/sdk` in Deno Edge Function | `supabase/functions/interpret/index.ts` — structured output via a `format_interpretation` tool call, which also writes the dream's image prompt |
+| AI — image | Black Forest Labs FLUX.1 Kontext [pro] | `supabase/functions/generate-image`, client-side `FluxImageGenerationService` |
+| AI — video | Luma Dream Machine | **Postponed** — no UI surface; `supabase/functions/generate-video` and `LumaVideoGenerationService` remain on disk, unreachable |
 | Payments | RevenueCat (`react-native-purchases`) | `RevenueCatEntitlementService`, webhook handler in `supabase/functions/webhooks` |
 | Auth | Supabase Auth + `expo-apple-authentication` + `@react-native-google-signin/google-signin` | Sign-in/sign-up screens, `SupabaseAuthService` |
 | Local security | `expo-local-authentication` + `expo-secure-store` | Face ID/biometric app lock (`ExpoLocalLockService`, `lock.tsx`) |
@@ -66,7 +66,7 @@ morpheo/
 npm install
 cp .env.example .env.local      # fill EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY,
                                   # EXPO_PUBLIC_REVENUECAT_API_KEY
-supabase secrets set ANTHROPIC_API_KEY=... OPENAI_API_KEY=... LUMA_API_KEY=... \
+supabase secrets set ANTHROPIC_API_KEY=... FLUX_API_KEY=... \
   REVENUECAT_WEBHOOK_AUTH_HEADER=...   # Edge Function secrets, never in .env.local
 
 # Local backend (optional, for full-stack dev)
@@ -97,7 +97,7 @@ Inferred from `src/app` route files and feature modules:
 - Dream journal: list/search/filter past dream entries (`useJournalFilters`, `useJournalSearch`)
 - Dream logging by text or voice dictation
 - AI dream interpretation (symbolic / mythological / psychological style) with keywords, emotions, and cultural references, gated by monthly entitlement limit and user consent
-- AI-generated dream image (gpt-image-2) and optional video (Luma) per dream entry, with a capped regeneration count
+- AI-generated dream image (FLUX.1 Kontext [pro]) per dream entry, with a capped regeneration count. Video generation is postponed and has no UI surface.
 - Recurrence insights: top recurring keywords/emotions/symbols over time, with a premium-only deeper analytics view
 - Subscription/paywall via RevenueCat, with a usage indicator for free-tier limits
 - Settings: cache size display/management, data export, privacy info, notification preferences, interpretation style, account deletion (exact-phrase confirmation)
@@ -126,19 +126,17 @@ flowchart LR
     SQLite["expo-sqlite\n(local dreams/media/interpretations)"]
     Supabase["Supabase\n(Postgres + Auth + Storage)"]
     Edge["Supabase Edge Functions\n(Deno)"]
-    Claude["Anthropic Claude\nclaude-sonnet-4-6"]
-    ImgGen["OpenAI gpt-image-2"]
-    Luma["Luma Dream Machine"]
+    Claude["Anthropic Claude\nclaude-haiku-4-5"]
+    ImgGen["Black Forest Labs\nFLUX.1 Kontext [pro]"]
     RC["RevenueCat"]
 
     App -- "read/write dream drafts" --> SQLite
     SQLite -- "sync queue (last-write-wins)" --> Supabase
     App -- "auth, sync, storage calls" --> Supabase
-    App -- "invoke: interpret/generate-image/generate-video/account-delete/export-data" --> Edge
+    App -- "invoke: interpret/generate-image/account-delete/export-data" --> Edge
     Edge -- "check consent + entitlement" --> Supabase
     Edge -- "tool_use: format_interpretation" --> Claude
-    Edge -- "image generation request" --> ImgGen
-    Edge -- "video generation request" --> Luma
+    Edge -- "submit prompt, poll for result" --> ImgGen
     App -- "purchase/entitlement check" --> RC
     RC -- "webhook: subscription events" --> Edge
 ```

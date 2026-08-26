@@ -32,7 +32,17 @@
     "syncing": "Synchronisation…",
     "interpretationReady": "Interprétation prête",
     "lucid": "lucide",
-    "openDream": "Ouvrir le rêve : {{title}}"
+    "openDream": "Ouvrir le rêve : {{title}}",
+    "filterLabel": "Filtrer les rêves",
+    "filterTitle": "Filtrer",
+    "filterEmotionHeading": "Émotion",
+    "filterPeriodHeading": "Période",
+    "filterPeriodA11y": "Filtrer sur {{period}}",
+    "filterApply": "Appliquer",
+    "filterClear": "Effacer",
+    "filterClearLabel": "Effacer tous les filtres",
+    "noFilterMatchesTitle": "Aucun rêve ne correspond à ces filtres",
+    "noFilterMatchesSubtitle": "Essayez une autre émotion ou une période plus large."
   },
   "dream": {
     "untitled": "Rêve sans titre",
@@ -41,7 +51,6 @@
     "interpretButton": "Interpréter ce rêve",
     "saveDraft": "Enregistrer le brouillon",
     "anotherAngle": "Autre angle",
-    "generateVideo": "Générer une vidéo",
     "monthlyThemeNote": "{{ordinal}} rêve de {{term}} ce mois-ci",
     "seeConstellation": "voir la constellation",
     "aiMetadataTitle": "Généré par Morpheo",
@@ -221,13 +230,6 @@
     "clarityValue": "Netteté : {{value}} sur {{max}}",
     "symbolicDensityValue": "Densité symbolique : {{value}} sur {{max}}",
     "themeChip": "Thème : {{label}}"
-  },
-  "video": {
-    "generate": "Générer une vidéo du rêve",
-    "submitting": "Envoi…",
-    "processingEstimate": "Génération de votre vidéo (~{{minutes}} min)…",
-    "ready": "Vidéo prête !",
-    "upgradeCta": "Passez à premium pour générer une vidéo"
   },
   "settings": {
     "title": "Paramètres",

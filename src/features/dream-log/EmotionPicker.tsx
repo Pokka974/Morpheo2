@@ -24,6 +24,17 @@ const CHIP_HIT_SLOP = { top: 7, bottom: 7, left: 2, right: 2 };
 interface Props {
   selected: string[];
   onChange: (selected: string[]) => void;
+  /** Defaults to the dream-log question. The journal filter asks a different one. */
+  heading?: string;
+  /**
+   * Picking one emotion clears any other, and the chips announce themselves as radios
+   * rather than checkboxes. The journal filter needs this because `useJournalFilters`
+   * takes a single `emotion` — offering checkboxes there would promise a multi-emotion
+   * filter the query cannot honour.
+   */
+  singleSelect?: boolean;
+  /** Renders every emotion up front, with no "+ N" reveal. */
+  alwaysExpanded?: boolean;
 }
 
 /**
@@ -31,9 +42,15 @@ interface Props {
  * change this screen makes. Same chip as the Journal's, with an unselected state in
  * the neutral chip so the row reads as a choice rather than as ten live tags.
  */
-export function EmotionPicker({ selected, onChange }: Props) {
+export function EmotionPicker({
+  selected,
+  onChange,
+  heading,
+  singleSelect = false,
+  alwaysExpanded = false,
+}: Props) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(alwaysExpanded);
 
   // Anything already picked stays visible when collapsed, so a selection can never
   // hide behind the "+ N" chip.
@@ -43,12 +60,16 @@ export function EmotionPicker({ selected, onChange }: Props) {
   const hiddenCount = EMOTIONS.length - visible.length;
 
   const toggle = (key: string) => {
-    onChange(selected.includes(key) ? selected.filter(e => e !== key) : [...selected, key]);
+    if (selected.includes(key)) {
+      onChange(selected.filter(e => e !== key));
+      return;
+    }
+    onChange(singleSelect ? [key] : [...selected, key]);
   };
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.heading}>{t('log.emotionsHeading')}</Text>
+      <Text style={styles.heading}>{heading ?? t('log.emotionsHeading')}</Text>
       <View style={styles.row}>
         {visible.map(key => {
           const isSelected = selected.includes(key);
@@ -58,8 +79,8 @@ export function EmotionPicker({ selected, onChange }: Props) {
             <Pressable
               key={key}
               onPress={() => toggle(key)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: isSelected }}
+              accessibilityRole={singleSelect ? 'radio' : 'checkbox'}
+              accessibilityState={singleSelect ? { selected: isSelected } : { checked: isSelected }}
               accessibilityLabel={t('a11y.emotionChip', { label })}
               hitSlop={CHIP_HIT_SLOP}
               style={[

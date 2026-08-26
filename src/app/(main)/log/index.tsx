@@ -261,6 +261,45 @@ export default function DreamLogScreen() {
     presleepSubstances: JSON.stringify(presleepSubstances),
   });
 
+  /**
+   * Clears every field that belongs to the dream just saved.
+   *
+   * The log screen is a tab, so Expo Router keeps it mounted after a save and navigating
+   * back returns to the same component instance with its state intact. Both save paths
+   * used to clear `description` alone, which left the previous dream's emotions, tone,
+   * clarity, sleep times, characters, places and private context sitting in the form —
+   * pre-filled, and silently saved onto the *next* dream unless the user noticed and
+   * cleared them by hand.
+   *
+   * Deliberately not reset: `mode` (a UI preference, not dream data), the suggestion and
+   * linkable-dream lists (loaded reference data, not input), and the transient
+   * picker/focus/recording flags, which their own handlers already own.
+   */
+  const resetForm = () => {
+    setDescription('');
+    setOccurredAt(new Date());
+    setEmotions([]);
+    setError(null);
+
+    setBedtime(null);
+    setWakeTime(null);
+    setSleepQuality(null);
+
+    setClarity(null);
+    setLucidity('none');
+    setTone(null);
+    setDreamEnding(null);
+    setDreamType([]);
+
+    setCharacters([]);
+    setPlaces([]);
+    setIsLinked(false);
+    setLinkedDreamId(null);
+
+    setDayStress(null);
+    setPresleepSubstances([]);
+  };
+
   const handleInterpretNow = async () => {
     if (!canInterpret) return;
     setBusy('interpret');
@@ -277,7 +316,7 @@ export default function DreamLogScreen() {
       // throws if it did not, rather than navigating into a foreign-key violation
       // the user would only ever see as "interpretation unavailable".
       await syncDreamForInterpretation(id);
-      setDescription('');
+      resetForm();
       router.push(
         `/(main)/journal/${id}/interpretation?dreamId=${id}&description=${encodeURIComponent(trimmed)}`
       );
@@ -301,7 +340,7 @@ export default function DreamLogScreen() {
       const session = await requireSession();
       if (!session) return;
       await saveDream(buildDraft(generateId(), session.user.id, description.trim()));
-      setDescription('');
+      resetForm();
       // Best-effort — the offline-first sync queue drains this on next reconnect
       // regardless, and a draft save shouldn't block on network.
       syncPendingDreams().catch((err: unknown) => {

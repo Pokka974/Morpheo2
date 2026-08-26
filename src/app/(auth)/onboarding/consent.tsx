@@ -51,8 +51,9 @@ export default function OnboardingConsentScreen() {
       <Text style={styles.title}>A quick note about privacy</Text>
       <View style={styles.card}>
         <Text style={styles.bodyText}>
-          To interpret your dreams, Morpheo sends your dream description to an AI provider
-          (Anthropic Claude).
+          To interpret your dreams, Morpheo sends your dream description to Anthropic (Claude). To
+          illustrate them, it sends a short visual description of the dream to Black Forest Labs
+          (FLUX).
         </Text>
         <Text style={styles.bodyText}>
           • Your dream text is sent securely and encrypted in transit.

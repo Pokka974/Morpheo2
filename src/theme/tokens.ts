@@ -381,6 +381,12 @@ export const typography = {
     fontFamily: fontFamily.ui,
     fontSize: fontSize.md,
     lineHeight: 24,
+    // Pinned rather than left undefined. An unset letterSpacing lets the platform pick its
+    // own tracking, and iOS applies its own to a TextInput's placeholder — which is what
+    // spaced the journal search placeholder out to roughly one character width per gap.
+    // Body copy wants neutral tracking everywhere, so this belongs on the token rather than
+    // being patched at each input.
+    letterSpacing: 0,
     color: colors.textSecondary,
   },
   meta: {

@@ -1,4 +1,4 @@
-import { OpenAIImageGenerationService } from '@services/ai/image/OpenAIImageGenerationService';
+import { FluxImageGenerationService } from '@services/ai/image/FluxImageGenerationService';
 import {
   ContentSafetyError,
   RegenerationLimitError,
@@ -26,11 +26,11 @@ const testRequest = {
   keywords: ['ocean', 'night', 'flying'],
 };
 
-describe('OpenAIImageGenerationService', () => {
-  let service: OpenAIImageGenerationService;
+describe('FluxImageGenerationService', () => {
+  let service: FluxImageGenerationService;
 
   beforeEach(() => {
-    service = new OpenAIImageGenerationService(mockStorage);
+    service = new FluxImageGenerationService(mockStorage);
     jest.clearAllMocks();
     (sqlite.runAsync as jest.Mock)
       .mockReset()

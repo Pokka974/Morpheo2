@@ -53,7 +53,8 @@ sqlite.execSync(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     archetype TEXT,
     themes TEXT NOT NULL DEFAULT '[]',
-    symbolic_density INTEGER
+    symbolic_density INTEGER,
+    image_prompt TEXT
   );
 `);
 
@@ -138,9 +139,10 @@ for (const [name, ddl] of dreamMetadataColumns) {
   }
 }
 
-// Same story again: the AI-generated archetype/themes/symbolic-density fields need to
-// be added explicitly for devices that installed before this migration, or the dream
-// detail screen's "Généré par Morpheo" block fails with "no such column".
+// Same story again: the AI-generated archetype/themes/symbolic-density fields, and the
+// image_prompt the interpretation model now writes for Flux, need to be added explicitly
+// for devices that installed before those migrations, or the dream detail screen's
+// "Généré par Morpheo" block fails with "no such column".
 const interpretationsColumns = sqlite.getAllSync<{ name: string }>(
   `PRAGMA table_info(interpretations);`
 );
@@ -148,6 +150,7 @@ const interpretationMetadataColumns: Array<[string, string]> = [
   ['archetype', 'TEXT'],
   ['themes', `TEXT NOT NULL DEFAULT '[]'`],
   ['symbolic_density', 'INTEGER'],
+  ['image_prompt', 'TEXT'],
 ];
 for (const [name, ddl] of interpretationMetadataColumns) {
   if (!interpretationsColumns.some(col => col.name === name)) {

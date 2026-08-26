@@ -22,7 +22,6 @@ const FREE_FEATURES = [
 const PREMIUM_FEATURES = [
   'Unlimited AI interpretations',
   'Unlimited AI images',
-  'Video dream illustration',
   'Full recurrence analytics',
   'All-time insights dashboard',
 ];

@@ -1,5 +1,5 @@
 import React from 'react';
-import Svg, { Path, Polyline } from 'react-native-svg';
+import Svg, { Circle, Path, Polyline } from 'react-native-svg';
 
 import { colors } from '@theme/tokens';
 
@@ -203,6 +203,55 @@ export function PenIcon({ size = 16, color = colors.textMuted, strokeWidth = 1.8
         stroke={color}
         strokeWidth={strokeWidth}
         strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** The journal search field's leading glyph. */
+export function SearchIcon({ size = 18, color = colors.textMuted, strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="10.5" cy="10.5" r="6.5" stroke={color} strokeWidth={strokeWidth} />
+      <Path d="M15.5 15.5L21 21" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/**
+ * The journal's filter control. The three-slider form reads as "narrow this list"
+ * rather than the funnel, which the design's stroked, 24px-grid vocabulary renders
+ * as a solid wedge at this size.
+ */
+export function FilterIcon({ size = 20, color = colors.accentText, strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M4 7h16" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Path d="M4 12h16" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Path d="M4 17h16" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Circle
+        cx="9"
+        cy="7"
+        r="2.4"
+        fill={colors.surfaceElevated}
+        stroke={color}
+        strokeWidth={strokeWidth}
+      />
+      <Circle
+        cx="15"
+        cy="12"
+        r="2.4"
+        fill={colors.surfaceElevated}
+        stroke={color}
+        strokeWidth={strokeWidth}
+      />
+      <Circle
+        cx="8"
+        cy="17"
+        r="2.4"
+        fill={colors.surfaceElevated}
+        stroke={color}
+        strokeWidth={strokeWidth}
       />
     </Svg>
   );
