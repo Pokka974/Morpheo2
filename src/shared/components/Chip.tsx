@@ -4,18 +4,40 @@ import { useTranslation } from 'react-i18next';
 
 import { colors, emotionChip, radius, spacing, typography } from '@theme/tokens';
 
-export type ChipVariant = 'emotion' | 'keyword';
+export type ChipVariant = 'emotion' | 'keyword' | 'entry';
 
 interface ChipProps {
   label: string;
   /**
    * `emotion` tints the chip with the feeling's own hue (ten defined in the tokens,
    * unknown values fall back to amethyst). `keyword` is the neutral chip used for
-   * symbols and cultural references, so a screen full of them stays calm.
+   * symbols and cultural references, so a screen full of them stays calm. `entry` is
+   * what the dreamer typed themselves — characters, places — and reads solid and
+   * bright against the reading's dimmer, dashed vocabulary. Two vocabularies, two
+   * styles: the rule holds across the log screen, the detail and Lectures.
    */
   variant?: ChipVariant;
   style?: ViewStyle;
 }
+
+const CHIP_PALETTES = {
+  keyword: {
+    text: colors.textSecondary,
+    fill: colors.chipNeutralFill,
+    border: colors.chipNeutralBorder,
+  },
+  entry: {
+    text: colors.textPrimary,
+    fill: colors.surfaceElevated,
+    border: colors.borderElevated,
+  },
+} as const;
+
+const A11Y_KEYS: Record<ChipVariant, string> = {
+  emotion: 'a11y.emotionChip',
+  keyword: 'a11y.keywordChip',
+  entry: 'a11y.entryChip',
+};
 
 /**
  * The recurring pill used for emotions, symbolic keywords and cultural references.
@@ -26,22 +48,13 @@ interface ChipProps {
 export function Chip({ label, variant = 'emotion', style }: ChipProps) {
   const { t } = useTranslation();
 
-  const palette =
-    variant === 'emotion'
-      ? emotionChip(label)
-      : {
-          text: colors.textSecondary,
-          fill: colors.chipNeutralFill,
-          border: colors.chipNeutralBorder,
-        };
+  const palette = variant === 'emotion' ? emotionChip(label) : CHIP_PALETTES[variant];
 
   return (
     <View
       style={[styles.chip, { backgroundColor: palette.fill, borderColor: palette.border }, style]}
       accessibilityRole="text"
-      accessibilityLabel={t(variant === 'emotion' ? 'a11y.emotionChip' : 'a11y.keywordChip', {
-        label,
-      })}
+      accessibilityLabel={t(A11Y_KEYS[variant], { label })}
     >
       <Text style={[styles.label, { color: palette.text }]} numberOfLines={1}>
         {label}

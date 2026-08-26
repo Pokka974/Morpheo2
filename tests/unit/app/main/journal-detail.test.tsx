@@ -73,9 +73,11 @@ const DREAM_ROW = {
   bedtime: null,
   wake_time: null,
   dream_ending: null,
+  dream_type: '[]',
   characters: '[]',
   places: '[]',
   linked_dream_id: null,
+  logged_at: '2026-01-05T06:40:00.000Z',
 };
 
 const DREAM_ROW_WITH_METADATA = {
@@ -88,6 +90,7 @@ const DREAM_ROW_WITH_METADATA = {
   bedtime: '23:15',
   wake_time: '07:10',
   dream_ending: 'resolved',
+  dream_type: JSON.stringify(['lucid', 'recurring']),
   characters: JSON.stringify(['a stranger']),
   places: JSON.stringify(['a hotel']),
 };
@@ -339,22 +342,108 @@ describe('DreamDetailScreen', () => {
     expect(queryByText('wonder')).toBeNull();
   });
 
-  it('expands the collapsed context section to reveal clarity, sleep, arc and who/where', async () => {
+  it('counts the noted context fields in the collapsed header', async () => {
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW_WITH_METADATA)
+      .mockResolvedValueOnce(null);
+    const { getByText } = renderScreen();
+
+    // bedtime, wake, quality, clarity, lucidity, tone, ending, type, characters, places.
+    await waitFor(() => expect(getByText('10 fields noted')).toBeTruthy());
+  });
+
+  it('expands the context section to reveal every field the dreamer noted', async () => {
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW_WITH_METADATA)
+      .mockResolvedValueOnce(null);
+    const { getAllByText, getByText, queryByText } = renderScreen();
+
+    await waitFor(() => expect(getByText('Dream context')).toBeTruthy());
+    expect(queryByText('7 h 55')).toBeNull();
+
+    fireEvent.press(getByText('Dream context'));
+
+    // The night: both endpoints kept, not just the duration they imply. Bedtime 23:15
+    // → wake 07:10 crosses midnight, so the span is 7h55.
+    expect(getByText('Bedtime')).toBeTruthy();
+    expect(getByText('23:15')).toBeTruthy();
+    expect(getByText('Wake time')).toBeTruthy();
+    expect(getByText('07:10')).toBeTruthy();
+    expect(getByText('7 h 55')).toBeTruthy();
+
+    // Both 1–5 scales read back their value, not just their dots.
+    expect(getByText('Sleep quality')).toBeTruthy();
+    expect(getByText('Dream clarity')).toBeTruthy();
+    expect(getAllByText('4/5')).toHaveLength(2);
+
+    // The dream: the four enumerated fields, each labelled.
+    expect(getByText('Lucid')).toBeTruthy();
+    expect(getByText('Positive')).toBeTruthy();
+    expect(getByText('Resolved')).toBeTruthy();
+    expect(getByText('Lucid dream · Recurring')).toBeTruthy();
+
+    // Who, where.
+    expect(getByText('a stranger')).toBeTruthy();
+    expect(getByText('a hotel')).toBeTruthy();
+  });
+
+  it('shows tone as a readable label, not only a colour dot', async () => {
     (db.getFirstAsync as jest.Mock)
       .mockResolvedValueOnce(DREAM_ROW_WITH_METADATA)
       .mockResolvedValueOnce(null);
     const { getByText, queryByText } = renderScreen();
 
     await waitFor(() => expect(getByText('Dream context')).toBeTruthy());
-    expect(queryByText('7 h 55 · 4/5')).toBeNull();
+    // Collapsed, the header dot is still the only tone signal — the label lives inside.
+    expect(queryByText('Positive')).toBeNull();
 
     fireEvent.press(getByText('Dream context'));
+    expect(getByText('Positive')).toBeTruthy();
+  });
 
-    // Bedtime 23:15 → wake 07:10 crosses midnight: 7h55, alongside the 4/5 quality rating.
-    expect(getByText('7 h 55 · 4/5')).toBeTruthy();
-    expect(getByText('Resolved')).toBeTruthy();
-    expect(getByText('a stranger')).toBeTruthy();
-    expect(getByText('a hotel')).toBeTruthy();
+  it.each([
+    ['semi', 'Semi-lucid'],
+    ['full', 'Fully lucid'],
+  ])('reads back lucidity level "%s" as its own label', async (lucidity, label) => {
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce({ ...DREAM_ROW_WITH_METADATA, lucidity })
+      .mockResolvedValueOnce(null);
+    const { getByText } = renderScreen();
+
+    await waitFor(() => expect(getByText('Dream context')).toBeTruthy());
+    fireEvent.press(getByText('Dream context'));
+
+    // The header marker flattens lucidity to a boolean; the context block must not —
+    // "semi" and "full" used to be indistinguishable from "lucid" and "not lucid".
+    expect(getByText(label)).toBeTruthy();
+  });
+
+  it('renders the night span and the moment the dream was logged', async () => {
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW_WITH_METADATA)
+      .mockResolvedValueOnce(null);
+    const { getByText } = renderScreen();
+
+    await waitFor(() => expect(getByText('Dream context')).toBeTruthy());
+    fireEvent.press(getByText('Dream context'));
+
+    // A 23:15 bedtime means the night started the evening before the 5th. The label
+    // comes from the same formatter the log screen uses when the dream is written.
+    expect(getByText(/Night of 4–5 January/)).toBeTruthy();
+    expect(getByText(/logged January 5 at/)).toBeTruthy();
+  });
+
+  it('omits the night span when the bedtime does not straddle two days', async () => {
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce({ ...DREAM_ROW_WITH_METADATA, bedtime: '02:30' })
+      .mockResolvedValueOnce(null);
+    const { getByText, queryByText } = renderScreen();
+
+    await waitFor(() => expect(getByText('Dream context')).toBeTruthy());
+    fireEvent.press(getByText('Dream context'));
+
+    expect(queryByText(/Night of/)).toBeNull();
+    expect(getByText(/logged January 5 at/)).toBeTruthy();
   });
 
   it('renders the related-dreams chain and navigates to the linked dream on press', async () => {
