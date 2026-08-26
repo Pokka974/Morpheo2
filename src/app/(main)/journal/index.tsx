@@ -14,6 +14,7 @@ import { useJournalSearch } from '@features/journal/useJournalSearch';
 import { useJournalFilters } from '@features/journal/useJournalFilters';
 import { syncPendingDreams } from '@features/dream-log/syncService';
 import { pullRemoteChanges } from '@features/sync/pullService';
+import { makeMediaCache } from '@features/sync/mediaCache';
 import { useServices } from '@services/useServices';
 import { colors, gradients, radius, spacing, typography } from '@theme/tokens';
 
@@ -23,7 +24,8 @@ export default function JournalListScreen() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { auth } = useServices();
+  const services = useServices();
+  const { auth } = services;
 
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,13 +45,18 @@ export default function JournalListScreen() {
         dream_emotions: string | null;
         emotions: string | null;
         interpretation_id: string | null;
+        is_lucid: number;
+        tone: string | null;
+        clarity: number | null;
+        dream_type: string | null;
       }>(
         `
         SELECT d.id, d.description, d.occurred_at, d.sync_status,
                m.local_cache_path as thumbnail_uri,
                d.emotions as dream_emotions,
                i.emotions as emotions,
-               i.id as interpretation_id
+               i.id as interpretation_id,
+               d.is_lucid, d.tone, d.clarity, d.dream_type
         FROM dreams d
         LEFT JOIN media m ON m.id = (
           SELECT id FROM media
@@ -82,6 +89,10 @@ export default function JournalListScreen() {
           // its own — which is every dream logged before the log screen collected them.
           emotions: pickEmotions(r.dream_emotions, r.emotions),
           hasInterpretation: Boolean(r.interpretation_id),
+          isLucid: Boolean(r.is_lucid),
+          tone: r.tone as JournalEntry['tone'],
+          clarity: r.clarity,
+          dreamType: parseStringArray(r.dream_type),
         }))
       );
     } catch (err) {
@@ -112,7 +123,7 @@ export default function JournalListScreen() {
           console.error('Push sync on pull-to-refresh failed:', err);
         }
         try {
-          await pullRemoteChanges(session.user.id);
+          await pullRemoteChanges(session.user.id, makeMediaCache(services));
         } catch (err) {
           console.error('Pull sync on pull-to-refresh failed:', err);
         }
@@ -121,7 +132,7 @@ export default function JournalListScreen() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [auth, loadEntries]);
+  }, [auth, services, loadEntries]);
 
   const displayEntries: JournalEntry[] = (searchResults ?? filterResults ?? entries).map(r =>
     'occurredAt' in r
@@ -254,6 +265,16 @@ function pickEmotions(
 ): string[] {
   const own = parseEmotions(dreamEmotions);
   return own.length > 0 ? own : parseEmotions(interpretationEmotions);
+}
+
+function parseStringArray(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 const styles = StyleSheet.create({

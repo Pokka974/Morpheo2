@@ -57,3 +57,7 @@ coverage/
 # Supabase local
 supabase/.branches/
 supabase/.temp/
+# Unanchored: the CLI writes .temp/ relative to wherever it was invoked, which is not
+# always the repo root — a stray copy under src/ once slipped past the anchored form.
+**/supabase/.branches/
+**/supabase/.temp/

@@ -15,6 +15,7 @@ import { useInterpretation } from '@features/interpretation/useInterpretation';
 import { recordRecurrence } from '@features/recurrence/recurrenceRepository';
 import { DreamNotSyncedError, syncDreamForInterpretation } from '@features/dream-log/syncService';
 import { useServices } from '@services/useServices';
+import type { InterpretationRequestMetadata } from '@services/ai/interpretation/InterpretationService';
 import { colors } from '@theme/tokens';
 
 /**
@@ -23,6 +24,53 @@ import { colors } from '@theme/tokens';
  * `supabase/functions/interpret/index.ts`.
  */
 const INTERPRETATION_MODEL = 'claude-sonnet-4-6';
+
+function parseStringArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The dream's own metadata (tone, lucidity, clarity, ending, type tags, who/where) — passed to
+ * the Edge Function so its archetype/themes reading is informed by more than the raw
+ * narrative text. Failure here degrades to "no metadata" rather than blocking the
+ * interpretation, same spirit as the previous-dream-count query above.
+ */
+async function loadMetadata(dreamId: string): Promise<InterpretationRequestMetadata | undefined> {
+  try {
+    const row = await db.getFirstAsync<{
+      tone: string | null;
+      lucidity: string;
+      clarity: number | null;
+      dream_ending: string | null;
+      dream_type: string | null;
+      characters: string | null;
+      places: string | null;
+    }>(
+      `SELECT tone, lucidity, clarity, dream_ending, dream_type, characters, places
+         FROM dreams WHERE id = ?`,
+      [dreamId]
+    );
+    if (!row) return undefined;
+    return {
+      tone: row.tone as InterpretationRequestMetadata['tone'],
+      lucidity: row.lucidity as InterpretationRequestMetadata['lucidity'],
+      clarity: row.clarity,
+      dreamEnding: row.dream_ending as InterpretationRequestMetadata['dreamEnding'],
+      dreamType: parseStringArray(row.dream_type),
+      characters: parseStringArray(row.characters),
+      places: parseStringArray(row.places),
+    };
+  } catch (err) {
+    console.error('Failed to load dream metadata for interpretation:', err);
+    return undefined;
+  }
+}
 
 /**
  * Fires the interpretation request as soon as this screen mounts — no second
@@ -81,7 +129,12 @@ export default function InterpretationScreen() {
         // classify — let the interpret call run and report it in the usual way.
         console.error('Pre-interpretation sync failed unexpectedly:', err);
       }
-      await interpret({ dreamId, description, style: 'symbolic' });
+      await interpret({
+        dreamId,
+        description,
+        style: 'symbolic',
+        metadata: await loadMetadata(dreamId),
+      });
     })();
   };
 
@@ -107,11 +160,16 @@ export default function InterpretationScreen() {
   useEffect(() => {
     if (state.status !== 'success' && state.status !== 'degraded') return;
     const result = state.result;
+    // Defensive fallbacks: archetype/themes/symbolicDensity are only present once the
+    // interpret Edge Function has been deployed with the matching schema — an older
+    // deployed version (or a rollback) still returns a result missing them entirely,
+    // which should degrade gracefully rather than crash the save.
+    const themes = result.themes ?? [];
     void db
       .runAsync(
         `INSERT OR REPLACE INTO interpretations
-        (id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at, archetype, themes, symbolic_density)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           result.id,
           dreamId,
@@ -124,6 +182,9 @@ export default function InterpretationScreen() {
           result.promptVersion,
           result.modelUsed,
           result.createdAt,
+          result.archetype ?? null,
+          JSON.stringify(themes),
+          result.symbolicDensity ?? null,
         ]
       )
       .then(async () => {
@@ -134,6 +195,7 @@ export default function InterpretationScreen() {
         if (dreamRow) {
           await recordRecurrence(dreamRow.user_id, dreamId, 'keyword', result.keywords);
           await recordRecurrence(dreamRow.user_id, dreamId, 'emotion', result.emotions);
+          await recordRecurrence(dreamRow.user_id, dreamId, 'theme', themes);
         }
         router.replace(`/(main)/journal/${dreamId}/detail`);
       });

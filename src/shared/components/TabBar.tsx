@@ -15,9 +15,8 @@ import { colors, MIN_TOUCH_TARGET, sizes, spacing, typography } from '@theme/tok
  * the palette and scale cleanly. Every tab meets the 44px touch-target floor even
  * though its visible icon is smaller.
  *
- * The design shows four tabs (Journal · Insights · Readings · Profile). "Readings"
- * has no route in the app yet, so the bar renders the three that exist and keeps the
- * centre action optically centred with a matching spacer.
+ * Four tabs either side of the centre action: Journal · Insights · Readings ·
+ * Profile.
  */
 
 type IconProps = { active: boolean };
@@ -58,6 +57,24 @@ function InsightsIcon({ active }: IconProps) {
   );
 }
 
+/** The Lecture(s) tab — a rotated square, the same 24px stroke grid as its siblings. */
+function ReadingsIcon({ active }: IconProps) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+      <Rect
+        x={4.5}
+        y={4.5}
+        width={13}
+        height={13}
+        rx={2}
+        transform="rotate(45 11 11)"
+        stroke={stroke(active)}
+        strokeWidth={strokeWidth(active)}
+      />
+    </Svg>
+  );
+}
+
 function ProfileIcon({ active }: IconProps) {
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
@@ -74,17 +91,19 @@ function ProfileIcon({ active }: IconProps) {
 const ICONS: Record<string, React.ComponentType<IconProps>> = {
   journal: JournalIcon,
   insights: InsightsIcon,
+  readings: ReadingsIcon,
   settings: ProfileIcon,
 };
 
 const LABEL_KEYS: Record<string, string> = {
   journal: 'tabs.journal',
   insights: 'tabs.insights',
+  readings: 'tabs.readings',
   settings: 'tabs.profile',
 };
 
 /** Routes shown as tabs, in bar order. `log` is the centre action, not a tab. */
-const TAB_ORDER = ['journal', 'insights', 'settings'] as const;
+const TAB_ORDER = ['journal', 'insights', 'readings', 'settings'] as const;
 const CENTRE_ROUTE = 'log';
 
 export function TabBar({ state, navigation }: BottomTabBarProps) {

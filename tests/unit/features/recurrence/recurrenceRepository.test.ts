@@ -1,14 +1,19 @@
 import {
   getTopRecurrences,
   getRecurrencesForDream,
+  getMonthlyThemeForDream,
   recordRecurrence,
 } from '@features/recurrence/recurrenceRepository';
 
 const mockExecuteSync = jest.fn();
 const mockPrepareSync = jest.fn().mockReturnValue({ executeSync: mockExecuteSync });
+const mockGetAllAsync = jest.fn();
 
 jest.mock('@db/client', () => ({
-  sqlite: { prepareSync: (...args: unknown[]) => mockPrepareSync(...args) },
+  sqlite: {
+    prepareSync: (...args: unknown[]) => mockPrepareSync(...args),
+    getAllAsync: (...args: unknown[]) => mockGetAllAsync(...args),
+  },
 }));
 
 const waterPattern = {
@@ -151,6 +156,82 @@ describe('recurrenceRepository', () => {
         ([sql]) => (sql as string).includes('occurrence_count = ?')
       );
       expect(countingUpdate).toBeUndefined();
+    });
+
+    it('accepts pattern type "theme", recording AI-identified themes alongside keywords/emotions', async () => {
+      await recordRecurrence('user-1', 'dream-1', 'theme', ['transformation'], '2026-08-20T00:00:00.000Z');
+
+      const insertCall = mockExecuteSync.mock.calls.find(([sql]) => (sql as string).includes('INSERT'));
+      expect(insertCall![1]).toEqual(
+        expect.arrayContaining(['user-1', 'transformation', 'theme'])
+      );
+    });
+  });
+
+  describe('getMonthlyThemeForDream', () => {
+    beforeEach(() => {
+      mockPrepareSync.mockReturnValue({ executeSync: mockExecuteSync });
+    });
+
+    const flyingTheme = {
+      id: 'rp-theme-1',
+      user_id: 'user-001',
+      term: 'flying',
+      pattern_type: 'theme',
+      occurrence_count: 4,
+      dream_ids: JSON.stringify(['d1', 'd2', 'd3', 'd4']),
+      last_seen_at: '2026-08-25',
+    };
+
+    it('returns null when the dream has no theme-type recurrence pattern', async () => {
+      mockExecuteSync.mockReturnValue([]);
+      const result = await getMonthlyThemeForDream('d1', '2026-08-25T06:40:00.000Z');
+      expect(result).toBeNull();
+    });
+
+    it('returns null when this dream is only the first occurrence of the theme this month', async () => {
+      mockExecuteSync.mockReturnValue([flyingTheme]);
+      mockGetAllAsync.mockResolvedValue([
+        { id: 'd1', description: 'Flying over the city.', occurred_at: '2026-08-25T06:40:00.000Z' },
+      ]);
+
+      const result = await getMonthlyThemeForDream('d1', '2026-08-25T06:40:00.000Z');
+      expect(result).toBeNull();
+    });
+
+    it('computes the ordinal, total and titles among same-month occurrences, oldest to newest', async () => {
+      mockExecuteSync.mockReturnValue([flyingTheme]);
+      mockGetAllAsync.mockResolvedValue([
+        { id: 'd1', description: 'Flying over the city.', occurred_at: '2026-08-25T06:40:00.000Z' },
+        { id: 'd2', description: 'Above the empty stadium.', occurred_at: '2026-08-17T00:00:00.000Z' },
+        { id: 'd3', description: 'The leap from the cliff.', occurred_at: '2026-08-09T00:00:00.000Z' },
+      ]);
+
+      const result = await getMonthlyThemeForDream('d1', '2026-08-25T06:40:00.000Z');
+      expect(result).toEqual({
+        theme: 'flying',
+        ordinal: 3,
+        totalThisMonth: 3,
+        dreamsThisMonth: [
+          { id: 'd3', title: 'The leap from the cliff.', occurredAt: '2026-08-09T00:00:00.000Z' },
+          { id: 'd2', title: 'Above the empty stadium.', occurredAt: '2026-08-17T00:00:00.000Z' },
+          { id: 'd1', title: 'Flying over the city.', occurredAt: '2026-08-25T06:40:00.000Z' },
+        ],
+      });
+    });
+
+    it('excludes occurrences that fall in a different month from the count', async () => {
+      mockExecuteSync.mockReturnValue([flyingTheme]);
+      mockGetAllAsync.mockResolvedValue([
+        { id: 'd1', description: 'Flying over the city.', occurred_at: '2026-08-25T06:40:00.000Z' },
+        { id: 'd2', description: 'Above the empty stadium.', occurred_at: '2026-08-17T00:00:00.000Z' },
+        { id: 'd4', description: 'An earlier flight.', occurred_at: '2026-07-30T00:00:00.000Z' }, // previous month — excluded
+      ]);
+
+      const result = await getMonthlyThemeForDream('d1', '2026-08-25T06:40:00.000Z');
+      expect(result?.totalThisMonth).toBe(2);
+      expect(result?.ordinal).toBe(2);
+      expect(result?.dreamsThisMonth.map(d => d.id)).toEqual(['d2', 'd1']);
     });
   });
 });

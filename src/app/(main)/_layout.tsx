@@ -17,6 +17,7 @@ export default function MainLayout() {
       <Tabs.Screen name="insights" />
       {/* Reached through the tab bar's centre action, not rendered as a tab. */}
       <Tabs.Screen name="log" />
+      <Tabs.Screen name="readings" />
       <Tabs.Screen name="settings" />
 
       {/* Non-tab screens — hidden from the bar */}

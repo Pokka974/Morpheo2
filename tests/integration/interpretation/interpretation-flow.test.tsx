@@ -94,6 +94,46 @@ describe('InterpretationScreen', () => {
     );
   }
 
+  // The dreamer's own log-time metadata has to survive the trip to the Edge Function:
+  // the archetype/themes reading is explicitly prompted to lean on it, so a field that
+  // silently stops being selected would degrade the reading with nothing failing.
+  it('passes the dream own log-time metadata, including the ending, to the interpret call', async () => {
+    (db.getFirstAsync as jest.Mock).mockImplementation((sql: string) => {
+      if (sql.includes('COUNT(*)')) return Promise.resolve({ count: 12 });
+      if (sql.includes('dream_ending')) {
+        return Promise.resolve({
+          tone: 'mixed',
+          lucidity: 'semi',
+          clarity: 4,
+          dream_ending: 'unresolved',
+          dream_type: '["recurring"]',
+          characters: '["ma mere"]',
+          places: '["une foret"]',
+        });
+      }
+      return Promise.resolve({ user_id: 'user-1' });
+    });
+    const interpretSpy = jest.spyOn(interpretationService, 'interpret');
+
+    render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(interpretSpy).toHaveBeenCalled());
+    expect(interpretSpy.mock.calls[0]?.[0].metadata).toEqual({
+      tone: 'mixed',
+      lucidity: 'semi',
+      clarity: 4,
+      dreamEnding: 'unresolved',
+      dreamType: ['recurring'],
+      characters: ['ma mere'],
+      places: ['une foret'],
+    });
+    interpretSpy.mockRestore();
+  });
+
   it('fires the interpretation request on mount — no CTA to press first', () => {
     const { getByLabelText, getByText, queryByText } = render(
       <ServicesProvider services={buildRegistry()}>
@@ -197,6 +237,40 @@ describe('InterpretationScreen', () => {
       );
       expect(insertCalls.length).toBeGreaterThan(0);
     });
+  });
+
+  it('does not crash when the interpret response is missing archetype/themes/symbolicDensity (an older deployed Edge Function)', async () => {
+    withDreamOwner('user-id');
+    const full = await interpretationService.interpret({
+      dreamId: 'test-dream-id',
+      description: 'x',
+      style: 'symbolic',
+    });
+    const legacyShape = { ...full } as Record<string, unknown>;
+    delete legacyShape.archetype;
+    delete legacyShape.themes;
+    delete legacyShape.symbolicDensity;
+    // Restored at the end — a leaked spy here would pollute the call counts other
+    // tests in this file assert on (e.g. "does not double-fire").
+    const interpretSpy = jest
+      .spyOn(interpretationService, 'interpret')
+      .mockResolvedValueOnce(legacyShape as unknown as Awaited<ReturnType<typeof interpretationService.interpret>>);
+
+    render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => {
+      expect(mockRouterReplace).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail');
+    });
+    const insertCalls = (db.prepareSync as jest.Mock).mock.calls.filter(([sql]) =>
+      (sql as string).includes('INSERT INTO recurrence_patterns')
+    );
+    // keyword + emotion still record; theme is skipped since there were no themes.
+    expect(insertCalls.length).toBeGreaterThan(0);
+    interpretSpy.mockRestore();
   });
 
   it('does not blow up when the dream row cannot be found locally — recurrence is skipped, navigation still happens', async () => {

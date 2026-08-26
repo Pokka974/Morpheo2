@@ -21,6 +21,7 @@ import { useSyncOnConnect } from '@features/dream-log/useSyncOnConnect';
 import { syncPendingDreams } from '@features/dream-log/syncService';
 import { useAuthSync } from '@features/auth/useAuthSync';
 import { pullRemoteChanges } from '@features/sync/pullService';
+import { makeMediaCache } from '@features/sync/mediaCache';
 
 // Resolve the device language before the first render so no screen flashes English
 // on its way to French.
@@ -39,6 +40,10 @@ const services: ServiceRegistry = {
   entitlement: new RevenueCatEntitlementService(),
   notifications: new ExpoNotificationService(),
 };
+
+// Built once alongside `services` so its identity is stable: both hooks below take
+// it as a dependency, and a fresh object per render would re-subscribe every time.
+const mediaCache = makeMediaCache(services);
 
 type AuthState = 'loading' | 'onboarding' | 'unauthenticated' | 'locked' | 'ready';
 
@@ -72,8 +77,8 @@ function AppNavigator() {
   const insets = useSafeAreaInsets();
   const [authState, setAuthState] = useState<AuthState>('loading');
 
-  useSyncOnConnect(services.auth);
-  useAuthSync(services.auth, services.notifications);
+  useSyncOnConnect(services.auth, mediaCache);
+  useAuthSync(services.auth, services.notifications, mediaCache);
 
   useEffect(() => {
     const rcKey = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'] as string | undefined;
@@ -149,7 +154,7 @@ function AppNavigator() {
       console.error('Push sync on foreground failed:', err);
     }
     try {
-      await pullRemoteChanges(session.user.id);
+      await pullRemoteChanges(session.user.id, mediaCache);
     } catch (err) {
       console.error('Pull sync on foreground failed:', err);
     }

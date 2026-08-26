@@ -16,6 +16,25 @@ export interface InterpretationResult {
   promptVersion: string;
   modelUsed: string;
   createdAt: string;
+  /** The dominant Jungian/narrative archetype Claude identified for this dream. */
+  archetype: string | null;
+  /** AI-identified recurring themes — distinct from the literal `keywords`. */
+  themes: string[];
+  /** 1 (literal, few symbols) to 4 (highly symbolic, densely layered). */
+  symbolicDensity: number | null;
+}
+
+/** Dream metadata passed through so the Edge Function's reading — tone, archetype,
+ * themes — can be informed by more than the raw narrative text alone. */
+export interface InterpretationRequestMetadata {
+  tone?: 'positive' | 'neutral' | 'negative' | 'mixed' | null;
+  lucidity?: 'none' | 'semi' | 'lucid' | 'full';
+  clarity?: number | null;
+  /** How the dream resolved — a narrative-shape signal the archetype reading depends on. */
+  dreamEnding?: 'resolved' | 'unresolved' | 'fragmented' | null;
+  dreamType?: string[];
+  characters?: string[];
+  places?: string[];
 }
 
 export interface InterpretationRequest {
@@ -23,6 +42,7 @@ export interface InterpretationRequest {
   description: string;
   style: 'symbolic' | 'mythological' | 'psychological';
   languageHint?: string;
+  metadata?: InterpretationRequestMetadata;
 }
 
 export interface InterpretationService {

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,6 +18,16 @@ import {
   getTopRecurrences,
   type RecurrencePattern,
 } from '@features/recurrence/recurrenceRepository';
+import { getRecurrenceChains, type RecurrenceChain } from '@features/recurrence/recurrenceChains';
+import {
+  getSleepClarityPoints,
+  type SleepClarityPoint,
+} from '@features/recurrence/sleepClarityRepository';
+import {
+  SleepClarityScatter,
+  type ScatterBubble,
+  type ScatterTrend,
+} from '@features/recurrence/SleepClarityScatter';
 import { useServices } from '@services/useServices';
 import { supabase } from '../../../supabase/client';
 import {
@@ -56,6 +66,8 @@ export default function InsightsScreen() {
   const [period, setPeriod] = useState<Period>('30');
   const [keywords, setKeywords] = useState<RecurrencePattern[]>([]);
   const [emotions, setEmotions] = useState<RecurrencePattern[]>([]);
+  const [sleepClarityPoints, setSleepClarityPoints] = useState<SleepClarityPoint[]>([]);
+  const [chains, setChains] = useState<RecurrenceChain[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -82,12 +94,16 @@ export default function InsightsScreen() {
     // `undefined` means "all time"; the repository omits the date filter for it.
     const days = (isPremium ? PERIOD_DAYS[period] : FREE_WINDOW_DAYS) ?? undefined;
     try {
-      const [kw, em] = await Promise.all([
+      const [kw, em, points, recurrenceChains] = await Promise.all([
         getTopRecurrences(userId, 'keyword', limit, days),
         getTopRecurrences(userId, 'emotion', limit, days),
+        getSleepClarityPoints(userId, days),
+        getRecurrenceChains(userId),
       ]);
       setKeywords(kw);
       setEmotions(em);
+      setSleepClarityPoints(points);
+      setChains(recurrenceChains);
     } catch (err) {
       console.error('Failed to load recurrence patterns:', err);
     }
@@ -114,6 +130,7 @@ export default function InsightsScreen() {
   );
 
   const ribbon: RibbonPoint[] = useMemo(() => buildRibbon(emotions), [emotions]);
+  const scatter = useMemo(() => buildScatterData(sleepClarityPoints), [sleepClarityPoints]);
 
   const periodLabel = t(
     period === '30'
@@ -191,6 +208,67 @@ export default function InsightsScreen() {
         </View>
       ) : null}
 
+      <View style={styles.surfacePanel}>
+        <Text style={styles.panelTitle}>{t('insights.sleepClarityTitle')}</Text>
+        {scatter.bubbles.length > 0 ? (
+          <>
+            <Text style={styles.panelLegend}>
+              {t('insights.sleepClaritySubtitle', { period: periodLabel })}
+            </Text>
+            <SleepClarityScatter
+              bubbles={scatter.bubbles}
+              trend={scatter.trend}
+              testID="sleep-clarity-scatter"
+            />
+            {scatter.captionQuality != null ? (
+              <Text style={styles.panelCaption}>
+                {t('insights.sleepClarityCaption', { quality: scatter.captionQuality })}
+              </Text>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Text style={styles.panelTitleSecondary}>{t('insights.sleepClarityEmptyTitle')}</Text>
+            <Text style={styles.panelLegend}>{t('insights.sleepClarityEmptyBody')}</Text>
+          </>
+        )}
+      </View>
+
+      {chains.length > 0 ? (
+        <View style={styles.surfacePanel}>
+          <Text style={styles.panelTitle}>{t('insights.chainsTitle')}</Text>
+          <Text style={styles.panelLegend}>{t('insights.chainsSubtitle')}</Text>
+          <View style={styles.chainList}>
+            {chains.map(chain => (
+              <View key={chain.id} style={styles.chainCard}>
+                <Text style={styles.panelMeta}>
+                  {t('insights.chainLength', { count: chain.dreams.length })}
+                </Text>
+                {chain.dreams.map(dream => (
+                  <Pressable
+                    key={dream.id}
+                    onPress={() => router.push(`/(main)/journal/${dream.id}/detail`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={dream.title}
+                    style={styles.chainRow}
+                  >
+                    <Text style={styles.chainRowDate}>
+                      {new Date(dream.occurredAt).toLocaleDateString(undefined, {
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </Text>
+                    <Text style={styles.chainRowTitle} numberOfLines={1}>
+                      {dream.title}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       {!isPremium ? (
         <LinearGradient
           colors={[...gradients.mystic.colors]}
@@ -264,6 +342,82 @@ export function buildRibbon(emotions: RecurrencePattern[]): RibbonPoint[] {
   }));
 }
 
+/** Below this many logged pairs the chart is more noise than pattern. */
+const MIN_SCATTER_POINTS = 5;
+
+export interface ScatterData {
+  bubbles: ScatterBubble[];
+  trend: ScatterTrend | null;
+  /** The sleep-quality threshold named in the caption sentence, or `null` when
+   * the data is too sparse or shows no positive relationship to name one. */
+  captionQuality: number | null;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * Turns raw (sleep quality, clarity) pairs into the scatter's bubbles, a linear
+ * trend line, and — when the trend is positive enough to be worth naming — the
+ * threshold quality used in the caption sentence.
+ *
+ * The threshold is the lowest sleep-quality bucket whose mean clarity is within
+ * 0.5 of the best bucket's mean: "your clearest dreams follow nights rated N or
+ * higher" is a claim about where the plateau starts, not just where the single
+ * best-average bucket happens to sit.
+ */
+export function buildScatterData(points: SleepClarityPoint[]): ScatterData {
+  if (points.length < MIN_SCATTER_POINTS) return { bubbles: [], trend: null, captionQuality: null };
+
+  const bucketed = new Map<string, ScatterBubble>();
+  for (const p of points) {
+    const key = `${p.sleepQuality}-${p.clarity}`;
+    const existing = bucketed.get(key);
+    if (existing) existing.count += 1;
+    else bucketed.set(key, { x: p.sleepQuality, y: p.clarity, count: 1 });
+  }
+  const bubbles = Array.from(bucketed.values());
+
+  const n = points.length;
+  const meanX = points.reduce((sum, p) => sum + p.sleepQuality, 0) / n;
+  const meanY = points.reduce((sum, p) => sum + p.clarity, 0) / n;
+  let numerator = 0;
+  let denominator = 0;
+  for (const p of points) {
+    numerator += (p.sleepQuality - meanX) * (p.clarity - meanY);
+    denominator += (p.sleepQuality - meanX) ** 2;
+  }
+  const slope = denominator === 0 ? 0 : numerator / denominator;
+  const intercept = meanY - slope * meanX;
+
+  const trend: ScatterTrend = {
+    x1: 1,
+    y1: clamp(intercept + slope * 1, 1, 5),
+    x2: 5,
+    y2: clamp(intercept + slope * 5, 1, 5),
+  };
+
+  let captionQuality: number | null = null;
+  // A near-flat or negative slope has nothing honest to claim about "higher is clearer".
+  if (slope > 0.05) {
+    const byQuality = new Map<number, { sum: number; count: number }>();
+    for (const p of points) {
+      const bucket = byQuality.get(p.sleepQuality) ?? { sum: 0, count: 0 };
+      bucket.sum += p.clarity;
+      bucket.count += 1;
+      byQuality.set(p.sleepQuality, bucket);
+    }
+    const means = Array.from(byQuality.entries())
+      .map(([quality, b]) => ({ quality, mean: b.sum / b.count }))
+      .sort((a, b) => a.quality - b.quality);
+    const maxMean = Math.max(...means.map(m => m.mean));
+    captionQuality = means.find(m => m.mean >= maxMean - 0.5)?.quality ?? null;
+  }
+
+  return { bubbles, trend, captionQuality };
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -320,6 +474,42 @@ const styles = StyleSheet.create({
     ...typography.meta,
     fontSize: 12,
     marginBottom: 6,
+  },
+  panelTitleSecondary: {
+    ...typography.cardTitle,
+    fontSize: 14,
+  },
+  panelCaption: {
+    ...typography.meta,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 6,
+  },
+  chainList: {
+    gap: spacing.sm,
+  },
+  chainCard: {
+    borderRadius: radius.thumb,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.sm + 2,
+    gap: 4,
+  },
+  chainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 32,
+  },
+  chainRowDate: {
+    ...typography.counter,
+    width: 44,
+  },
+  chainRowTitle: {
+    ...typography.body,
+    fontSize: 13,
+    flex: 1,
   },
   upgradeCard: {
     borderRadius: radius.panel,

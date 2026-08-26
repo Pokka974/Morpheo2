@@ -259,7 +259,13 @@ describe('JournalListScreen', () => {
 
       expect(mockSyncPendingDreams).toHaveBeenCalledTimes(1);
       // MockAuthService's default session carries this fixed user id.
-      expect(mockPullRemoteChanges).toHaveBeenCalledWith('mock-user-id');
+      expect(mockPullRemoteChanges).toHaveBeenCalledWith(
+        'mock-user-id',
+        expect.objectContaining({
+          getSignedUrl: expect.any(Function),
+          cacheMedia: expect.any(Function),
+        })
+      );
     });
 
     it('pushes before it pulls, so an in-flight local edit reaches the server before reconciling down', async () => {

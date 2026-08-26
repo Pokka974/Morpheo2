@@ -27,10 +27,21 @@ jest.mock('@features/sync/pullService', () => ({
 
 import { renderHook } from '@testing-library/react-native';
 import { useSyncOnConnect } from '@features/dream-log/useSyncOnConnect';
+
+/** The hook only forwards this to `pullRemoteChanges`, which is mocked here, so a
+ * pair of no-op stubs is enough to satisfy the dependency. */
+const mediaCache = {
+  getSignedUrl: jest.fn(async () => 'https://example.com/signed.png'),
+  cacheMedia: jest.fn(async () => '/local/path.png'),
+};
+
 import { AuthExpiredError } from '@features/dream-log/syncService';
 import type { AuthService } from '@services/auth/AuthService';
 
-function getNetInfoHandler(): (state: { isConnected: boolean; isInternetReachable: boolean | null }) => void {
+function getNetInfoHandler(): (state: {
+  isConnected: boolean;
+  isInternetReachable: boolean | null;
+}) => void {
   const calls = mockAddEventListener.mock.calls;
   return calls[calls.length - 1]![0];
 }
@@ -56,14 +67,14 @@ describe('useSyncOnConnect', () => {
   });
 
   it('subscribes on mount and unsubscribes on unmount', () => {
-    const { unmount } = renderHook(() => useSyncOnConnect(auth));
+    const { unmount } = renderHook(() => useSyncOnConnect(auth, mediaCache));
     expect(mockAddEventListener).toHaveBeenCalledWith(expect.any(Function));
     unmount();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   it('does not sync when going offline (marks wasOffline for later)', async () => {
-    renderHook(() => useSyncOnConnect(auth));
+    renderHook(() => useSyncOnConnect(auth, mediaCache));
     const handler = getNetInfoHandler();
 
     handler({ isConnected: false, isInternetReachable: null });
@@ -72,7 +83,7 @@ describe('useSyncOnConnect', () => {
   });
 
   it('does not sync on a connected event if it was never offline first', async () => {
-    renderHook(() => useSyncOnConnect(auth));
+    renderHook(() => useSyncOnConnect(auth, mediaCache));
     const handler = getNetInfoHandler();
 
     handler({ isConnected: true, isInternetReachable: true });
@@ -82,7 +93,7 @@ describe('useSyncOnConnect', () => {
 
   it('syncs pending dreams once reconnected after being offline', async () => {
     mockSyncPendingDreams.mockResolvedValue(undefined);
-    renderHook(() => useSyncOnConnect(auth));
+    renderHook(() => useSyncOnConnect(auth, mediaCache));
     const handler = getNetInfoHandler();
 
     handler({ isConnected: false, isInternetReachable: null });
@@ -94,7 +105,7 @@ describe('useSyncOnConnect', () => {
   });
 
   it('treats isInternetReachable === false as offline even when isConnected is true', async () => {
-    renderHook(() => useSyncOnConnect(auth));
+    renderHook(() => useSyncOnConnect(auth, mediaCache));
     const handler = getNetInfoHandler();
 
     handler({ isConnected: true, isInternetReachable: false });
@@ -112,7 +123,7 @@ describe('useSyncOnConnect', () => {
       .mockResolvedValueOnce(undefined);
     (auth.getSession as jest.Mock).mockResolvedValue(null);
 
-    renderHook(() => useSyncOnConnect(auth));
+    renderHook(() => useSyncOnConnect(auth, mediaCache));
     const handler = getNetInfoHandler();
 
     handler({ isConnected: false, isInternetReachable: null });
@@ -132,7 +143,7 @@ describe('useSyncOnConnect', () => {
     mockSyncPendingDreams.mockRejectedValueOnce(new AuthExpiredError());
     (auth.getSession as jest.Mock).mockRejectedValue(new Error('refresh failed'));
 
-    renderHook(() => useSyncOnConnect(auth));
+    renderHook(() => useSyncOnConnect(auth, mediaCache));
     const handler = getNetInfoHandler();
 
     handler({ isConnected: false, isInternetReachable: null });
@@ -146,7 +157,7 @@ describe('useSyncOnConnect', () => {
   it('swallows a non-auth sync error without retrying the push via getSession', async () => {
     mockSyncPendingDreams.mockRejectedValueOnce(new Error('generic failure'));
 
-    renderHook(() => useSyncOnConnect(auth));
+    renderHook(() => useSyncOnConnect(auth, mediaCache));
     const handler = getNetInfoHandler();
 
     handler({ isConnected: false, isInternetReachable: null });
@@ -168,7 +179,7 @@ describe('useSyncOnConnect', () => {
     });
     mockPullRemoteChanges.mockResolvedValue(undefined);
 
-    renderHook(() => useSyncOnConnect(auth));
+    renderHook(() => useSyncOnConnect(auth, mediaCache));
     const handler = getNetInfoHandler();
 
     handler({ isConnected: false, isInternetReachable: null });
@@ -176,13 +187,19 @@ describe('useSyncOnConnect', () => {
     handler({ isConnected: true, isInternetReachable: true });
     await flush();
 
-    expect(mockPullRemoteChanges).toHaveBeenCalledWith('user-42');
+    expect(mockPullRemoteChanges).toHaveBeenCalledWith(
+      'user-42',
+      expect.objectContaining({
+        getSignedUrl: expect.any(Function),
+        cacheMedia: expect.any(Function),
+      })
+    );
   });
 
   it('does not pull when there is no active session after reconnecting', async () => {
     mockSyncPendingDreams.mockResolvedValue(undefined);
 
-    renderHook(() => useSyncOnConnect(auth));
+    renderHook(() => useSyncOnConnect(auth, mediaCache));
     const handler = getNetInfoHandler();
 
     handler({ isConnected: false, isInternetReachable: null });
@@ -202,7 +219,7 @@ describe('useSyncOnConnect', () => {
     });
     mockPullRemoteChanges.mockRejectedValue(new Error('pull failed'));
 
-    renderHook(() => useSyncOnConnect(auth));
+    renderHook(() => useSyncOnConnect(auth, mediaCache));
     const handler = getNetInfoHandler();
 
     handler({ isConnected: false, isInternetReachable: null });

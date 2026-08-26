@@ -9,6 +9,7 @@ function buildProps(activeIndex = 0): BottomTabBarProps {
     { key: 'journal-1', name: 'journal' },
     { key: 'insights-1', name: 'insights' },
     { key: 'log-1', name: 'log' },
+    { key: 'readings-1', name: 'readings' },
     { key: 'settings-1', name: 'settings' },
   ];
   return {
@@ -24,7 +25,17 @@ describe('<TabBar />', () => {
     const { getByText } = render(<TabBar {...buildProps()} />);
     expect(getByText('Journal')).toBeTruthy();
     expect(getByText('Insights')).toBeTruthy();
+    expect(getByText('Readings')).toBeTruthy();
     expect(getByText('Profile')).toBeTruthy();
+  });
+
+  it('places Readings on the same side as Profile, after the centre action', () => {
+    const { getByLabelText } = render(<TabBar {...buildProps()} />);
+    // Left/right split is `Math.ceil(visible.length / 2)`: with all four tabs
+    // present, Journal/Insights sit left of the centre action and
+    // Readings/Profile sit right of it.
+    expect(getByLabelText('Readings tab')).toBeTruthy();
+    expect(getByLabelText('Profile tab')).toBeTruthy();
   });
 
   it('steps out of the way entirely while the dream-log flow is open', () => {
@@ -34,6 +45,7 @@ describe('<TabBar />', () => {
 
     expect(queryByText('Journal')).toBeNull();
     expect(queryByText('Insights')).toBeNull();
+    expect(queryByText('Readings')).toBeNull();
     expect(queryByText('Profile')).toBeNull();
     expect(queryByTestId('tab-log-dream')).toBeNull();
   });
@@ -59,6 +71,15 @@ describe('<TabBar />', () => {
     expect(props.navigation.navigate).toHaveBeenCalledWith('insights');
   });
 
+  it('navigates to readings when its tab is pressed', () => {
+    const props = buildProps(0);
+    const { getByLabelText } = render(<TabBar {...props} />);
+
+    fireEvent.press(getByLabelText('Readings tab'));
+
+    expect(props.navigation.navigate).toHaveBeenCalledWith('readings');
+  });
+
   it('does not re-navigate to the tab already showing', () => {
     const props = buildProps(0);
     const { getByLabelText } = render(<TabBar {...props} />);
@@ -79,7 +100,7 @@ describe('<TabBar />', () => {
 
   it('every tab meets the 44px touch-target floor', () => {
     const { getByLabelText } = render(<TabBar {...buildProps()} />);
-    for (const label of ['Journal tab', 'Insights tab', 'Profile tab']) {
+    for (const label of ['Journal tab', 'Insights tab', 'Readings tab', 'Profile tab']) {
       const style = getByLabelText(label).props.style;
       const flat = Array.isArray(style) ? Object.assign({}, ...style) : style;
       expect(flat.minHeight).toBeGreaterThanOrEqual(44);

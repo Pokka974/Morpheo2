@@ -34,6 +34,19 @@ const makeDream = (overrides: Partial<Dream>): Dream => ({
   isDeleted: false,
   editedSinceInterpretation: false,
   syncStatus: 'local',
+  bedtime: null,
+  wakeTime: null,
+  sleepQuality: null,
+  clarity: null,
+  lucidity: 'none',
+  tone: null,
+  dreamEnding: null,
+  dreamType: '[]',
+  characters: '[]',
+  places: '[]',
+  linkedDreamId: null,
+  dayStress: null,
+  presleepSubstances: '[]',
   ...overrides,
 });
 
@@ -144,6 +157,57 @@ describe('syncPendingDreams', () => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+
+  it('maps the sleep/dream/who-where metadata fields to their snake_case columns', async () => {
+    mockGetPendingDreams.mockResolvedValue([
+      makeDream({
+        bedtime: '23:10',
+        wakeTime: '07:05',
+        sleepQuality: 4,
+        clarity: 5,
+        lucidity: 'full',
+        tone: 'positive',
+        dreamEnding: 'resolved',
+        dreamType: '["nightmare","recurring"]',
+        characters: '["ma mère"]',
+        places: '["hôtel"]',
+        linkedDreamId: 'dream-earlier',
+      }),
+    ]);
+    mockUpsert.mockResolvedValue({ error: null });
+
+    await syncPendingDreams();
+
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bedtime: '23:10',
+        wake_time: '07:05',
+        sleep_quality: 4,
+        clarity: 5,
+        lucidity: 'full',
+        tone: 'positive',
+        dream_ending: 'resolved',
+        dream_type: ['nightmare', 'recurring'],
+        characters: ['ma mère'],
+        places: ['hôtel'],
+        linked_dream_id: 'dream-earlier',
+      }),
+      expect.anything()
+    );
+  });
+
+  it('never sends day_stress or presleep_substances — the private "Contexte personnel" block stays local-only', async () => {
+    mockGetPendingDreams.mockResolvedValue([
+      makeDream({ dayStress: 4, presleepSubstances: '["alcohol"]' }),
+    ]);
+    mockUpsert.mockResolvedValue({ error: null });
+
+    await syncPendingDreams();
+
+    const payload = mockUpsert.mock.calls[0]![0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('day_stress');
+    expect(payload).not.toHaveProperty('presleep_substances');
   });
 
   it('drops non-string entries rather than sending them to a TEXT[] column', async () => {

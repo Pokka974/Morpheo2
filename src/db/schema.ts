@@ -22,6 +22,35 @@ export const dreams = sqliteTable('dreams', {
   syncStatus: text('sync_status', { enum: ['local', 'sync_pending', 'synced', 'sync_failed'] })
     .notNull()
     .default('local'),
+  // --- Sleep ---
+  bedtime: text('bedtime'),
+  wakeTime: text('wake_time'),
+  /** 1–5. */
+  sleepQuality: integer('sleep_quality'),
+  // --- The dream itself ---
+  /** 1–5. */
+  clarity: integer('clarity'),
+  /** Replaces the old boolean-only marker; `isLucid` stays as a derived convenience flag. */
+  lucidity: text('lucidity', { enum: ['none', 'semi', 'lucid', 'full'] })
+    .notNull()
+    .default('none'),
+  tone: text('tone', { enum: ['positive', 'neutral', 'negative', 'mixed'] }),
+  dreamEnding: text('dream_ending', { enum: ['resolved', 'unresolved', 'fragmented'] }),
+  /** JSON array of type tags (e.g. "nightmare", "recurring"). */
+  dreamType: text('dream_type').notNull().default('[]'),
+  // --- Who, where ---
+  /** JSON array of role-based tags (e.g. "ma mère", "un inconnu"), not names. */
+  characters: text('characters').notNull().default('[]'),
+  /** JSON array of place tags. */
+  places: text('places').notNull().default('[]'),
+  /** Set when this dream continues an earlier one — forms a recurrence chain. */
+  linkedDreamId: text('linked_dream_id'),
+  // --- Private context — local-only, never synced to Supabase, never sent to the AI,
+  // excluded from export. See src/db/client.ts for why these have no Postgres column. ---
+  /** 1–5. */
+  dayStress: integer('day_stress'),
+  /** JSON array (e.g. "melatonin", "late_caffeine"). */
+  presleepSubstances: text('presleep_substances').notNull().default('[]'),
 });
 
 export const interpretations = sqliteTable('interpretations', {
@@ -40,6 +69,12 @@ export const interpretations = sqliteTable('interpretations', {
   createdAt: text('created_at')
     .notNull()
     .default(sql`(datetime('now'))`),
+  /** The dominant Jungian/narrative archetype Claude identified for this dream. */
+  archetype: text('archetype'),
+  /** JSON array of AI-identified recurring themes — distinct from the literal `keywords`. */
+  themes: text('themes').notNull().default('[]'),
+  /** 1 (literal, few symbols) to 4 (highly symbolic, densely layered). */
+  symbolicDensity: integer('symbolic_density'),
 });
 
 export const media = sqliteTable('media', {
@@ -71,7 +106,7 @@ export const recurrencePatterns = sqliteTable('recurrence_patterns', {
   userId: text('user_id').notNull(),
   symbol: text('symbol').notNull(),
   patternType: text('pattern_type', {
-    enum: ['keyword', 'emotion', 'cultural_reference'],
+    enum: ['keyword', 'emotion', 'cultural_reference', 'theme'],
   }).notNull(),
   occurrenceCount: integer('occurrence_count').notNull().default(0),
   dreamIds: text('dream_ids').notNull().default('[]'),

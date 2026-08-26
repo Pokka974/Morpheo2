@@ -42,13 +42,15 @@ describe('seedSampleDreams', () => {
     expect(insertCalls.length).toBe(result.count);
   });
 
-  it('records keyword and emotion recurrence for every seed dream', async () => {
+  it('records keyword, emotion and theme recurrence for every seed dream', async () => {
     const result = await seedSampleDreams('user-1');
 
     const keywordCalls = mockRecordRecurrence.mock.calls.filter(c => c[2] === 'keyword');
     const emotionCalls = mockRecordRecurrence.mock.calls.filter(c => c[2] === 'emotion');
+    const themeCalls = mockRecordRecurrence.mock.calls.filter(c => c[2] === 'theme');
     expect(keywordCalls.length).toBe(result.count);
     expect(emotionCalls.length).toBe(result.count);
+    expect(themeCalls.length).toBe(result.count);
   });
 
   it('triggers a best-effort sync once after seeding all dreams', async () => {

@@ -5,6 +5,14 @@ jest.mock('@features/sync/pullService', () => ({
 
 import { renderHook } from '@testing-library/react-native';
 import { useAuthSync } from '@features/auth/useAuthSync';
+
+/** The hook only forwards this to `pullRemoteChanges`, which is mocked here, so a
+ * pair of no-op stubs is enough to satisfy the dependency. */
+const mediaCache = {
+  getSignedUrl: jest.fn(async () => 'https://example.com/signed.png'),
+  cacheMedia: jest.fn(async () => '/local/path.png'),
+};
+
 import type { AuthService, AuthSession } from '@services/auth/AuthService';
 import type { NotificationService } from '@services/notifications/NotificationService';
 
@@ -31,7 +39,7 @@ describe('useAuthSync', () => {
     const registerPushToken = jest.fn().mockResolvedValue(undefined);
     const notifications = { registerPushToken } as unknown as NotificationService;
 
-    renderHook(() => useAuthSync(auth, notifications));
+    renderHook(() => useAuthSync(auth, notifications, mediaCache));
 
     await capturedCallback(session);
     expect(registerPushToken).toHaveBeenCalledTimes(1);
@@ -49,7 +57,7 @@ describe('useAuthSync', () => {
     const registerPushToken = jest.fn().mockResolvedValue(undefined);
     const notifications = { registerPushToken } as unknown as NotificationService;
 
-    renderHook(() => useAuthSync(auth, notifications));
+    renderHook(() => useAuthSync(auth, notifications, mediaCache));
 
     await capturedCallback(null);
     expect(registerPushToken).not.toHaveBeenCalled();
@@ -68,12 +76,18 @@ describe('useAuthSync', () => {
       registerPushToken: jest.fn().mockResolvedValue(undefined),
     } as unknown as NotificationService;
 
-    renderHook(() => useAuthSync(auth, notifications));
+    renderHook(() => useAuthSync(auth, notifications, mediaCache));
 
     await capturedCallback(session);
     // Fire-and-forget: let the pull's microtask settle.
     await Promise.resolve();
-    expect(mockPullRemoteChanges).toHaveBeenCalledWith('user-1');
+    expect(mockPullRemoteChanges).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        getSignedUrl: expect.any(Function),
+        cacheMedia: expect.any(Function),
+      })
+    );
   });
 
   it('does not pull when the session is null', async () => {
@@ -89,7 +103,7 @@ describe('useAuthSync', () => {
       registerPushToken: jest.fn().mockResolvedValue(undefined),
     } as unknown as NotificationService;
 
-    renderHook(() => useAuthSync(auth, notifications));
+    renderHook(() => useAuthSync(auth, notifications, mediaCache));
 
     await capturedCallback(null);
     expect(mockPullRemoteChanges).not.toHaveBeenCalled();
@@ -109,7 +123,7 @@ describe('useAuthSync', () => {
       registerPushToken: jest.fn().mockResolvedValue(undefined),
     } as unknown as NotificationService;
 
-    renderHook(() => useAuthSync(auth, notifications));
+    renderHook(() => useAuthSync(auth, notifications, mediaCache));
 
     expect(() => capturedCallback(session)).not.toThrow();
     await Promise.resolve();
@@ -129,7 +143,7 @@ describe('useAuthSync', () => {
     const registerPushToken = jest.fn().mockRejectedValue(new Error('push registration failed'));
     const notifications = { registerPushToken } as unknown as NotificationService;
 
-    renderHook(() => useAuthSync(auth, notifications));
+    renderHook(() => useAuthSync(auth, notifications, mediaCache));
 
     expect(() => capturedCallback(session)).not.toThrow();
     // Let the fire-and-forget registerPushToken().catch() settle without an unhandled rejection.
@@ -145,7 +159,7 @@ describe('useAuthSync', () => {
     } as unknown as AuthService;
     const notifications = { registerPushToken: jest.fn() } as unknown as NotificationService;
 
-    const { unmount } = renderHook(() => useAuthSync(auth, notifications));
+    const { unmount } = renderHook(() => useAuthSync(auth, notifications, mediaCache));
     unmount();
 
     expect(unsubscribe).toHaveBeenCalledTimes(1);

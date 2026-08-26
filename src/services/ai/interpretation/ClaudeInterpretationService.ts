@@ -60,6 +60,9 @@ export class ClaudeInterpretationService implements InterpretationService {
       promptVersion: row['prompt_version'] as string,
       modelUsed: row['model_used'] as string,
       createdAt: row['created_at'] as string,
+      archetype: (row['archetype'] as string | null) ?? null,
+      themes: (row['themes'] as string[] | null) ?? [],
+      symbolicDensity: (row['symbolic_density'] as number | null) ?? null,
     };
   }
 }

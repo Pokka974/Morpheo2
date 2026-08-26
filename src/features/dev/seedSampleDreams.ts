@@ -11,6 +11,11 @@ interface SeedDream {
   keywords: string[];
   emotions: string[];
   culturalReference: { symbol: string; tradition: string; meaning: string };
+  archetype: string;
+  /** Deliberately overlaps across a couple of dreams ("threshold", "flight") so the
+   * detail screen's "Nth {theme} dream this month" section has something to show. */
+  themes: string[];
+  symbolicDensity: number;
 }
 
 // Keywords and emotions deliberately overlap across dreams (ocean/water, forest,
@@ -31,6 +36,9 @@ const SEED_DREAMS: SeedDream[] = [
       tradition: 'Jungian',
       meaning: 'the depths of the unconscious mind',
     },
+    archetype: 'The Explorer',
+    themes: ['threshold', 'depth'],
+    symbolicDensity: 3,
   },
   {
     daysAgo: 5,
@@ -45,6 +53,9 @@ const SEED_DREAMS: SeedDream[] = [
       tradition: 'Folklore',
       meaning: 'the unknown, a place of transformation',
     },
+    archetype: 'The Dreamer',
+    themes: ['flight', 'fragility'],
+    symbolicDensity: 3,
   },
   {
     daysAgo: 8,
@@ -59,6 +70,9 @@ const SEED_DREAMS: SeedDream[] = [
       tradition: 'Taoist',
       meaning: 'the natural flow of life',
     },
+    archetype: 'The Elder',
+    themes: ['reflection', 'lineage'],
+    symbolicDensity: 2,
   },
   {
     daysAgo: 11,
@@ -73,6 +87,9 @@ const SEED_DREAMS: SeedDream[] = [
       tradition: 'Jungian',
       meaning: 'the shadow self, hidden fears',
     },
+    archetype: 'The Shadow',
+    themes: ['pursuit', 'fear'],
+    symbolicDensity: 3,
   },
   {
     daysAgo: 15,
@@ -87,6 +104,9 @@ const SEED_DREAMS: SeedDream[] = [
       tradition: 'Egyptian',
       meaning: 'renewal and rebirth',
     },
+    archetype: 'The Hero',
+    themes: ['flight', 'renewal'],
+    symbolicDensity: 2,
   },
   {
     daysAgo: 19,
@@ -101,6 +121,9 @@ const SEED_DREAMS: SeedDream[] = [
       tradition: 'Biblical',
       meaning: 'paradise, untouched potential',
     },
+    archetype: 'The Seeker',
+    themes: ['threshold', 'discovery'],
+    symbolicDensity: 3,
   },
 ];
 
@@ -127,8 +150,8 @@ export async function seedSampleDreams(userId: string): Promise<{ count: number 
 
     await sqlite.runAsync(
       `INSERT OR REPLACE INTO interpretations
-        (id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at, archetype, themes, symbolic_density)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         generateId(),
         dreamId,
@@ -141,11 +164,15 @@ export async function seedSampleDreams(userId: string): Promise<{ count: number 
         'dev-seed',
         'dev-seed',
         occurredAt.toISOString(),
+        seed.archetype,
+        JSON.stringify(seed.themes),
+        seed.symbolicDensity,
       ]
     );
 
     await recordRecurrence(userId, dreamId, 'keyword', seed.keywords, occurredAt.toISOString());
     await recordRecurrence(userId, dreamId, 'emotion', seed.emotions, occurredAt.toISOString());
+    await recordRecurrence(userId, dreamId, 'theme', seed.themes, occurredAt.toISOString());
   }
 
   // Best-effort, same as the draft-save path — seeding still succeeds locally (which is
