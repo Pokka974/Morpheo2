@@ -1,8 +1,19 @@
+const expoPreset = require('jest-expo/jest-preset.js');
+
 module.exports = {
   preset: 'jest-expo',
 
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|drizzle-orm|@shopify/flash-list)',
+  ],
+  // Gesture handler asserts its native TurboModule at import time, which no unit
+  // test has. Its own setup file stubs the module and swaps the gesture components
+  // for plain views, so the constellation's pinch/pan can be rendered in jsdom.
+  // Appended, not replaced: jest-expo's preset sets `setupFiles` to React Native's
+  // own setup plus its own, and a bare assignment here would silently drop both.
+  setupFiles: [
+    ...expoPreset.setupFiles,
+    '<rootDir>/node_modules/react-native-gesture-handler/jestSetup.js',
   ],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.i18n.js'],
 

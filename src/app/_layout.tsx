@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AppState, AppStateStatus, StyleSheet, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@services/../supabase/client';
 import { SupabaseAuthService } from '@services/auth/SupabaseAuthService';
@@ -58,13 +59,20 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <AppNavigator />
-    </SafeAreaProvider>
+    // Gesture handler must wrap the whole tree, above navigation — the Insights
+    // constellation is pinch-zoomable and its detector is inert outside this root.
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
+        <AppNavigator />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   splash: {
     flex: 1,
     backgroundColor: colors.background,

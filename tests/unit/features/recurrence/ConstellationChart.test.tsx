@@ -3,9 +3,11 @@ import { render, fireEvent } from '@testing-library/react-native';
 
 import {
   ConstellationChart,
+  clampViewport,
   deriveEdges,
   layoutNodes,
   scaleRadius,
+  zoomAbout,
   type ConstellationNode,
 } from '@features/recurrence/ConstellationChart';
 
@@ -109,6 +111,37 @@ describe('deriveEdges', () => {
     const keys = edges.map(e => [e.from, e.to].sort().join('-'));
     expect(new Set(keys).size).toBe(keys.length);
     expect(edges.every(e => e.from !== e.to)).toBe(true);
+  });
+});
+
+describe('viewport', () => {
+  it('starts fully zoomed out, showing the whole sky', () => {
+    expect(clampViewport({ minX: 0, minY: 0, zoom: 1 })).toEqual({ minX: 0, minY: 0, zoom: 1 });
+  });
+
+  it('refuses to zoom out past the canvas or in past the cap', () => {
+    expect(clampViewport({ minX: 0, minY: 0, zoom: 0.2 }).zoom).toBe(1);
+    expect(clampViewport({ minX: 0, minY: 0, zoom: 99 }).zoom).toBe(4);
+  });
+
+  it('never lets the window leave the canvas, however far it is dragged', () => {
+    const dragged = clampViewport({ minX: 9999, minY: -9999, zoom: 2 });
+    // At 2x the window is half the canvas, so its origin tops out at the midpoint.
+    expect(dragged.minX).toBe(170);
+    expect(dragged.minY).toBe(0);
+  });
+
+  it('holds the centre of the view still while zooming', () => {
+    // Zooming in on the fully-zoomed-out view keeps the middle of the sky centred.
+    const zoomed = zoomAbout({ minX: 0, minY: 0, zoom: 1 }, 2);
+    expect(zoomed.minX + 340 / 2 / 2).toBeCloseTo(170, 5);
+    expect(zoomed.minY + 268 / 2 / 2).toBeCloseTo(134, 5);
+  });
+
+  it('clamps a zoom that would push the window off the edge', () => {
+    // Centred on the top-left corner, then zoomed out: the window cannot follow.
+    const view = zoomAbout({ minX: 0, minY: 0, zoom: 4 }, 1);
+    expect(view).toEqual({ minX: 0, minY: 0, zoom: 1 });
   });
 });
 

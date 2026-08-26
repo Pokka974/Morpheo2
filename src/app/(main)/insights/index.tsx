@@ -20,14 +20,14 @@ import {
 } from '@features/recurrence/recurrenceRepository';
 import { getRecurrenceChains, type RecurrenceChain } from '@features/recurrence/recurrenceChains';
 import {
+  getEmotionTonePoints,
+  type EmotionTonePoint,
+} from '@features/recurrence/emotionToneRepository';
+import {
   getSleepClarityPoints,
   type SleepClarityPoint,
 } from '@features/recurrence/sleepClarityRepository';
-import {
-  SleepClarityScatter,
-  type ScatterBubble,
-  type ScatterTrend,
-} from '@features/recurrence/SleepClarityScatter';
+import { SleepClarityBars, type ClarityBar } from '@features/recurrence/SleepClarityBars';
 import { useServices } from '@services/useServices';
 import { supabase } from '../../../supabase/client';
 import {
@@ -57,7 +57,7 @@ const PREMIUM_LIMIT = 12;
 
 export default function InsightsScreen() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { entitlement } = useServices();
 
@@ -67,6 +67,7 @@ export default function InsightsScreen() {
   const [keywords, setKeywords] = useState<RecurrencePattern[]>([]);
   const [emotions, setEmotions] = useState<RecurrencePattern[]>([]);
   const [sleepClarityPoints, setSleepClarityPoints] = useState<SleepClarityPoint[]>([]);
+  const [tonePoints, setTonePoints] = useState<EmotionTonePoint[]>([]);
   const [chains, setChains] = useState<RecurrenceChain[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -94,15 +95,17 @@ export default function InsightsScreen() {
     // `undefined` means "all time"; the repository omits the date filter for it.
     const days = (isPremium ? PERIOD_DAYS[period] : FREE_WINDOW_DAYS) ?? undefined;
     try {
-      const [kw, em, points, recurrenceChains] = await Promise.all([
+      const [kw, em, points, tone, recurrenceChains] = await Promise.all([
         getTopRecurrences(userId, 'keyword', limit, days),
         getTopRecurrences(userId, 'emotion', limit, days),
         getSleepClarityPoints(userId, days),
+        getEmotionTonePoints(userId, days),
         getRecurrenceChains(userId),
       ]);
       setKeywords(kw);
       setEmotions(em);
       setSleepClarityPoints(points);
+      setTonePoints(tone);
       setChains(recurrenceChains);
     } catch (err) {
       console.error('Failed to load recurrence patterns:', err);
@@ -129,8 +132,14 @@ export default function InsightsScreen() {
     [keywords, emotions]
   );
 
-  const ribbon: RibbonPoint[] = useMemo(() => buildRibbon(emotions), [emotions]);
-  const scatter = useMemo(() => buildScatterData(sleepClarityPoints), [sleepClarityPoints]);
+  const ribbon: RibbonPoint[] = useMemo(
+    () => buildRibbon(tonePoints, i18n.language),
+    [tonePoints, i18n.language]
+  );
+  const sleepClarity = useMemo(
+    () => buildSleepClarityData(sleepClarityPoints),
+    [sleepClarityPoints]
+  );
 
   const periodLabel = t(
     period === '30'
@@ -183,19 +192,29 @@ export default function InsightsScreen() {
           <Text style={styles.panelTitle}>{t('insights.constellationTitle')}</Text>
           <Text style={styles.panelMeta}>{periodLabel}</Text>
         </View>
-        <Text style={styles.panelLegend}>{t('insights.constellationLegend')}</Text>
+        <Text style={styles.panelLegend}>
+          {t('insights.constellationLegend')}
+          {nodes.length >= 3 ? ` · ${t('insights.constellationZoomHint')}` : ''}
+        </Text>
         <ConstellationChart nodes={nodes} testID="constellation" />
       </LinearGradient>
 
-      {ribbon.length >= 2 ? (
-        <View style={styles.surfacePanel}>
-          <Text style={styles.panelTitle}>{t('insights.ribbonTitle')}</Text>
-          <Text style={styles.panelLegend}>
-            {t('insights.ribbonSubtitle', { period: periodLabel })}
-          </Text>
-          <EmotionRibbon points={ribbon} testID="emotion-ribbon" />
-        </View>
-      ) : null}
+      <View style={styles.surfacePanel}>
+        <Text style={styles.panelTitle}>{t('insights.ribbonTitle')}</Text>
+        {ribbon.length >= 2 ? (
+          <>
+            <Text style={styles.panelLegend}>
+              {t('insights.ribbonSubtitle', { period: periodLabel })}
+            </Text>
+            <EmotionRibbon points={ribbon} testID="emotion-ribbon" />
+          </>
+        ) : (
+          <>
+            <Text style={styles.panelTitleSecondary}>{t('insights.ribbonEmptyTitle')}</Text>
+            <Text style={styles.panelLegend}>{t('insights.ribbonEmptyBody')}</Text>
+          </>
+        )}
+      </View>
 
       {emotions.length > 0 ? (
         <View style={styles.surfacePanel}>
@@ -210,19 +229,19 @@ export default function InsightsScreen() {
 
       <View style={styles.surfacePanel}>
         <Text style={styles.panelTitle}>{t('insights.sleepClarityTitle')}</Text>
-        {scatter.bubbles.length > 0 ? (
+        {sleepClarity.bars.length > 0 ? (
           <>
             <Text style={styles.panelLegend}>
               {t('insights.sleepClaritySubtitle', { period: periodLabel })}
             </Text>
-            <SleepClarityScatter
-              bubbles={scatter.bubbles}
-              trend={scatter.trend}
-              testID="sleep-clarity-scatter"
+            <SleepClarityBars
+              bars={sleepClarity.bars}
+              highlightQuality={sleepClarity.captionQuality}
+              testID="sleep-clarity-bars"
             />
-            {scatter.captionQuality != null ? (
+            {sleepClarity.captionQuality != null ? (
               <Text style={styles.panelCaption}>
-                {t('insights.sleepClarityCaption', { quality: scatter.captionQuality })}
+                {t('insights.sleepClarityCaption', { quality: sleepClarity.captionQuality })}
               </Text>
             ) : null}
           </>
@@ -310,74 +329,111 @@ function dominantEmotion(
 }
 
 /**
- * Derives the night's arc from the recurring emotions.
+ * The emotional tone of the journal across the selected period.
  *
- * Until per-dream timestamps carry an emotional reading, this distributes the known
- * emotions across the night and separates them into the positive curve and the
- * dashed tension line. The shape is honest about what it is: an average, labelled as
- * such in the subtitle.
+ * This replaces a chart that was decorative. The old ribbon drew a hardcoded
+ * five-point squiggle over an invented 23h–07h clock axis, scaled by a single
+ * ratio — its shape was identical for every user, and nothing in it came from the
+ * dreamer's nights. A night's *arc* is not recoverable either: a dream carries one
+ * `occurred_at` and one set of emotions, never emotion sampled through the night.
+ * The question this data can honestly answer is the one over time — are the last
+ * few weeks of dreams lighter or heavier than the ones before them?
+ *
+ * The two curves are deliberately independent rather than complements. A dream can
+ * be both free and afraid, and reading "share that felt good" against "share that
+ * felt tense" says something a single positive-minus-negative score erases.
  */
 const POSITIVE = new Set(['calm', 'joy', 'freedom', 'curiosity', 'wonder', 'nostalgia']);
-const CLOCK = ['23h', '01h', '03h', '05h', '07h'];
+const TENSION = new Set(['confusion', 'anxiety', 'fear', 'anger']);
 
-export function buildRibbon(emotions: RecurrencePattern[]): RibbonPoint[] {
-  if (emotions.length === 0) return [];
+/** Enough buckets to show a movement, few enough that each holds real dreams. */
+const TONE_BUCKETS = 6;
+/** Below this the curve would be joining the dots between one or two nights. */
+const MIN_TONE_DREAMS = 4;
 
-  const total = emotions.reduce((sum, e) => sum + e.occurrenceCount, 0) || 1;
-  const positiveShare =
-    emotions
-      .filter(e => POSITIVE.has(e.term.trim().toLowerCase()))
-      .reduce((sum, e) => sum + e.occurrenceCount, 0) / total;
-  const tensionShare = 1 - positiveShare;
-
-  // Five samples across the night, peaking in deep sleep — the arc the design draws.
-  const shape = [0.35, 0.85, 0.4, 0.95, 0.6];
-  const tensionShape = [0.3, 0.18, 0.5, 0.22, 0.3];
-
-  return shape.map((value, i) => ({
-    t: i / (shape.length - 1),
-    positive: value * Math.max(positiveShare, 0.15),
-    tension: (tensionShape[i] ?? 0.3) * Math.max(tensionShare, 0.1),
-    label: CLOCK[i] ?? '',
-  }));
+function hasAny(emotions: string[], set: Set<string>): boolean {
+  return emotions.some(e => set.has(e.trim().toLowerCase()));
 }
 
-/** Below this many logged pairs the chart is more noise than pattern. */
-const MIN_SCATTER_POINTS = 5;
+export function buildRibbon(points: EmotionTonePoint[], locale: string): RibbonPoint[] {
+  if (points.length < MIN_TONE_DREAMS) return [];
 
-export interface ScatterData {
-  bubbles: ScatterBubble[];
-  trend: ScatterTrend | null;
-  /** The sleep-quality threshold named in the caption sentence, or `null` when
-   * the data is too sparse or shows no positive relationship to name one. */
+  const times = points.map(p => new Date(p.occurredAt).getTime()).filter(n => Number.isFinite(n));
+  if (times.length < MIN_TONE_DREAMS) return [];
+  const first = Math.min(...times);
+  const span = Math.max(...times) - first;
+  // Every dream on the same day: there is no "over time" to draw.
+  if (span <= 0) return [];
+
+  const buckets: EmotionTonePoint[][] = Array.from({ length: TONE_BUCKETS }, () => []);
+  for (const point of points) {
+    const at = new Date(point.occurredAt).getTime();
+    if (!Number.isFinite(at)) continue;
+    // The most recent dream lands in the final bucket, not one past the end.
+    const index = Math.min(TONE_BUCKETS - 1, Math.floor(((at - first) / span) * TONE_BUCKETS));
+    buckets[index]!.push(point);
+  }
+
+  // A quiet stretch is a gap in the record, not a zero — drop empty buckets rather
+  // than drawing the curve to the floor on nights that were never logged.
+  const filled = buckets
+    .map((dreams, index) => ({ dreams, index }))
+    .filter(b => b.dreams.length > 0);
+  if (filled.length < 2) return [];
+
+  const dayMonth: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+
+  return filled.map((bucket, i) => {
+    const total = bucket.dreams.length;
+    const midpoint = new Date(first + ((bucket.index + 0.5) / TONE_BUCKETS) * span);
+    // Label the two ends and the middle only; six dates across 320 units collide.
+    const isLabelled = i === 0 || i === filled.length - 1 || i === Math.floor(filled.length / 2);
+
+    return {
+      t: i / (filled.length - 1),
+      positive: bucket.dreams.filter(d => hasAny(d.emotions, POSITIVE)).length / total,
+      tension: bucket.dreams.filter(d => hasAny(d.emotions, TENSION)).length / total,
+      ...(isLabelled ? { label: midpoint.toLocaleDateString(locale, dayMonth) } : {}),
+    };
+  });
+}
+
+/** Below this many logged nights the chart is more noise than pattern. */
+const MIN_SLEEP_NIGHTS = 5;
+
+export interface SleepClarityData {
+  bars: ClarityBar[];
+  /** The sleep-quality threshold named in the caption sentence, and the rating from
+   * which the bars turn amber. `null` when the data is too sparse, or shows no
+   * positive relationship worth claiming one. */
   captionQuality: number | null;
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
 /**
- * Turns raw (sleep quality, clarity) pairs into the scatter's bubbles, a linear
- * trend line, and — when the trend is positive enough to be worth naming — the
- * threshold quality used in the caption sentence.
+ * Turns raw (sleep quality, clarity) pairs into one bar per sleep rating, plus the
+ * threshold the caption names.
  *
- * The threshold is the lowest sleep-quality bucket whose mean clarity is within
- * 0.5 of the best bucket's mean: "your clearest dreams follow nights rated N or
- * higher" is a claim about where the plateau starts, not just where the single
- * best-average bucket happens to sit.
+ * The threshold is the lowest sleep-quality bucket whose mean clarity is within 0.5
+ * of the best bucket's mean: "your clearest dreams follow nights rated N or higher"
+ * is a claim about where the plateau starts, not just where the single best-average
+ * bucket happens to sit. It is only claimed at all when the least-squares slope of
+ * clarity on sleep quality is positive — a flat or negative relationship has nothing
+ * honest to say about sleeping better.
  */
-export function buildScatterData(points: SleepClarityPoint[]): ScatterData {
-  if (points.length < MIN_SCATTER_POINTS) return { bubbles: [], trend: null, captionQuality: null };
+export function buildSleepClarityData(points: SleepClarityPoint[]): SleepClarityData {
+  if (points.length < MIN_SLEEP_NIGHTS) return { bars: [], captionQuality: null };
 
-  const bucketed = new Map<string, ScatterBubble>();
+  const byQuality = new Map<number, { sum: number; count: number }>();
   for (const p of points) {
-    const key = `${p.sleepQuality}-${p.clarity}`;
-    const existing = bucketed.get(key);
-    if (existing) existing.count += 1;
-    else bucketed.set(key, { x: p.sleepQuality, y: p.clarity, count: 1 });
+    const bucket = byQuality.get(p.sleepQuality) ?? { sum: 0, count: 0 };
+    bucket.sum += p.clarity;
+    bucket.count += 1;
+    byQuality.set(p.sleepQuality, bucket);
   }
-  const bubbles = Array.from(bucketed.values());
+
+  const bars: ClarityBar[] = Array.from(byQuality.entries())
+    .map(([quality, b]) => ({ quality, meanClarity: b.sum / b.count, count: b.count }))
+    .sort((a, b) => a.quality - b.quality);
 
   const n = points.length;
   const meanX = points.reduce((sum, p) => sum + p.sleepQuality, 0) / n;
@@ -389,33 +445,14 @@ export function buildScatterData(points: SleepClarityPoint[]): ScatterData {
     denominator += (p.sleepQuality - meanX) ** 2;
   }
   const slope = denominator === 0 ? 0 : numerator / denominator;
-  const intercept = meanY - slope * meanX;
-
-  const trend: ScatterTrend = {
-    x1: 1,
-    y1: clamp(intercept + slope * 1, 1, 5),
-    x2: 5,
-    y2: clamp(intercept + slope * 5, 1, 5),
-  };
 
   let captionQuality: number | null = null;
-  // A near-flat or negative slope has nothing honest to claim about "higher is clearer".
   if (slope > 0.05) {
-    const byQuality = new Map<number, { sum: number; count: number }>();
-    for (const p of points) {
-      const bucket = byQuality.get(p.sleepQuality) ?? { sum: 0, count: 0 };
-      bucket.sum += p.clarity;
-      bucket.count += 1;
-      byQuality.set(p.sleepQuality, bucket);
-    }
-    const means = Array.from(byQuality.entries())
-      .map(([quality, b]) => ({ quality, mean: b.sum / b.count }))
-      .sort((a, b) => a.quality - b.quality);
-    const maxMean = Math.max(...means.map(m => m.mean));
-    captionQuality = means.find(m => m.mean >= maxMean - 0.5)?.quality ?? null;
+    const maxMean = Math.max(...bars.map(b => b.meanClarity));
+    captionQuality = bars.find(b => b.meanClarity >= maxMean - 0.5)?.quality ?? null;
   }
 
-  return { bubbles, trend, captionQuality };
+  return { bars, captionQuality };
 }
 
 const styles = StyleSheet.create({

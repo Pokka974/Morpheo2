@@ -199,4 +199,21 @@ describe('InsightsScreen', () => {
 
     await waitFor(() => expect(getByText('Not enough dreams yet')).toBeTruthy());
   });
+
+  it('keeps the emotion-curve card on screen with an empty state, rather than hiding it', async () => {
+    // The old ribbon disappeared entirely below its threshold, so a reader with no
+    // tagged dreams never learned the card existed or what would fill it.
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
+    mockGetTopRecurrences.mockResolvedValue([]);
+    entitlementService.configure('premium');
+
+    const { getByText } = render(
+      <ServicesProvider services={buildRegistry()}>
+        <InsightsScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(getByText('Emotion curve')).toBeTruthy());
+    expect(getByText('Not enough tagged dreams yet')).toBeTruthy();
+  });
 });
