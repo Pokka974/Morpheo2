@@ -174,10 +174,7 @@ function DensityDots({ confidence }: { confidence: ReadingEntry['confidence'] })
       <Text style={styles.densityLabel}>{t('readings.densityLabel')}</Text>
       <View style={styles.densityRow}>
         {[1, 2, 3].map(step => (
-          <View
-            key={step}
-            style={[styles.densityDot, step <= filled && styles.densityDotFilled]}
-          />
+          <View key={step} style={[styles.densityDot, step <= filled && styles.densityDotFilled]} />
         ))}
       </View>
     </View>

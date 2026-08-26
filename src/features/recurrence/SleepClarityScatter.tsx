@@ -64,14 +64,7 @@ export function SleepClarityScatter({ bubbles, trend, testID }: Props) {
   return (
     <View testID={testID}>
       <Svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" style={styles.svg}>
-        <Line
-          x1={LEFT}
-          y1={TOP}
-          x2={LEFT}
-          y2={BOTTOM}
-          stroke={colors.border}
-          strokeWidth={1}
-        />
+        <Line x1={LEFT} y1={TOP} x2={LEFT} y2={BOTTOM} stroke={colors.border} strokeWidth={1} />
         <Line
           x1={LEFT}
           y1={BOTTOM}

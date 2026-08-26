@@ -461,6 +461,76 @@ describe('pullRemoteChanges', () => {
     );
   });
 
+  it('also treats an expired-JWT rejection as a stale session, not a data error', async () => {
+    // PGRST303 (clock skew) is covered above; PGRST301 is the far more common half of
+    // the pair — an ordinary expired token — and shares none of its code path by luck.
+    let calls = 0;
+    mockFrom.mockImplementation((table: string) => {
+      if (table !== 'dreams') return chainable(EMPTY);
+      calls += 1;
+      return calls === 1
+        ? chainable({ data: null, error: { code: 'PGRST301', message: 'JWT expired' } })
+        : chainable({ data: [baseRemoteDream], error: null });
+    });
+
+    await pullRemoteChanges('user-1');
+
+    expect(mockRefreshSession).toHaveBeenCalledTimes(1);
+    await expect(AsyncStorage.getItem('sync_dreams_last_pulled_at')).resolves.toBe(
+      baseRemoteDream.last_modified_at
+    );
+  });
+
+  it('refreshes on a stale session reported by the interpretations pull, not just dreams', async () => {
+    // Each pull calls assertSessionUsable separately, so covering one says nothing
+    // about the others — and a token that expires mid-cycle hits a later table first.
+    let calls = 0;
+    mockFrom.mockImplementation((table: string) => {
+      if (table !== 'interpretations') return chainable(EMPTY);
+      calls += 1;
+      // No `message`, exercising the 'no detail' fallback in the thrown error.
+      return calls === 1 ? chainable({ data: null, error: { code: 'PGRST301' } }) : chainable(EMPTY);
+    });
+
+    await pullRemoteChanges('user-1');
+
+    expect(mockRefreshSession).toHaveBeenCalledTimes(1);
+    expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('no detail'));
+  });
+
+  it('defaults a null themes array rather than writing SQL NULL into a NOT NULL column', async () => {
+    // `themes` is NOT NULL DEFAULT '[]' locally, but an interpretation written before
+    // migration 016 comes back from PostgREST with all three new columns null.
+    const preMigrationRow = {
+      id: 'interp-1',
+      dream_id: 'dream-1',
+      overall_reading: 'A reading from before the archetype columns existed.',
+      keywords: ['water'],
+      emotions: ['calm'],
+      cultural_references: [],
+      confidence: 0.8,
+      is_degraded: false,
+      prompt_version: 'v1',
+      model_used: 'claude-sonnet-4-6',
+      created_at: '2026-08-02T00:00:00.000Z',
+      archetype: null,
+      themes: null,
+      symbolic_density: null,
+    };
+    mockFrom.mockImplementation((table: string) =>
+      table === 'interpretations'
+        ? chainable({ data: [preMigrationRow], error: null })
+        : chainable(EMPTY)
+    );
+
+    await pullRemoteChanges('user-1');
+
+    expect(mockRunAsync).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT OR IGNORE INTO interpretations'),
+      expect.arrayContaining(['interp-1', null, '[]', null])
+    );
+  });
+
   it('does not refresh the session for a data-layer error, which the next cycle can simply retry', async () => {
     mockFrom.mockImplementation((table: string) =>
       table === 'dreams'

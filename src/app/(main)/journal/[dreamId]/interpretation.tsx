@@ -129,7 +129,12 @@ export default function InterpretationScreen() {
         // classify — let the interpret call run and report it in the usual way.
         console.error('Pre-interpretation sync failed unexpectedly:', err);
       }
-      await interpret({ dreamId, description, style: 'symbolic', metadata: await loadMetadata(dreamId) });
+      await interpret({
+        dreamId,
+        description,
+        style: 'symbolic',
+        metadata: await loadMetadata(dreamId),
+      });
     })();
   };
 

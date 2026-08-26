@@ -7,7 +7,16 @@ import { useTranslation } from 'react-i18next';
 import { ClarityDots } from '@shared/components/ClarityDots';
 import { Chip, ChipRow } from '@shared/components/Chip';
 import type { Tone } from '@features/dream-log/dreamMetadata';
-import { colors, glow, gradients, radius, sizes, spacing, toneColors, typography } from '@theme/tokens';
+import {
+  colors,
+  glow,
+  gradients,
+  radius,
+  sizes,
+  spacing,
+  toneColors,
+  typography,
+} from '@theme/tokens';
 
 export interface JournalEntry {
   id: string;
@@ -121,7 +130,9 @@ export function DreamCard({ entry, variant = 'full', onPress }: DreamCardProps) 
             {!isPending && entry.tone ? (
               <View
                 style={[styles.toneDot, { backgroundColor: toneColors[entry.tone] }]}
-                accessibilityLabel={t('a11y.toneIndicator', { tone: t(`log.tone${capitalize(entry.tone)}`) })}
+                accessibilityLabel={t('a11y.toneIndicator', {
+                  tone: t(`log.tone${capitalize(entry.tone)}`),
+                })}
               />
             ) : null}
             {!isPending && isNightmare ? (
@@ -192,7 +203,9 @@ export function DreamCard({ entry, variant = 'full', onPress }: DreamCardProps) 
                 styles.toneDotGlow,
                 { backgroundColor: toneColors[entry.tone], shadowColor: toneColors[entry.tone] },
               ]}
-              accessibilityLabel={t('a11y.toneIndicator', { tone: t(`log.tone${capitalize(entry.tone)}`) })}
+              accessibilityLabel={t('a11y.toneIndicator', {
+                tone: t(`log.tone${capitalize(entry.tone)}`),
+              })}
             />
           ) : null}
         </View>

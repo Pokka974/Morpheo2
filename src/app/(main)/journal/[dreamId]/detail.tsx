@@ -36,7 +36,16 @@ import { useImageGeneration } from '@features/media-generation/useImageGeneratio
 import { useVideoGeneration } from '@features/media-generation/useVideoGeneration';
 import { VideoGenerationButton } from '@features/media-generation/VideoGenerationButton';
 import { useServices } from '@services/useServices';
-import { colors, glow, gradients, radius, sizes, spacing, toneColors, typography } from '@theme/tokens';
+import {
+  colors,
+  glow,
+  gradients,
+  radius,
+  sizes,
+  spacing,
+  toneColors,
+  typography,
+} from '@theme/tokens';
 import type {
   CulturalReference,
   InterpretationResult,
@@ -260,7 +269,9 @@ export default function DreamDetailScreen() {
 
   // The dreamer's own emotions outrank the AI's reading — same preference the
   // journal list applies, since they were the one who had the dream.
-  const headlineEmotions = dream.emotions.length ? dream.emotions : (interpretation?.emotions ?? []);
+  const headlineEmotions = dream.emotions.length
+    ? dream.emotions
+    : (interpretation?.emotions ?? []);
 
   const hasSleepInfo = dream.bedtime != null && dream.wakeTime != null;
   const duration = hasSleepInfo ? sleepDuration(dream.bedtime!, dream.wakeTime!) : null;
@@ -370,7 +381,9 @@ export default function DreamDetailScreen() {
             {dream.tone ? (
               <View
                 style={[styles.toneDot, { backgroundColor: toneColors[dream.tone] }]}
-                accessibilityLabel={t('a11y.toneIndicator', { tone: t(`log.tone${capitalize(dream.tone)}`) })}
+                accessibilityLabel={t('a11y.toneIndicator', {
+                  tone: t(`log.tone${capitalize(dream.tone)}`),
+                })}
               />
             ) : null}
           </View>
@@ -455,7 +468,10 @@ export default function DreamDetailScreen() {
                       <ClarityDots
                         value={dream.clarity}
                         size={5}
-                        accessibilityLabel={t('a11y.clarityValue', { value: dream.clarity, max: 5 })}
+                        accessibilityLabel={t('a11y.clarityValue', {
+                          value: dream.clarity,
+                          max: 5,
+                        })}
                       />
                     </View>
                   ) : null}
@@ -465,7 +481,10 @@ export default function DreamDetailScreen() {
                       <Text style={styles.contextBoxValue}>
                         {[
                           duration
-                            ? t('dream.sleepDuration', { hours: duration.hours, minutes: duration.minutes })
+                            ? t('dream.sleepDuration', {
+                                hours: duration.hours,
+                                minutes: duration.minutes,
+                              })
                             : null,
                           dream.sleepQuality != null ? `${dream.sleepQuality}/5` : null,
                         ]
@@ -480,7 +499,10 @@ export default function DreamDetailScreen() {
               {dream.dreamEnding ? (
                 <View style={styles.contextRow}>
                   <Text style={styles.contextRowLabel}>{t('dream.narrativeArcLabel')}</Text>
-                  <Chip label={t(`log.dreamEnding${capitalize(dream.dreamEnding)}`)} variant="keyword" />
+                  <Chip
+                    label={t(`log.dreamEnding${capitalize(dream.dreamEnding)}`)}
+                    variant="keyword"
+                  />
                 </View>
               ) : null}
 

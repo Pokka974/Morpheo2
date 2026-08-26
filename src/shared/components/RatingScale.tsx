@@ -56,7 +56,13 @@ export function RatingScale({
               <View
                 style={[
                   isBar ? styles.bar : styles.dot,
-                  filled ? (isBar ? styles.barFilled : styles.dotFilled) : isBar ? styles.barIdle : styles.dotIdle,
+                  filled
+                    ? isBar
+                      ? styles.barFilled
+                      : styles.dotFilled
+                    : isBar
+                      ? styles.barIdle
+                      : styles.dotIdle,
                 ]}
               />
             </Pressable>

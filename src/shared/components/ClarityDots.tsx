@@ -44,10 +44,7 @@ export function ClarityDots({
       accessibilityLabel={accessibilityLabel}
     >
       {steps.map(step => (
-        <View
-          key={step}
-          style={[shapeStyle, step <= filled ? styles.filled : styles.idle]}
-        />
+        <View key={step} style={[shapeStyle, step <= filled ? styles.filled : styles.idle]} />
       ))}
     </View>
   );

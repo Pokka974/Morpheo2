@@ -66,12 +66,17 @@ function toTimeString(d: Date): string {
  * `occurredAt` stores. Crosses a month boundary correctly (day 1 of a new month
  * gets its own month name rather than silently reusing the first day's).
  */
-function formatNightLabel(t: (key: string, opts?: Record<string, unknown>) => string, locale: string, date: Date): string {
+function formatNightLabel(
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  locale: string,
+  date: Date
+): string {
   const next = new Date(date);
   next.setDate(date.getDate() + 1);
   const day = (d: Date) => d.toLocaleDateString(locale, { day: 'numeric' });
   const month = (d: Date) => d.toLocaleDateString(locale, { month: 'long' });
-  const sameMonth = date.getMonth() === next.getMonth() && date.getFullYear() === next.getFullYear();
+  const sameMonth =
+    date.getMonth() === next.getMonth() && date.getFullYear() === next.getFullYear();
   return sameMonth
     ? t('log.nightOfSameMonth', { d1: day(date), d2: day(next), month: month(date) })
     : t('log.nightOfCrossMonth', {
@@ -472,9 +477,7 @@ export default function DreamLogScreen() {
               style={styles.timePill}
             >
               <Text style={styles.timePillLabel}>{t('log.bedtimeLabel')}</Text>
-              <Text style={styles.timePillValue}>
-                {bedtime ? toTimeString(bedtime) : '—'}
-              </Text>
+              <Text style={styles.timePillValue}>{bedtime ? toTimeString(bedtime) : '—'}</Text>
             </Pressable>
             <Pressable
               onPress={() => setActivePicker('wakeTime')}
@@ -483,9 +486,7 @@ export default function DreamLogScreen() {
               style={styles.timePill}
             >
               <Text style={styles.timePillLabel}>{t('log.wakeTimeLabel')}</Text>
-              <Text style={styles.timePillValue}>
-                {wakeTime ? toTimeString(wakeTime) : '—'}
-              </Text>
+              <Text style={styles.timePillValue}>{wakeTime ? toTimeString(wakeTime) : '—'}</Text>
             </Pressable>
           </View>
           <RatingScale
@@ -609,9 +610,7 @@ export default function DreamLogScreen() {
                   ))}
                 </View>
               )}
-              {linkedDream ? (
-                <Text style={styles.meta}>{linkedDream.title}</Text>
-              ) : null}
+              {linkedDream ? <Text style={styles.meta}>{linkedDream.title}</Text> : null}
             </View>
           ) : null}
         </CollapsibleSection>
