@@ -118,7 +118,7 @@ export class OpenAIImageGenerationService implements ImageGenerationService {
       dreamId
     );
     if (localRow) {
-      return {
+      return this.withDisplayUrl({
         id: localRow.id,
         dreamId: localRow.dream_id,
         mediaType: localRow.media_type as 'image' | 'video',
@@ -130,7 +130,7 @@ export class OpenAIImageGenerationService implements ImageGenerationService {
         errorMessage: localRow.error_message,
         createdAt: localRow.created_at,
         updatedAt: localRow.updated_at,
-      };
+      });
     }
 
     // Falls back to Supabase directly for a dream whose image was generated on
@@ -146,7 +146,27 @@ export class OpenAIImageGenerationService implements ImageGenerationService {
     const { data, error } = response;
 
     if (error || !data) return null;
-    return this.mapRow(data as Record<string, unknown>);
+    return this.withDisplayUrl(this.mapRow(data as Record<string, unknown>));
+  }
+
+  /**
+   * `local_cache_path` is populated only on the device that generated the image, or
+   * on one that has since hydrated it. Anywhere else the row reads as complete with
+   * no file behind it, which is exactly the state that renders a blank card. Falling
+   * back to a short-lived signed URL displays it right away; the sync layer's
+   * hydration pass caches the bytes properly in the background.
+   *
+   * Signing is best-effort — a failure leaves both URLs null and the caller shows its
+   * placeholder, rather than failing the whole read for a missing thumbnail.
+   */
+  private async withDisplayUrl(media: MediaResult): Promise<MediaResult> {
+    if (media.localCachePath || media.generationStatus !== 'complete') return media;
+    try {
+      return { ...media, signedUrl: await this.getSignedUrl(media.id) };
+    } catch (err) {
+      console.error(`Failed to sign media ${media.id} for display:`, err);
+      return media;
+    }
   }
 
   async getSignedUrl(mediaId: string): Promise<string> {
@@ -154,10 +174,25 @@ export class OpenAIImageGenerationService implements ImageGenerationService {
       body: { mediaId },
     })) as { data: unknown; error: unknown };
     const { data, error } = response;
-    if (error || !data) throw new Error('Failed to get signed URL');
-    return (data as { signedUrl: string }).signedUrl;
+    // The cause is carried through rather than collapsed into a bare message: the
+    // failure modes here (function not deployed, expired session, missing object)
+    // are indistinguishable at the call site otherwise.
+    if (error || !data) {
+      throw new Error(`Failed to get signed URL for ${mediaId}`, {
+        cause: error ?? 'empty response',
+      });
+    }
+    const signedUrl = (data as { signedUrl?: unknown }).signedUrl;
+    if (typeof signedUrl !== 'string' || signedUrl.length === 0) {
+      throw new Error(`Failed to get signed URL for ${mediaId}`, {
+        cause: 'response carried no signedUrl',
+      });
+    }
+    return signedUrl;
   }
 
+  /** A remote row carries neither a signed URL nor a device-local path; both are
+   * layered on by `withDisplayUrl` / the sync layer's hydration pass. */
   private mapRow(row: Record<string, unknown>): MediaResult {
     return {
       id: row['id'] as string,

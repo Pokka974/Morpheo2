@@ -69,6 +69,12 @@ export const interpretations = sqliteTable('interpretations', {
   createdAt: text('created_at')
     .notNull()
     .default(sql`(datetime('now'))`),
+  /** The dominant Jungian/narrative archetype Claude identified for this dream. */
+  archetype: text('archetype'),
+  /** JSON array of AI-identified recurring themes — distinct from the literal `keywords`. */
+  themes: text('themes').notNull().default('[]'),
+  /** 1 (literal, few symbols) to 4 (highly symbolic, densely layered). */
+  symbolicDensity: integer('symbolic_density'),
 });
 
 export const media = sqliteTable('media', {
@@ -100,7 +106,7 @@ export const recurrencePatterns = sqliteTable('recurrence_patterns', {
   userId: text('user_id').notNull(),
   symbol: text('symbol').notNull(),
   patternType: text('pattern_type', {
-    enum: ['keyword', 'emotion', 'cultural_reference'],
+    enum: ['keyword', 'emotion', 'cultural_reference', 'theme'],
   }).notNull(),
   occurrenceCount: integer('occurrence_count').notNull().default(0),
   dreamIds: text('dream_ids').notNull().default('[]'),

@@ -75,6 +75,31 @@ const DREAM_ROW = {
   id: 'dream-1',
   description: 'I was walking through a misty forest.',
   occurred_at: '2026-01-05T00:00:00.000Z',
+  emotions: null,
+  lucidity: 'none',
+  tone: null,
+  clarity: null,
+  sleep_quality: null,
+  bedtime: null,
+  wake_time: null,
+  dream_ending: null,
+  characters: '[]',
+  places: '[]',
+  linked_dream_id: null,
+};
+
+const DREAM_ROW_WITH_METADATA = {
+  ...DREAM_ROW,
+  emotions: JSON.stringify(['awe']),
+  lucidity: 'lucid',
+  tone: 'positive',
+  clarity: 4,
+  sleep_quality: 4,
+  bedtime: '23:15',
+  wake_time: '07:10',
+  dream_ending: 'resolved',
+  characters: JSON.stringify(['a stranger']),
+  places: JSON.stringify(['a hotel']),
 };
 
 const INTERP_ROW = {
@@ -87,6 +112,19 @@ const INTERP_ROW = {
   prompt_version: 'v1',
   model_used: 'claude-sonnet-4-6',
   created_at: '2026-01-05T01:00:00.000Z',
+  archetype: null,
+  themes: null,
+  symbolic_density: null,
+};
+
+const INTERP_ROW_WITH_AI_METADATA = {
+  ...INTERP_ROW,
+  cultural_references: JSON.stringify([
+    { symbol: 'water', tradition: 'Jungian', meaning: 'The unconscious mind' },
+  ]),
+  archetype: 'The Seeker',
+  themes: JSON.stringify(['transformation', 'threshold']),
+  symbolic_density: 3,
 };
 
 function renderScreen() {
@@ -108,6 +146,7 @@ describe('DreamDetailScreen', () => {
     mockVideoState = { status: 'idle' };
     imageService.configure('success');
     (db.getFirstAsync as jest.Mock).mockReset();
+    (db.getAllAsync as jest.Mock).mockReset().mockResolvedValue([]);
     (db.runAsync as jest.Mock).mockReset().mockResolvedValue({ lastInsertRowId: 1, changes: 1 });
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
@@ -306,5 +345,139 @@ describe('DreamDetailScreen', () => {
       ).toBeTruthy()
     );
     expect(queryByText('No illustration yet')).toBeNull();
+  });
+
+  it('does not render the context section when the dream carries no extra metadata', async () => {
+    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
+    const { getByText, queryByText } = renderScreen();
+
+    await waitFor(() => expect(getByText('Interpret this dream')).toBeTruthy());
+    expect(queryByText('Dream context')).toBeNull();
+  });
+
+  it('shows the lucid marker and tone dot in the header when the dream carries them', async () => {
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW_WITH_METADATA)
+      .mockResolvedValueOnce(null);
+    const { getByText, getByLabelText } = renderScreen();
+
+    await waitFor(() => expect(getByText('lucid')).toBeTruthy());
+    expect(getByLabelText('Tone: Positive')).toBeTruthy();
+  });
+
+  it('prefers the dream’s own emotions over the interpretation’s in the header chips', async () => {
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW_WITH_METADATA)
+      .mockResolvedValueOnce(INTERP_ROW);
+    const { getByText, queryByText } = renderScreen();
+
+    await waitFor(() => expect(getByText('awe')).toBeTruthy());
+    // INTERP_ROW's own emotion ("wonder") no longer wins now that the dream has its own.
+    expect(queryByText('wonder')).toBeNull();
+  });
+
+  it('expands the collapsed context section to reveal clarity, sleep, arc and who/where', async () => {
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW_WITH_METADATA)
+      .mockResolvedValueOnce(null);
+    const { getByText, queryByText } = renderScreen();
+
+    await waitFor(() => expect(getByText('Dream context')).toBeTruthy());
+    expect(queryByText('7 h 55 · 4/5')).toBeNull();
+
+    fireEvent.press(getByText('Dream context'));
+
+    // Bedtime 23:15 → wake 07:10 crosses midnight: 7h55, alongside the 4/5 quality rating.
+    expect(getByText('7 h 55 · 4/5')).toBeTruthy();
+    expect(getByText('Resolved')).toBeTruthy();
+    expect(getByText('a stranger')).toBeTruthy();
+    expect(getByText('a hotel')).toBeTruthy();
+  });
+
+  it('renders the related-dreams chain and navigates to the linked dream on press', async () => {
+    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
+    (db.getAllAsync as jest.Mock).mockResolvedValueOnce([
+      { id: 'dream-1', description: DREAM_ROW.description, occurred_at: DREAM_ROW.occurred_at, linked_dream_id: 'dream-0' },
+      { id: 'dream-0', description: 'An earlier dream about the same forest.', occurred_at: '2026-01-01T00:00:00.000Z', linked_dream_id: null },
+    ]);
+    const { getByText, findByText } = renderScreen();
+
+    await waitFor(() => expect(getByText('Related dreams')).toBeTruthy());
+    const linkedRow = await findByText('An earlier dream about the same forest.');
+    fireEvent.press(linkedRow);
+    expect(mockPush).toHaveBeenCalledWith('/(main)/journal/dream-0/detail');
+  });
+
+  it('does not render the AI-metadata or cultural-references blocks for a legacy interpretation without them', async () => {
+    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(INTERP_ROW);
+    const { getByText, queryByText } = renderScreen();
+
+    await waitFor(() => expect(getByText('Interpretation')).toBeTruthy());
+    expect(queryByText('Generated by Morpheo')).toBeNull();
+    expect(queryByText('Cultural references')).toBeNull();
+  });
+
+  it('shows the archetype, theme chips and symbolic-density indicator when the interpretation carries them', async () => {
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW)
+      .mockResolvedValueOnce(INTERP_ROW_WITH_AI_METADATA);
+    const { getByText, getByLabelText } = renderScreen();
+
+    await waitFor(() => expect(getByText('Generated by Morpheo')).toBeTruthy());
+    expect(getByText('The Seeker')).toBeTruthy();
+    expect(getByText('Dominant archetype')).toBeTruthy();
+    expect(getByText('transformation')).toBeTruthy();
+    expect(getByText('threshold')).toBeTruthy();
+    expect(getByLabelText('Symbolic density: 3 of 4')).toBeTruthy();
+  });
+
+  it('renders cultural references as an always-visible list, not a collapsed accordion', async () => {
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW)
+      .mockResolvedValueOnce(INTERP_ROW_WITH_AI_METADATA);
+    const { getByText } = renderScreen();
+
+    await waitFor(() => expect(getByText('Cultural references')).toBeTruthy());
+    expect(getByText('water · Jungian')).toBeTruthy();
+    expect(getByText('The unconscious mind')).toBeTruthy();
+  });
+
+  it('renders the monthly theme-recurrence section with an ordinal header and navigates on row press', async () => {
+    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
+    (db.prepareSync as jest.Mock).mockReturnValueOnce({
+      executeSync: () => [
+        {
+          id: 'rp-theme-1',
+          user_id: 'mock-user-id',
+          term: 'flying',
+          pattern_type: 'theme',
+          occurrence_count: 2,
+          dream_ids: JSON.stringify(['dream-1', 'dream-earlier']),
+          last_seen_at: '2026-01-05',
+        },
+      ],
+    });
+    (db.getAllAsync as jest.Mock).mockImplementation((sql: string) => {
+      if (sql.includes('linked_dream_id')) return Promise.resolve([]);
+      if (sql.includes(' IN (')) {
+        return Promise.resolve([
+          { id: 'dream-1', description: DREAM_ROW.description, occurred_at: DREAM_ROW.occurred_at },
+          {
+            id: 'dream-earlier',
+            description: 'An earlier flying dream.',
+            occurred_at: '2026-01-02T00:00:00.000Z',
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    const { getByText, findByText } = renderScreen();
+
+    await waitFor(() => expect(getByText('2nd flying dream this month')).toBeTruthy());
+    expect(getByText('this dream')).toBeTruthy();
+    const earlierRow = await findByText('An earlier flying dream.');
+    fireEvent.press(earlierRow);
+    expect(mockPush).toHaveBeenCalledWith('/(main)/journal/dream-earlier/detail');
   });
 });

@@ -66,6 +66,21 @@ export const emotionColors = {
 
 export type EmotionKey = keyof typeof emotionColors;
 
+/**
+ * The dream's overall tone — a single dot on the card and in the detail header,
+ * next to the lucid marker. Reuses hues already defined for emotions rather than
+ * introducing new ones: positive/negative/mixed read as the same colours as the
+ * calm/fear/nostalgia chips a dreamer already recognises.
+ */
+export const toneColors = {
+  positive: emotionColors.calm,
+  negative: emotionColors.fear,
+  mixed: emotionColors.nostalgia,
+  neutral: palette.cosmicGray,
+} as const;
+
+export type ToneKey = keyof typeof toneColors;
+
 /** Alpha suffixes used to build an emotion chip from its hue (fill 12%, border 25%). */
 const EMOTION_FILL_ALPHA = '1f';
 const EMOTION_BORDER_ALPHA = '40';
@@ -500,6 +515,7 @@ export const sizes = {
 export const tokens = {
   colors,
   emotionColors,
+  toneColors,
   gradients,
   spacing,
   radius,

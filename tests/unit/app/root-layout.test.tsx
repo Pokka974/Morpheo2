@@ -9,13 +9,15 @@ const mockSegments = jest.fn(() => ['(main)']);
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace, push: mockPush }),
   useSegments: () => mockSegments(),
-  Stack: Object.assign(
-    ({ children }: { children?: React.ReactNode }) => children,
-    { Screen: () => null }
-  ),
+  Stack: Object.assign(({ children }: { children?: React.ReactNode }) => children, {
+    Screen: () => null,
+  }),
 }));
 
-jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+jest.mock(
+  'react-native-safe-area-context',
+  () => require('react-native-safe-area-context/jest/mock').default
+);
 
 const mockGetItem = jest.fn();
 jest.mock('@react-native-async-storage/async-storage', () => ({
@@ -146,7 +148,10 @@ describe('RootLayout / AppNavigator', () => {
 
   it('pushes to lock and evicts cache when the app becomes active outside (auth) while locked', async () => {
     let activeHandler: ((state: string) => void) | undefined;
-    jest.spyOn(AppState, 'addEventListener').mockImplementation(((_event: string, cb: (state: string) => void) => {
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(((
+      _event: string,
+      cb: (state: string) => void
+    ) => {
       activeHandler = cb;
       return { remove: jest.fn() };
     }) as typeof AppState.addEventListener);
@@ -164,7 +169,10 @@ describe('RootLayout / AppNavigator', () => {
 
   it('does not push to lock when the app becomes active while already inside (auth)', async () => {
     let activeHandler: ((state: string) => void) | undefined;
-    jest.spyOn(AppState, 'addEventListener').mockImplementation(((_event: string, cb: (state: string) => void) => {
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(((
+      _event: string,
+      cb: (state: string) => void
+    ) => {
       activeHandler = cb;
       return { remove: jest.fn() };
     }) as typeof AppState.addEventListener);
@@ -195,24 +203,42 @@ describe('RootLayout / AppNavigator', () => {
 
   it('pushes pending dreams then pulls remote changes when the app foregrounds with an active session', async () => {
     let activeHandler: ((state: string) => void) | undefined;
-    jest.spyOn(AppState, 'addEventListener').mockImplementation(((_event: string, cb: (state: string) => void) => {
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(((
+      _event: string,
+      cb: (state: string) => void
+    ) => {
       activeHandler = cb;
       return { remove: jest.fn() };
     }) as typeof AppState.addEventListener);
 
-    mockAuthServiceGetSession.mockResolvedValue({ user: { id: 'u1' }, accessToken: 't', expiresAt: 0 });
+    mockAuthServiceGetSession.mockResolvedValue({
+      user: { id: 'u1' },
+      accessToken: 't',
+      expiresAt: 0,
+    });
     render(<RootLayout />);
     await waitFor(() => expect(mockReplace).toHaveBeenCalled());
 
     activeHandler?.('active');
 
     await waitFor(() => expect(mockSyncPendingDreams).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(mockPullRemoteChanges).toHaveBeenCalledWith('u1'));
+    await waitFor(() =>
+      expect(mockPullRemoteChanges).toHaveBeenCalledWith(
+        'u1',
+        expect.objectContaining({
+          getSignedUrl: expect.any(Function),
+          cacheMedia: expect.any(Function),
+        })
+      )
+    );
   });
 
   it('does not push or pull on foreground when there is no active session', async () => {
     let activeHandler: ((state: string) => void) | undefined;
-    jest.spyOn(AppState, 'addEventListener').mockImplementation(((_event: string, cb: (state: string) => void) => {
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(((
+      _event: string,
+      cb: (state: string) => void
+    ) => {
       activeHandler = cb;
       return { remove: jest.fn() };
     }) as typeof AppState.addEventListener);

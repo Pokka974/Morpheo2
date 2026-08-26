@@ -31,10 +31,72 @@ const FORMAT_INTERPRETATION_TOOL: Anthropic.Tool = {
         enum: ['high', 'medium', 'low'],
         description: 'Confidence in interpretation quality. Low if description is vague or very short.',
       },
+      archetype: {
+        type: 'string',
+        description: 'A short phrase (2-5 words) naming the dominant Jungian or narrative archetype in this dream, e.g. "The Seeker", "The Shadow Self".',
+      },
+      themes: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'The 2-4 dominant recurring themes/motifs of this dream, as short tags (e.g. "flying", "family conflict"), distinct from `keywords` which lists concrete symbols.',
+      },
+      symbolic_density: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 4,
+        description: 'How symbolically dense/layered this dream is, 1 (literal, few symbols) to 4 (highly symbolic, many layered meanings).',
+      },
     },
-    required: ['overall_reading', 'keywords', 'emotions', 'cultural_references', 'confidence'],
+    required: [
+      'overall_reading',
+      'keywords',
+      'emotions',
+      'cultural_references',
+      'confidence',
+      'archetype',
+      'themes',
+      'symbolic_density',
+    ],
   },
 };
+
+interface RequestMetadata {
+  tone?: string | null;
+  lucidity?: string;
+  dreamType?: string[];
+  clarity?: number | null;
+  dreamEnding?: string | null;
+  characters?: string[];
+  places?: string[];
+}
+
+/**
+ * Appended to the user message, never the system prompt — `promptRow.version` tracks
+ * which prompt template produced a reading, a separate axis from what per-request data
+ * that reading was informed by. Only mentions fields actually present, so a dream
+ * logged without extra metadata doesn't get a prompt full of "not specified" noise.
+ */
+function formatMetadataBlock(m?: RequestMetadata): string {
+  if (!m) return '';
+  const lines: string[] = [];
+  if (m.tone) lines.push(`- Tone the dreamer assigned: ${m.tone}`);
+  if (m.lucidity && m.lucidity !== 'none') lines.push(`- Lucidity: ${m.lucidity}`);
+  if (m.clarity != null) lines.push(`- Dream clarity/vividness (1-5): ${m.clarity}`);
+  // The enum values are glossed rather than passed bare: 'fragmented' in particular
+  // reads ambiguously on its own, and this field is meant to carry real weight in the
+  // archetype call — an unresolved dream and a resolved one are different stories.
+  if (m.dreamEnding) {
+    lines.push(
+      `- How the dream ended: ${m.dreamEnding} (resolved = reached closure, ` +
+        `unresolved = left hanging, fragmented = broke apart or dissolved)`
+    );
+  }
+  if (m.dreamType?.length) lines.push(`- Dreamer-tagged type(s): ${m.dreamType.join(', ')}`);
+  if (m.characters?.length) lines.push(`- Characters present: ${m.characters.join(', ')}`);
+  if (m.places?.length) lines.push(`- Places/settings: ${m.places.join(', ')}`);
+  if (!lines.length) return '';
+  return `\n\nAdditional context the dreamer noted (use this to inform your reading of tone, archetype and themes — the ending in particular shapes the narrative arc the archetype names — do not simply restate it back):\n${lines.join('\n')}`;
+}
 
 serve(async (req: Request) => {
   const supabase = createClient(
@@ -111,7 +173,13 @@ serve(async (req: Request) => {
 
     creditConsumedFor = user.id;
 
-    const body = await req.json() as { dreamId: string; description: string; style?: string; languageHint?: string };
+    const body = await req.json() as {
+      dreamId: string;
+      description: string;
+      style?: string;
+      languageHint?: string;
+      metadata?: RequestMetadata;
+    };
 
     // Fetch active system prompt
     const { data: promptRow } = await supabase
@@ -143,7 +211,7 @@ serve(async (req: Request) => {
       messages: [
         {
           role: 'user',
-          content: `Please interpret this dream:\n\n${body.description}`,
+          content: `Please interpret this dream:\n\n${body.description}${formatMetadataBlock(body.metadata)}`,
         },
       ],
     });
@@ -160,6 +228,9 @@ serve(async (req: Request) => {
       emotions: string[];
       cultural_references: Array<{ symbol: string; tradition: string; meaning: string }>;
       confidence: 'high' | 'medium' | 'low';
+      archetype: string;
+      themes: string[];
+      symbolic_density: number;
     };
 
     const isDegraded = input.confidence === 'low';
@@ -178,6 +249,9 @@ serve(async (req: Request) => {
         is_degraded: isDegraded,
         prompt_version: promptRow.version,
         model_used: 'claude-sonnet-4-6',
+        archetype: input.archetype,
+        themes: input.themes,
+        symbolic_density: input.symbolic_density,
       })
       .select()
       .single();
@@ -201,6 +275,9 @@ serve(async (req: Request) => {
         promptVersion: interpretation.prompt_version,
         modelUsed: interpretation.model_used,
         createdAt: interpretation.created_at,
+        archetype: interpretation.archetype,
+        themes: interpretation.themes,
+        symbolicDensity: interpretation.symbolic_density,
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );

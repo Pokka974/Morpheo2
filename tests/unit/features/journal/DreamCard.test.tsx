@@ -49,6 +49,18 @@ describe('<DreamCard /> full', () => {
     expect(renderCard().queryByText('lucid')).toBeNull();
   });
 
+  it('renders a tone dot labelled with the tone when one is set', () => {
+    const { getByLabelText } = renderCard({ tone: 'positive' });
+    expect(getByLabelText('Tone: Positive')).toBeTruthy();
+    expect(renderCard().queryByLabelText(/^Tone:/)).toBeNull();
+  });
+
+  it('renders five clarity dots labelled with the value when clarity is set', () => {
+    const { getByLabelText } = renderCard({ clarity: 4 });
+    expect(getByLabelText('Clarity: 4 of 5')).toBeTruthy();
+    expect(renderCard().queryByLabelText(/^Clarity:/)).toBeNull();
+  });
+
   it('falls back to a placeholder when no visual has been generated', () => {
     const { getByText } = renderCard();
     expect(getByText('Generated visual')).toBeTruthy();
@@ -105,5 +117,28 @@ describe('<DreamCard /> compact', () => {
     const { getByLabelText, onPress } = renderCard({}, 'compact');
     fireEvent.press(getByLabelText(/Open dream/));
     expect(onPress).toHaveBeenCalledWith('dream-1');
+  });
+
+  it('badges a nightmare but not an ordinary type tag', () => {
+    expect(
+      renderCard({ dreamType: ['nightmare'] }, 'compact').getByText('Nightmare')
+    ).toBeTruthy();
+    expect(
+      renderCard({ dreamType: ['flying'] }, 'compact').queryByText('Nightmare')
+    ).toBeNull();
+  });
+
+  it('shows clarity dots on the compact row when clarity is set', () => {
+    const { getByLabelText } = renderCard({ clarity: 2 }, 'compact');
+    expect(getByLabelText('Clarity: 2 of 5')).toBeTruthy();
+  });
+
+  it('hides the tone dot and type badge while a dream is still syncing', () => {
+    const { queryByLabelText, queryByText } = renderCard(
+      { syncStatus: 'sync_pending', tone: 'negative', dreamType: ['nightmare'] },
+      'compact'
+    );
+    expect(queryByLabelText(/^Tone:/)).toBeNull();
+    expect(queryByText('Nightmare')).toBeNull();
   });
 });

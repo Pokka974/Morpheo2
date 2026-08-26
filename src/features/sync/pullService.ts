@@ -3,8 +3,14 @@ import { and, eq } from 'drizzle-orm';
 import { supabase } from '../../supabase/client';
 import { db, sqlite } from '@db/client';
 import { dreams, media } from '@db/schema';
+import type { MediaCacheDeps } from './mediaCache';
 
 const PAGE_SIZE = 200;
+/** Ceiling on how many images one sync cycle will download. The journal list pages
+ * at 20, so the newest 24 cover the first screenful plus scroll headroom; anything
+ * older is picked up by later cycles rather than making a fresh device sit through
+ * hundreds of downloads before its first sync completes. */
+const HYDRATION_LIMIT = 24;
 /** No stored cursor means "never pulled" — start from the beginning of time so a
  * fresh install or a new device does a full backfill rather than "changes since now". */
 const EPOCH = '1970-01-01T00:00:00.000Z';
@@ -51,6 +57,9 @@ interface RemoteInterpretation {
   prompt_version: string;
   model_used: string;
   created_at: string;
+  archetype: string | null;
+  themes: string[] | null;
+  symbolic_density: number | null;
 }
 
 interface RemoteMedia {
@@ -73,18 +82,132 @@ interface RemoteMedia {
  * one table's failure (a stale session, a transient network error) doesn't block
  * the others; it's simply retried on the next sync cycle via its own cursor.
  */
-export async function pullRemoteChanges(userId: string): Promise<void> {
+export async function pullRemoteChanges(
+  userId: string,
+  mediaCache?: MediaCacheDeps
+): Promise<void> {
   await tryPull('dreams', () => pullDreams(userId));
   await tryPull('dream deletions', () => reconcileDreamDeletions(userId));
   await tryPull('interpretations', () => pullInterpretations(userId));
   await tryPull('media', () => pullMedia(userId));
+  // Last, and only once the rows it works from are actually present.
+  if (mediaCache) await tryPull('media cache', () => hydrateMediaCache(mediaCache));
+}
+
+/**
+ * `pullMedia` brings the media row down but never the bytes: `local_cache_path` is
+ * device-local and has no remote counterpart, so an image generated on another
+ * device arrives with `storage_key` set and nothing displayable behind it. Both the
+ * journal list and the detail screen read `local_cache_path` and nothing else, which
+ * is why such a dream shows no image no matter how many times it syncs.
+ *
+ * This downloads each such image once and records the resulting file. The signed URL
+ * is deliberately not persisted — it expires within the hour, whereas the cached file
+ * keeps working offline and is managed by the same 200MB eviction cap as any other
+ * cached media.
+ */
+async function hydrateMediaCache(deps: MediaCacheDeps): Promise<void> {
+  const rows = await sqlite.getAllAsync<{ id: string }>(
+    `SELECT id FROM media
+      WHERE media_type = 'image'
+        AND generation_status = 'complete'
+        AND storage_key IS NOT NULL
+        AND local_cache_path IS NULL
+      ORDER BY created_at DESC
+      LIMIT ?`,
+    HYDRATION_LIMIT
+  );
+
+  for (const row of rows) {
+    try {
+      const signedUrl = await deps.getSignedUrl(row.id);
+      const localPath = await deps.cacheMedia(row.id, signedUrl);
+      await sqlite.runAsync(`UPDATE media SET local_cache_path = ? WHERE id = ?`, [
+        localPath,
+        row.id,
+      ]);
+    } catch (err) {
+      // One unreachable object must not strand the rest of the batch. The row keeps
+      // its null cache path, so the next sync cycle simply tries it again.
+      console.error(`Failed to cache media ${row.id}:`, err);
+    }
+  }
+}
+
+/**
+ * PostgREST rejections that come from the auth layer rather than the data layer.
+ * The access token lives in SecureStore and is replayed on every subsequent request
+ * until it expires, so a single bad token turns one failure into a sustained stream
+ * of them — which is precisely the case worth refreshing for.
+ *
+ * `PGRST301` — the JWT is expired or otherwise fails validation.
+ * `PGRST303` — the JWT's `iat` is ahead of PostgREST's own clock ("JWT issued at
+ *   future"), i.e. clock skew between the token's issuer and the API.
+ */
+const STALE_SESSION_CODES = new Set(['PGRST301', 'PGRST303']);
+
+/** Signals that a pull failed because of the session rather than the data, so
+ * `tryPull` can refresh and retry instead of silently giving up. */
+class StaleSessionError extends Error {
+  constructor(label: string, code: string, detail: string) {
+    super(`${label} was rejected by the session (${code}): ${detail}`);
+    this.name = 'StaleSessionError';
+  }
+}
+
+/**
+ * Each pull below aborts on error, which is indistinguishable from "nothing new":
+ * the cursor stays put and the next cycle simply retries. That is the right response
+ * to a transient network error, but not to a stale session — the very same token
+ * would be replayed every cycle, silently no-op'ing the sync until it expires.
+ * Those get promoted to a throw so `tryPull` can do something about them.
+ */
+function assertSessionUsable(
+  label: string,
+  error: { code?: string | null; message?: string | null }
+): void {
+  const code = error.code ?? '';
+  if (STALE_SESSION_CODES.has(code)) {
+    throw new StaleSessionError(label, code, error.message ?? 'no detail');
+  }
 }
 
 async function tryPull(label: string, fn: () => Promise<void>): Promise<void> {
   try {
     await fn();
   } catch (err) {
+    if (err instanceof StaleSessionError) {
+      await retryWithFreshSession(label, fn, err);
+      return;
+    }
     console.error(`Pull sync failed for ${label}:`, err);
+  }
+}
+
+/**
+ * Retried exactly once, and only after the refresh itself has succeeded. Replaying a
+ * whole pull is safe: each one re-reads its cursor from AsyncStorage on entry and
+ * every write is idempotent (`ON CONFLICT DO UPDATE` / `INSERT OR IGNORE`). A second
+ * failure is left to the next sync cycle rather than looped on — if the refresh is
+ * what's broken, retrying harder only burns requests.
+ */
+async function retryWithFreshSession(
+  label: string,
+  fn: () => Promise<void>,
+  cause: StaleSessionError
+): Promise<void> {
+  console.warn(`${cause.message} — refreshing the session and retrying once.`);
+
+  const { error } = await supabase.auth.refreshSession();
+  if (error) {
+    console.error(`Session refresh failed, leaving ${label} for the next sync:`, error);
+    return;
+  }
+
+  try {
+    await fn();
+  } catch (err) {
+    console.error(`Pull sync failed for ${label} even after a session refresh:`, err);
   }
 }
 
@@ -107,6 +230,7 @@ async function pullDreams(userId: string): Promise<void> {
       .limit(PAGE_SIZE);
 
     if (error) {
+      assertSessionUsable('Pull dreams', error);
       console.error('Pull dreams failed:', error);
       return;
     }
@@ -221,6 +345,7 @@ async function reconcileDreamDeletions(userId: string): Promise<void> {
     .eq('is_deleted', false);
 
   if (error) {
+    assertSessionUsable('Reconcile dream deletions', error);
     console.error('Reconcile dream deletions failed:', error);
     return;
   }
@@ -253,7 +378,7 @@ async function pullInterpretations(userId: string): Promise<void> {
     const { data, error } = await supabase
       .from('interpretations')
       .select(
-        'id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at'
+        'id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at, archetype, themes, symbolic_density'
       )
       .eq('user_id', userId)
       .gt('created_at', cursor)
@@ -261,6 +386,7 @@ async function pullInterpretations(userId: string): Promise<void> {
       .limit(PAGE_SIZE);
 
     if (error) {
+      assertSessionUsable('Pull interpretations', error);
       console.error('Pull interpretations failed:', error);
       return;
     }
@@ -269,8 +395,8 @@ async function pullInterpretations(userId: string): Promise<void> {
     for (const row of data as RemoteInterpretation[]) {
       await sqlite.runAsync(
         `INSERT OR IGNORE INTO interpretations
-          (id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at, archetype, themes, symbolic_density)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id,
           row.dream_id,
@@ -283,6 +409,9 @@ async function pullInterpretations(userId: string): Promise<void> {
           row.prompt_version,
           row.model_used,
           row.created_at,
+          row.archetype,
+          JSON.stringify(row.themes ?? []),
+          row.symbolic_density,
         ]
       );
     }
@@ -309,6 +438,7 @@ async function pullMedia(userId: string): Promise<void> {
       .limit(PAGE_SIZE);
 
     if (error) {
+      assertSessionUsable('Pull media', error);
       console.error('Pull media failed:', error);
       return;
     }

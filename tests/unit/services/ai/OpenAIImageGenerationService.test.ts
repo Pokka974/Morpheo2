@@ -291,6 +291,96 @@ describe('OpenAIImageGenerationService', () => {
       );
     });
 
+    // A device that synced a dream someone else's device generated the image for has
+    // the media row (storage_key and all) but no file behind it, since local_cache_path
+    // never leaves the device that wrote it. Without a signed-URL fallback the detail
+    // screen renders blank until the sync layer's hydration pass catches up.
+    it('falls back to a signed URL when the synced local row has no cached file yet', async () => {
+      (sqlite.getFirstAsync as jest.Mock).mockResolvedValue({
+        id: 'media-001',
+        dream_id: 'dream-001',
+        media_type: 'image',
+        generation_status: 'complete',
+        local_cache_path: null,
+        regeneration_count: 0,
+        max_regenerations: 3,
+        error_message: null,
+        created_at: '2026-08-14T00:00:00Z',
+        updated_at: '2026-08-14T00:00:00Z',
+      });
+      mockInvoke.mockResolvedValueOnce({
+        data: { signedUrl: 'https://example.com/signed.png' },
+        error: null,
+      });
+
+      const result = await service.getImage('dream-001');
+
+      expect(mockInvoke).toHaveBeenCalledWith('media-url', { body: { mediaId: 'media-001' } });
+      expect(result).toEqual(
+        expect.objectContaining({ signedUrl: 'https://example.com/signed.png' })
+      );
+    });
+
+    it('does not sign a row that already has a cached file, so an offline read stays offline', async () => {
+      (sqlite.getFirstAsync as jest.Mock).mockResolvedValue({
+        id: 'media-001',
+        dream_id: 'dream-001',
+        media_type: 'image',
+        generation_status: 'complete',
+        local_cache_path: '/local/path/img.jpg',
+        regeneration_count: 0,
+        max_regenerations: 3,
+        error_message: null,
+        created_at: '2026-08-14T00:00:00Z',
+        updated_at: '2026-08-14T00:00:00Z',
+      });
+
+      await service.getImage('dream-001');
+
+      expect(mockInvoke).not.toHaveBeenCalled();
+    });
+
+    it('does not sign a row that has no object behind it yet', async () => {
+      (sqlite.getFirstAsync as jest.Mock).mockResolvedValue({
+        id: 'media-001',
+        dream_id: 'dream-001',
+        media_type: 'image',
+        generation_status: 'processing',
+        local_cache_path: null,
+        regeneration_count: 0,
+        max_regenerations: 3,
+        error_message: null,
+        created_at: '2026-08-14T00:00:00Z',
+        updated_at: '2026-08-14T00:00:00Z',
+      });
+
+      await service.getImage('dream-001');
+
+      expect(mockInvoke).not.toHaveBeenCalled();
+    });
+
+    it('still returns the media when signing fails, rather than failing the whole read', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      (sqlite.getFirstAsync as jest.Mock).mockResolvedValue({
+        id: 'media-001',
+        dream_id: 'dream-001',
+        media_type: 'image',
+        generation_status: 'complete',
+        local_cache_path: null,
+        regeneration_count: 0,
+        max_regenerations: 3,
+        error_message: null,
+        created_at: '2026-08-14T00:00:00Z',
+        updated_at: '2026-08-14T00:00:00Z',
+      });
+      mockInvoke.mockResolvedValueOnce({ data: null, error: { message: 'boom' } });
+
+      const result = await service.getImage('dream-001');
+
+      expect(result).toEqual(expect.objectContaining({ id: 'media-001', signedUrl: null }));
+      consoleErrorSpy.mockRestore();
+    });
+
     it('returns null (not a thrown PGRST116 error) when the dream has no image media yet', async () => {
       const mockSelect = jest.fn().mockReturnThis();
       const mockEq = jest.fn().mockReturnThis();
@@ -333,6 +423,21 @@ describe('OpenAIImageGenerationService', () => {
 
     it('throws when there is no data', async () => {
       mockInvoke.mockResolvedValueOnce({ data: null, error: null });
+      await expect(service.getSignedUrl('media-001')).rejects.toThrow('Failed to get signed URL');
+    });
+
+    it('carries the underlying invoke error as the cause', async () => {
+      const invokeError = { message: 'Function not found' };
+      mockInvoke.mockResolvedValueOnce({ data: null, error: invokeError });
+      await expect(service.getSignedUrl('media-001')).rejects.toMatchObject({
+        cause: invokeError,
+      });
+    });
+
+    // A 2xx whose body was parsed as text (no JSON content-type) yields a truthy
+    // `data` with no `signedUrl` — it must fail loudly rather than return undefined.
+    it('throws when the response carries no signedUrl', async () => {
+      mockInvoke.mockResolvedValueOnce({ data: '{"signedUrl":"x"}', error: null });
       await expect(service.getSignedUrl('media-001')).rejects.toThrow('Failed to get signed URL');
     });
   });

@@ -175,6 +175,25 @@ export function CloseIcon({
   );
 }
 
+/**
+ * A generic four-point sparkle — marks a cultural/mythological reference row on the
+ * dream detail screen. Deliberately the same glyph for every row rather than a
+ * different icon per tradition: the AI's freeform `tradition` string doesn't support a
+ * principled icon taxonomy, so one consistent "notable symbol" mark is drawn instead.
+ */
+export function SymbolIcon({ size = 12, color = colors.accentText, strokeWidth = 1.3 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 2 L14.5 9.5 L22 12 L14.5 14.5 L12 22 L9.5 14.5 L2 12 L9.5 9.5 Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 /** Writing mode in the dream-log segmented control. */
 export function PenIcon({ size = 16, color = colors.textMuted, strokeWidth = 1.8 }: IconProps) {
   return (

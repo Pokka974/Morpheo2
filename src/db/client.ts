@@ -50,7 +50,10 @@ sqlite.execSync(`
     is_degraded INTEGER NOT NULL DEFAULT 0,
     prompt_version TEXT NOT NULL,
     model_used TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    archetype TEXT,
+    themes TEXT NOT NULL DEFAULT '[]',
+    symbolic_density INTEGER
   );
 `);
 
@@ -70,12 +73,15 @@ sqlite.execSync(`
   );
 `);
 
+// Keep this column list and CHECK in sync with the rebuild block below (search
+// "recurrence_patterns_old") — that block is a second, independent copy of this same
+// table definition, needed because SQLite cannot ALTER a CHECK constraint in place.
 sqlite.execSync(`
   CREATE TABLE IF NOT EXISTS recurrence_patterns (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     symbol TEXT NOT NULL,
-    pattern_type TEXT NOT NULL CHECK(pattern_type IN ('keyword','emotion','cultural_reference')),
+    pattern_type TEXT NOT NULL CHECK(pattern_type IN ('keyword','emotion','cultural_reference','theme')),
     occurrence_count INTEGER NOT NULL DEFAULT 0,
     dream_ids TEXT NOT NULL DEFAULT '[]',
     first_seen_at TEXT NOT NULL,
@@ -130,6 +136,58 @@ for (const [name, ddl] of dreamMetadataColumns) {
   if (!dreamsColumns.some(col => col.name === name)) {
     sqlite.execSync(`ALTER TABLE dreams ADD COLUMN ${name} ${ddl};`);
   }
+}
+
+// Same story again: the AI-generated archetype/themes/symbolic-density fields need to
+// be added explicitly for devices that installed before this migration, or the dream
+// detail screen's "Généré par Morpheo" block fails with "no such column".
+const interpretationsColumns = sqlite.getAllSync<{ name: string }>(
+  `PRAGMA table_info(interpretations);`
+);
+const interpretationMetadataColumns: Array<[string, string]> = [
+  ['archetype', 'TEXT'],
+  ['themes', `TEXT NOT NULL DEFAULT '[]'`],
+  ['symbolic_density', 'INTEGER'],
+];
+for (const [name, ddl] of interpretationMetadataColumns) {
+  if (!interpretationsColumns.some(col => col.name === name)) {
+    sqlite.execSync(`ALTER TABLE interpretations ADD COLUMN ${name} ${ddl};`);
+  }
+}
+
+// SQLite cannot ALTER a CHECK constraint in place — widening `pattern_type` to accept
+// 'theme' (recorded from the interpretation's AI-identified themes, distinct from
+// literal keywords) requires rebuilding the table. Guarded so it only runs once per
+// device, by inspecting the stored CREATE TABLE text for whether 'theme' is already
+// present in it. Column list here must stay in sync with the CREATE TABLE IF NOT
+// EXISTS above — see that block's comment.
+const recurrencePatternsSql = sqlite.getFirstSync<{ sql: string }>(
+  `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'recurrence_patterns';`
+);
+if (recurrencePatternsSql && !recurrencePatternsSql.sql.includes(`'theme'`)) {
+  sqlite.withTransactionSync(() => {
+    sqlite.execSync(`ALTER TABLE recurrence_patterns RENAME TO recurrence_patterns_old;`);
+    sqlite.execSync(`
+      CREATE TABLE recurrence_patterns (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        pattern_type TEXT NOT NULL CHECK(pattern_type IN ('keyword','emotion','cultural_reference','theme')),
+        occurrence_count INTEGER NOT NULL DEFAULT 0,
+        dream_ids TEXT NOT NULL DEFAULT '[]',
+        first_seen_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
+    sqlite.execSync(`
+      INSERT INTO recurrence_patterns
+        (id, user_id, symbol, pattern_type, occurrence_count, dream_ids, first_seen_at, last_seen_at, updated_at)
+      SELECT id, user_id, symbol, pattern_type, occurrence_count, dream_ids, first_seen_at, last_seen_at, updated_at
+      FROM recurrence_patterns_old;
+    `);
+    sqlite.execSync(`DROP TABLE recurrence_patterns_old;`);
+  });
 }
 
 sqlite.execSync(`

@@ -23,6 +23,9 @@ const SUCCESS_RESULT: InterpretationResult = {
   promptVersion: '1.0.0',
   modelUsed: 'mock',
   createdAt: new Date().toISOString(),
+  archetype: 'The Seeker',
+  themes: ['transformation', 'threshold'],
+  symbolicDensity: 3,
 };
 
 export class MockInterpretationService implements InterpretationService {
