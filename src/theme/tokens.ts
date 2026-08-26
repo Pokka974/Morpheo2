@@ -455,6 +455,16 @@ export const typography = {
     lineHeight: 16,
     color: colors.textMuted,
   },
+  /**
+   * The value inside a metric box (bedtime, wake time, duration). Monospace for the
+   * same reason as `counter`, but primary-weight since it is the box's whole point.
+   */
+  metricValue: {
+    fontFamily: fontFamily.mono,
+    fontSize: 14,
+    lineHeight: 18,
+    color: colors.textPrimary,
+  },
 } as const;
 
 // ---------------------------------------------------------------------------

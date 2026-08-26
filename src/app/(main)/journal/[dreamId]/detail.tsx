@@ -8,6 +8,8 @@ import {
   StyleSheet,
   Text,
   View,
+  type StyleProp,
+  type TextStyle,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { sqlite as db } from '@db/client';
 import { deleteDream } from '@features/dream-log/dreamRepository';
 import { isLucidLevel, type Lucidity, type Tone } from '@features/dream-log/dreamMetadata';
+import { bedtimeStraddlesMidnight, formatNightLabel } from '@features/dream-log/nightLabel';
 import { getRecurrenceChains, type RecurrenceChain } from '@features/recurrence/recurrenceChains';
 import {
   getMonthlyThemeForDream,
@@ -62,9 +65,11 @@ interface DreamDetail {
   bedtime: string | null;
   wakeTime: string | null;
   dreamEnding: 'resolved' | 'unresolved' | 'fragmented' | null;
+  dreamType: string[];
   characters: string[];
   places: string[];
   linkedDreamId: string | null;
+  loggedAt: string;
 }
 
 function parseStringArray(raw: string | null | undefined): string[] {
@@ -84,6 +89,12 @@ function sleepDuration(bedtime: string, wakeTime: string): { hours: number; minu
   let totalMinutes = wh! * 60 + wm! - (bh! * 60 + bm!);
   if (totalMinutes < 0) totalMinutes += 24 * 60;
   return { hours: Math.floor(totalMinutes / 60), minutes: totalMinutes % 60 };
+}
+
+function addDays(date: Date, days: number): Date {
+  const shifted = new Date(date);
+  shifted.setDate(shifted.getDate() + days);
+  return shifted;
 }
 
 const HERO_HEIGHT = 320;
@@ -122,13 +133,15 @@ export default function DreamDetailScreen() {
           bedtime: string | null;
           wake_time: string | null;
           dream_ending: string | null;
+          dream_type: string;
           characters: string;
           places: string;
           linked_dream_id: string | null;
+          logged_at: string;
         }>(
           `SELECT id, description, occurred_at, emotions, lucidity, tone, clarity,
-                  sleep_quality, bedtime, wake_time, dream_ending, characters, places,
-                  linked_dream_id
+                  sleep_quality, bedtime, wake_time, dream_ending, dream_type,
+                  characters, places, linked_dream_id, logged_at
            FROM dreams WHERE id = ? AND is_deleted = 0`,
           dreamId
         );
@@ -145,9 +158,11 @@ export default function DreamDetailScreen() {
           bedtime: dreamRow.bedtime,
           wakeTime: dreamRow.wake_time,
           dreamEnding: dreamRow.dream_ending as DreamDetail['dreamEnding'],
+          dreamType: parseStringArray(dreamRow.dream_type),
           characters: parseStringArray(dreamRow.characters),
           places: parseStringArray(dreamRow.places),
           linkedDreamId: dreamRow.linked_dream_id,
+          loggedAt: dreamRow.logged_at,
         });
 
         const interpRow = await db.getFirstAsync<{
@@ -274,13 +289,39 @@ export default function DreamDetailScreen() {
 
   const hasSleepInfo = dream.bedtime != null && dream.wakeTime != null;
   const duration = hasSleepInfo ? sleepDuration(dream.bedtime!, dream.wakeTime!) : null;
-  const hasContext =
-    dream.clarity != null ||
-    hasSleepInfo ||
-    dream.sleepQuality != null ||
-    dream.dreamEnding != null ||
-    dream.characters.length > 0 ||
-    dream.places.length > 0;
+
+  // One entry per context field the dreamer actually filled in, so the collapsed
+  // header can say "9 fields noted" without anyone having to expand it to find out.
+  // Characters and places count as one field each, not one per tag.
+  const contextFields = [
+    dream.bedtime,
+    dream.wakeTime,
+    dream.sleepQuality,
+    dream.clarity,
+    dream.lucidity !== 'none' ? dream.lucidity : null,
+    dream.tone,
+    dream.dreamEnding,
+    dream.dreamType.length ? dream.dreamType : null,
+    dream.characters.length ? dream.characters : null,
+    dream.places.length ? dream.places : null,
+  ].filter(v => v != null).length;
+  const hasContext = contextFields > 0;
+
+  const logged = new Date(dream.loggedAt);
+  const contextCaption = [
+    // Only worth naming the night when the bedtime puts it on the evening before —
+    // otherwise it just repeats the date already in the header. The night's first day
+    // is then the day before the one the dream is filed under.
+    bedtimeStraddlesMidnight(dream.bedtime)
+      ? formatNightLabel(t, i18n.language, addDays(new Date(dream.occurredAt), -1))
+      : null,
+    t('dream.loggedAtNote', {
+      date: logged.toLocaleDateString(i18n.language, { day: 'numeric', month: 'long' }),
+      time: logged.toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' }),
+    }),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   const chainDreams = chain?.dreams.filter(d => d.id !== dream.id) ?? [];
 
@@ -458,59 +499,109 @@ export default function DreamDetailScreen() {
           )}
 
           {hasContext ? (
-            <CollapsibleSection title={t('dream.contextTitle')} summary={t('dream.contextHint')}>
-              {dream.clarity != null || duration != null || dream.sleepQuality != null ? (
-                <View style={styles.contextBoxRow}>
+            <CollapsibleSection
+              title={t('dream.contextTitle')}
+              summary={t('dream.contextFieldCount', { count: contextFields })}
+            >
+              {/* The night — when the dreamer slept, and how well. */}
+              {dream.bedtime || dream.wakeTime || duration || dream.sleepQuality != null ? (
+                <View style={styles.contextBlock}>
+                  <Text style={styles.contextBlockLabel}>{t('dream.contextNightLabel')}</Text>
+
+                  {dream.bedtime || dream.wakeTime || duration ? (
+                    <View style={styles.metricRow}>
+                      {dream.bedtime ? (
+                        <MetricBox label={t('log.bedtimeLabel')} value={dream.bedtime} />
+                      ) : null}
+                      {dream.wakeTime ? (
+                        <MetricBox label={t('log.wakeTimeLabel')} value={dream.wakeTime} />
+                      ) : null}
+                      {duration ? (
+                        <MetricBox
+                          label={t('dream.durationLabel')}
+                          value={t('dream.sleepDuration', {
+                            hours: duration.hours,
+                            minutes: duration.minutes,
+                          })}
+                        />
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  {dream.sleepQuality != null ? (
+                    <ScaleRow
+                      label={t('log.sleepQualityLabel')}
+                      value={dream.sleepQuality}
+                      accessibilityLabel={t('a11y.sleepQualityValue', {
+                        value: dream.sleepQuality,
+                        max: 5,
+                      })}
+                    />
+                  ) : null}
+
+                  <Text style={styles.contextCaption}>{contextCaption}</Text>
+                </View>
+              ) : null}
+
+              {/* The dream itself — how it looked, how it felt, how it ended. */}
+              {dream.clarity != null ||
+              dream.lucidity !== 'none' ||
+              dream.tone ||
+              dream.dreamEnding ||
+              dream.dreamType.length ? (
+                <View style={styles.contextBlock}>
+                  <Text style={styles.contextBlockLabel}>{t('dream.contextDreamLabel')}</Text>
+
                   {dream.clarity != null ? (
-                    <View style={styles.contextBox}>
-                      <Text style={styles.contextBoxLabel}>{t('log.clarityLabel')}</Text>
-                      <ClarityDots
-                        value={dream.clarity}
-                        size={5}
-                        accessibilityLabel={t('a11y.clarityValue', {
-                          value: dream.clarity,
-                          max: 5,
-                        })}
+                    <ScaleRow
+                      label={t('log.clarityLabel')}
+                      value={dream.clarity}
+                      accessibilityLabel={t('a11y.clarityValue', { value: dream.clarity, max: 5 })}
+                    />
+                  ) : null}
+
+                  <View style={styles.fieldPillRow}>
+                    {dream.lucidity !== 'none' ? (
+                      <FieldPill
+                        label={t('log.lucidityLabel')}
+                        value={t(`log.lucidity${capitalize(dream.lucidity)}`)}
+                        // Amber tracks the lucid rungs and nothing else on this screen.
+                        valueStyle={
+                          isLucidLevel(dream.lucidity) ? styles.fieldPillLucid : undefined
+                        }
                       />
-                    </View>
-                  ) : null}
-                  {duration != null || dream.sleepQuality != null ? (
-                    <View style={styles.contextBox}>
-                      <Text style={styles.contextBoxLabel}>{t('log.sectionSleep')}</Text>
-                      <Text style={styles.contextBoxValue}>
-                        {[
-                          duration
-                            ? t('dream.sleepDuration', {
-                                hours: duration.hours,
-                                minutes: duration.minutes,
-                              })
-                            : null,
-                          dream.sleepQuality != null ? `${dream.sleepQuality}/5` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </Text>
-                    </View>
-                  ) : null}
+                    ) : null}
+                    {dream.tone ? (
+                      <FieldPill
+                        label={t('log.toneLabel')}
+                        value={t(`log.tone${capitalize(dream.tone)}`)}
+                        valueStyle={{ color: toneColors[dream.tone] }}
+                        dotColor={toneColors[dream.tone]}
+                      />
+                    ) : null}
+                    {dream.dreamEnding ? (
+                      <FieldPill
+                        label={t('log.dreamEndingLabel')}
+                        value={t(`log.dreamEnding${capitalize(dream.dreamEnding)}`)}
+                      />
+                    ) : null}
+                    {dream.dreamType.length ? (
+                      <FieldPill
+                        label={t('log.dreamTypeLabel')}
+                        value={dream.dreamType.map(type => t(`dreamType.${type}`)).join(' · ')}
+                      />
+                    ) : null}
+                  </View>
                 </View>
               ) : null}
 
-              {dream.dreamEnding ? (
-                <View style={styles.contextRow}>
-                  <Text style={styles.contextRowLabel}>{t('dream.narrativeArcLabel')}</Text>
-                  <Chip
-                    label={t(`log.dreamEnding${capitalize(dream.dreamEnding)}`)}
-                    variant="keyword"
-                  />
-                </View>
-              ) : null}
-
+              {/* Who, where — the dreamer's own words, so they carry the solid chip. */}
               {dream.characters.length || dream.places.length ? (
-                <View>
-                  <Text style={styles.contextRowLabel}>{t('dream.whoWhereLabel')}</Text>
+                <View style={styles.contextBlock}>
+                  <Text style={styles.contextBlockLabel}>{t('dream.whoWhereLabel')}</Text>
                   <ChipRow>
                     {[...dream.characters, ...dream.places].map((tag, index) => (
-                      <Chip key={`${tag}-${index}`} label={tag} variant="keyword" />
+                      <Chip key={`${tag}-${index}`} label={tag} variant="entry" />
                     ))}
                   </ChipRow>
                 </View>
@@ -660,6 +751,68 @@ export default function DreamDetailScreen() {
         </View>
       </Modal>
     </>
+  );
+}
+
+/**
+ * One inset box in the "The night" strip — a muted label over a monospace value.
+ * Bedtime, wake time and duration all share it so their digits line up column to
+ * column instead of drifting with proportional figures.
+ */
+function MetricBox({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metricBox}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={styles.metricValue}>{value}</Text>
+    </View>
+  );
+}
+
+/**
+ * A 1–5 rating read back as the dreamer set it: the label, the five dots, then the
+ * fraction. The number matters — the dots alone leave a screenshot ambiguous and put
+ * the whole datum on colour, which the design system forbids.
+ */
+function ScaleRow({
+  label,
+  value,
+  accessibilityLabel,
+}: {
+  label: string;
+  value: number;
+  accessibilityLabel: string;
+}) {
+  return (
+    <View style={styles.scaleRow}>
+      <Text style={styles.scaleLabel}>{label}</Text>
+      <ClarityDots value={value} size={10} accessibilityLabel={accessibilityLabel} />
+      <Text style={styles.scaleValue}>{value}/5</Text>
+    </View>
+  );
+}
+
+/**
+ * A single enumerated field, read back as "label · value" in one pill. Used for
+ * lucidity, tone, ending and type — the four fields that are a choice rather than a
+ * scale, and which previously reached the screen as a colour dot or not at all.
+ */
+function FieldPill({
+  label,
+  value,
+  valueStyle,
+  dotColor,
+}: {
+  label: string;
+  value: string;
+  valueStyle?: StyleProp<TextStyle>;
+  dotColor?: string;
+}) {
+  return (
+    <View style={styles.fieldPill}>
+      <Text style={styles.fieldPillLabel}>{label}</Text>
+      {dotColor ? <View style={[styles.fieldPillDot, { backgroundColor: dotColor }]} /> : null}
+      <Text style={[styles.fieldPillValue, valueStyle]}>{value}</Text>
+    </View>
   );
 }
 
@@ -849,37 +1002,98 @@ const styles = StyleSheet.create({
   delete: {
     alignSelf: 'center',
   },
-  contextBoxRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+  contextBlock: {
+    gap: 9,
   },
-  contextBox: {
-    flex: 1,
-    padding: spacing.sm + 3,
-    borderRadius: radius.button,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 5,
-  },
-  contextBoxLabel: {
+  contextBlockLabel: {
     ...typography.overline,
     fontSize: 10,
     lineHeight: 13,
   },
-  contextBoxValue: {
-    ...typography.cardTitle,
-    fontSize: 13,
+  contextCaption: {
+    ...typography.meta,
+    fontSize: 11.5,
+    lineHeight: 16,
   },
-  contextRow: {
+  metricRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  metricBox: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radius.button,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 3,
+  },
+  metricLabel: {
+    ...typography.overline,
+    fontSize: 10,
+    lineHeight: 13,
+    letterSpacing: 0,
+    textTransform: 'none',
+  },
+  metricValue: {
+    ...typography.metricValue,
+  },
+  scaleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm + 1,
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radius.button,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  contextRowLabel: {
-    ...typography.overline,
-    fontSize: 10.5,
-    marginBottom: 7,
+  scaleLabel: {
+    ...typography.body,
+    flex: 1,
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: colors.textSecondary,
+  },
+  scaleValue: {
+    ...typography.chip,
+    color: colors.accentText,
+  },
+  fieldPillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  fieldPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: radius.chip,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  fieldPillLabel: {
+    ...typography.meta,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  fieldPillValue: {
+    ...typography.chip,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+  },
+  fieldPillLucid: {
+    color: colors.highlight,
+  },
+  fieldPillDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.full,
   },
   relatedCard: {
     borderRadius: radius.card,

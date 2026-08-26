@@ -42,6 +42,7 @@ import {
   type Lucidity,
   type Tone,
 } from '@features/dream-log/dreamMetadata';
+import { formatNightLabel } from '@features/dream-log/nightLabel';
 import {
   DreamNotSyncedError,
   syncDreamForInterpretation,
@@ -58,33 +59,6 @@ type ActivePicker = 'occurredAt' | 'bedtime' | 'wakeTime' | null;
 
 function toTimeString(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-/**
- * "Nuit du 22 au 23 août" — the dream's date is really a night spanning two
- * calendar days, so it is described as one rather than as the single day
- * `occurredAt` stores. Crosses a month boundary correctly (day 1 of a new month
- * gets its own month name rather than silently reusing the first day's).
- */
-function formatNightLabel(
-  t: (key: string, opts?: Record<string, unknown>) => string,
-  locale: string,
-  date: Date
-): string {
-  const next = new Date(date);
-  next.setDate(date.getDate() + 1);
-  const day = (d: Date) => d.toLocaleDateString(locale, { day: 'numeric' });
-  const month = (d: Date) => d.toLocaleDateString(locale, { month: 'long' });
-  const sameMonth =
-    date.getMonth() === next.getMonth() && date.getFullYear() === next.getFullYear();
-  return sameMonth
-    ? t('log.nightOfSameMonth', { d1: day(date), d2: day(next), month: month(date) })
-    : t('log.nightOfCrossMonth', {
-        d1: day(date),
-        month1: month(date),
-        d2: day(next),
-        month2: month(next),
-      });
 }
 
 /**
