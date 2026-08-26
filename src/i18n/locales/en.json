@@ -32,7 +32,17 @@
     "syncing": "Syncing…",
     "interpretationReady": "Interpretation ready",
     "lucid": "lucid",
-    "openDream": "Open dream: {{title}}"
+    "openDream": "Open dream: {{title}}",
+    "filterLabel": "Filter dreams",
+    "filterTitle": "Filter",
+    "filterEmotionHeading": "Emotion",
+    "filterPeriodHeading": "Period",
+    "filterPeriodA11y": "Filter on {{period}}",
+    "filterApply": "Apply",
+    "filterClear": "Clear",
+    "filterClearLabel": "Clear all filters",
+    "noFilterMatchesTitle": "No dreams match these filters",
+    "noFilterMatchesSubtitle": "Try a different emotion or a wider period."
   },
   "dream": {
     "untitled": "Untitled dream",

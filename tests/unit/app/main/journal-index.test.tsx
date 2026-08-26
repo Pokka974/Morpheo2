@@ -54,13 +54,19 @@ jest.mock('@features/journal/useJournalSearch', () => ({
   }),
 }));
 
+const mockApplyFilters = jest.fn();
+const mockClearFilters = jest.fn();
+let mockFilterState: {
+  filters: { emotion?: string; startDate?: string };
+  results: unknown[] | null;
+} = { filters: {}, results: null };
 jest.mock('@features/journal/useJournalFilters', () => ({
   useJournalFilters: () => ({
-    filters: {},
-    results: null,
+    filters: mockFilterState.filters,
+    results: mockFilterState.results,
     isFiltering: false,
-    applyFilters: jest.fn(),
-    clearFilters: jest.fn(),
+    applyFilters: mockApplyFilters,
+    clearFilters: mockClearFilters,
   }),
 }));
 
@@ -86,27 +92,32 @@ const mockScrollToOffset = jest.fn();
 jest.mock('@shopify/flash-list', () => {
   const ReactActual = require('react');
   return {
-    FlashList: ReactActual.forwardRef((props: {
-      data: unknown[];
-      renderItem: (info: { item: unknown; index: number }) => React.ReactElement;
-      keyExtractor?: (item: unknown, index: number) => string;
-      onRefresh?: () => void;
-      refreshing?: boolean;
-    }, ref: unknown) => {
-      ReactActual.useImperativeHandle(ref, () => ({ scrollToOffset: mockScrollToOffset }));
-      capturedFlashListProps = { onRefresh: props.onRefresh, refreshing: props.refreshing };
-      return ReactActual.createElement(
-        ReactActual.Fragment,
-        null,
-        props.data.map((item, index) =>
-          ReactActual.createElement(
-            ReactActual.Fragment,
-            { key: props.keyExtractor ? props.keyExtractor(item, index) : index },
-            props.renderItem({ item, index })
+    FlashList: ReactActual.forwardRef(
+      (
+        props: {
+          data: unknown[];
+          renderItem: (info: { item: unknown; index: number }) => React.ReactElement;
+          keyExtractor?: (item: unknown, index: number) => string;
+          onRefresh?: () => void;
+          refreshing?: boolean;
+        },
+        ref: unknown
+      ) => {
+        ReactActual.useImperativeHandle(ref, () => ({ scrollToOffset: mockScrollToOffset }));
+        capturedFlashListProps = { onRefresh: props.onRefresh, refreshing: props.refreshing };
+        return ReactActual.createElement(
+          ReactActual.Fragment,
+          null,
+          props.data.map((item, index) =>
+            ReactActual.createElement(
+              ReactActual.Fragment,
+              { key: props.keyExtractor ? props.keyExtractor(item, index) : index },
+              props.renderItem({ item, index })
+            )
           )
-        )
-      );
-    }),
+        );
+      }
+    ),
   };
 });
 
@@ -139,6 +150,9 @@ describe('JournalListScreen', () => {
     mockSearch.mockClear();
     mockClearSearch.mockClear();
     mockSearchState = { results: null, isSearching: false };
+    mockApplyFilters.mockClear();
+    mockClearFilters.mockClear();
+    mockFilterState = { filters: {}, results: null };
     (db.getAllAsync as jest.Mock).mockReset();
     mockSyncPendingDreams.mockReset().mockResolvedValue(undefined);
     mockPullRemoteChanges.mockReset().mockResolvedValue(undefined);
@@ -422,6 +436,82 @@ describe('JournalListScreen', () => {
       });
 
       expect(capturedFlashListProps.refreshing).toBe(false);
+    });
+  });
+
+  describe('filters', () => {
+    const ONE_DREAM = [
+      {
+        id: 'dream-1',
+        description: 'I was flying over a forest.',
+        occurred_at: '2026-01-01T00:00:00.000Z',
+        sync_status: 'synced',
+        thumbnail_uri: null,
+      },
+    ];
+
+    it('opens the filter sheet from the header button', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue(ONE_DREAM);
+      const { getByTestId, queryByText } = renderScreen();
+      await waitFor(() => expect(getByTestId('journal-filter-button')).toBeTruthy());
+
+      expect(queryByText('Apply')).toBeNull();
+      fireEvent.press(getByTestId('journal-filter-button'));
+      expect(getByTestId('journal-filter-apply')).toBeTruthy();
+    });
+
+    it('applies the chosen emotion and period to the filter engine', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue(ONE_DREAM);
+      const { getByTestId, getByText } = renderScreen();
+      await waitFor(() => expect(getByTestId('journal-filter-button')).toBeTruthy());
+
+      fireEvent.press(getByTestId('journal-filter-button'));
+      fireEvent.press(getByText('fear'));
+      fireEvent.press(getByText('30 d'));
+      fireEvent.press(getByTestId('journal-filter-apply'));
+
+      expect(mockApplyFilters).toHaveBeenCalledTimes(1);
+      const applied = mockApplyFilters.mock.calls[0][0];
+      expect(applied.emotion).toBe('fear');
+      expect(applied.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('leaves startDate undefined when the period stays on "All"', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue(ONE_DREAM);
+      const { getByTestId, getByText } = renderScreen();
+      await waitFor(() => expect(getByTestId('journal-filter-button')).toBeTruthy());
+
+      fireEvent.press(getByTestId('journal-filter-button'));
+      fireEvent.press(getByText('fear'));
+      fireEvent.press(getByTestId('journal-filter-apply'));
+
+      expect(mockApplyFilters).toHaveBeenCalledWith({ emotion: 'fear', startDate: undefined });
+    });
+
+    it('names the filters in force as chips, and clears them on demand', async () => {
+      mockFilterState = { filters: { emotion: 'fear' }, results: [] };
+      (db.getAllAsync as jest.Mock).mockResolvedValue(ONE_DREAM);
+      const { getByTestId, getByText } = renderScreen();
+
+      await waitFor(() => expect(getByText('fear')).toBeTruthy());
+      fireEvent.press(getByTestId('journal-filters-clear'));
+      expect(mockClearFilters).toHaveBeenCalled();
+    });
+
+    it('distinguishes a filtered-to-nothing list from an empty journal', async () => {
+      mockFilterState = { filters: { emotion: 'fear' }, results: [] };
+      (db.getAllAsync as jest.Mock).mockResolvedValue(ONE_DREAM);
+      const { getByText, queryByText } = renderScreen();
+
+      await waitFor(() => expect(getByText('No dreams match these filters')).toBeTruthy());
+      expect(queryByText('Your dream journal is empty')).toBeNull();
+    });
+
+    it('shows no filter chips when nothing is filtered', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue(ONE_DREAM);
+      const { queryByTestId } = renderScreen();
+      await waitFor(() => expect(queryByTestId('journal-filter-button')).toBeTruthy());
+      expect(queryByTestId('journal-filters-clear')).toBeNull();
     });
   });
 });

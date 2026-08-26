@@ -32,7 +32,17 @@
     "syncing": "Synchronisation…",
     "interpretationReady": "Interprétation prête",
     "lucid": "lucide",
-    "openDream": "Ouvrir le rêve : {{title}}"
+    "openDream": "Ouvrir le rêve : {{title}}",
+    "filterLabel": "Filtrer les rêves",
+    "filterTitle": "Filtrer",
+    "filterEmotionHeading": "Émotion",
+    "filterPeriodHeading": "Période",
+    "filterPeriodA11y": "Filtrer sur {{period}}",
+    "filterApply": "Appliquer",
+    "filterClear": "Effacer",
+    "filterClearLabel": "Effacer tous les filtres",
+    "noFilterMatchesTitle": "Aucun rêve ne correspond à ces filtres",
+    "noFilterMatchesSubtitle": "Essayez une autre émotion ou une période plus large."
   },
   "dream": {
     "untitled": "Rêve sans titre",
