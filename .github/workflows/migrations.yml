@@ -1,22 +1,71 @@
 name: Migrations
 
-# Gated on supabase/** because the job boots a Postgres container: there is no reason to
-# pay for it on a PR that only touches React Native code.
+# Deliberately NOT gated with a top-level `paths:` filter. "Apply Migrations" is a
+# required status check on main: a workflow that never triggers never reports, and a
+# required check that never reports leaves the pull request pending forever rather than
+# failing. A skipped job, by contrast, satisfies the check. So the workflow always runs
+# and the cost gate moved to `if:` on the expensive job below.
 on:
   push:
     branches: [main, develop]
-    paths:
-      - 'supabase/**'
-      - '.github/workflows/migrations.yml'
   pull_request:
     branches: [main, develop]
-    paths:
-      - 'supabase/**'
-      - '.github/workflows/migrations.yml'
 
 jobs:
+  # Cheap: a checkout and a diff, no containers. Decides whether the Postgres job below
+  # has anything to validate.
+  detect:
+    name: Detect SQL changes
+    runs-on: ubuntu-latest
+    outputs:
+      sql: ${{ steps.filter.outputs.sql }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        env:
+          # Via env rather than inline ${{ }} so nothing from the event interpolates
+          # into the shell.
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT" = "pull_request" ]; then
+            base="$PR_BASE"
+          else
+            base="$PUSH_BEFORE"
+          fi
+
+          # A branch's first push reports an all-zero "before", and a force-push can name
+          # a commit that is no longer reachable. Neither is a diff we can take, so fall
+          # back to running the gate rather than skipping it.
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "no usable base commit ($base) — running the migration gate"
+            echo "sql=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$base" "$GITHUB_SHA" -- \
+            'supabase/**' '.github/workflows/migrations.yml')
+
+          if [ -n "$changed" ]; then
+            echo "changed:"; echo "$changed"
+            echo "sql=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "no supabase/** change — skipping the migration gate"
+            echo "sql=false" >>"$GITHUB_OUTPUT"
+          fi
+
   apply-migrations:
     name: Apply Migrations
+    needs: detect
+    # Skipped — not absent — when nothing SQL changed, so the required check still reports.
+    if: needs.detect.outputs.sql == 'true'
     runs-on: ubuntu-latest
     env:
       DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
