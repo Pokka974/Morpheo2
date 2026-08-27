@@ -169,8 +169,9 @@ supabase functions serve  # Serve Edge Functions locally
 | `src/theme/useAppFonts.ts` | Manrope + Fraunces loading gate |
 | `src/i18n/locales/{en,fr}.json` | All user-facing copy |
 | `src/shared/components/` | Button, Chip, Card, TabBar, SettingsRow/Section, icons, state components |
-| `src/features/recurrence/ConstellationChart.tsx` | Theme co-occurrence graph (react-native-svg) |
-| `src/features/recurrence/EmotionRibbon.tsx` | Night emotional arc (react-native-svg) |
+| `src/features/recurrence/ConstellationChart.tsx` | Theme co-occurrence graph — pinch/pan via the SVG viewBox (react-native-svg) |
+| `src/features/recurrence/EmotionRibbon.tsx` | Emotional tone **over the selected period** — not a night arc; there is no per-hour emotion data |
+| `src/features/recurrence/SleepClarityBars.tsx` | Mean dream clarity per sleep-quality rating (react-native-svg) |
 | `tests/unit/theme/contrast.test.ts` | WCAG AA gate on every token pairing |
 | `src/app/_layout.tsx` | Root layout, service wiring, lock gate, cache eviction |
 | `src/services/ServicesProvider.tsx` | React context for service injection |

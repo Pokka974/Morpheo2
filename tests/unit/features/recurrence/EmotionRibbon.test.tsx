@@ -3,12 +3,14 @@ import { render } from '@testing-library/react-native';
 
 import { EmotionRibbon, splinePath, type RibbonPoint } from '@features/recurrence/EmotionRibbon';
 
+// The curve now runs over the journal's own timeline, not an invented clock —
+// `t` is position within the selected period and the labels are dates.
 const POINTS: RibbonPoint[] = [
-  { t: 0, positive: 0.35, tension: 0.3, label: '23h' },
-  { t: 0.25, positive: 0.85, tension: 0.18, label: '01h' },
-  { t: 0.5, positive: 0.4, tension: 0.5, label: '03h' },
-  { t: 0.75, positive: 0.95, tension: 0.22, label: '05h' },
-  { t: 1, positive: 0.6, tension: 0.3, label: '07h' },
+  { t: 0, positive: 0.35, tension: 0.3, label: '3 Jan' },
+  { t: 0.25, positive: 0.85, tension: 0.18 },
+  { t: 0.5, positive: 0.4, tension: 0.5, label: '17 Jan' },
+  { t: 0.75, positive: 0.95, tension: 0.22 },
+  { t: 1, positive: 0.6, tension: 0.3, label: '31 Jan' },
 ];
 
 describe('splinePath', () => {
@@ -57,17 +59,24 @@ describe('<EmotionRibbon />', () => {
     expect(toJSON()).toBeNull();
   });
 
-  it('renders the legend that separates positive from tension', () => {
+  it('renders the legend that separates the light dreams from the tense ones', () => {
     const { getByText } = render(<EmotionRibbon points={POINTS} />);
-    expect(getByText('positive emotions')).toBeTruthy();
-    expect(getByText('tension')).toBeTruthy();
+    expect(getByText('felt good')).toBeTruthy();
+    expect(getByText('felt tense')).toBeTruthy();
   });
 
-  it('draws the clock axis labels', () => {
-    const { toJSON } = render(<EmotionRibbon points={POINTS} />);
-    const tree = JSON.stringify(toJSON());
-    expect(tree).toContain('23h');
-    expect(tree).toContain('07h');
+  it('draws the axis labels it is given, and only those', () => {
+    const tree = JSON.stringify(render(<EmotionRibbon points={POINTS} />).toJSON());
+    expect(tree).toContain('3 Jan');
+    expect(tree).toContain('17 Jan');
+    expect(tree).toContain('31 Jan');
+
+    // An unlabelled point contributes no axis text at all — which is what lets the
+    // caller thin six buckets down to three dates that fit across 320 units.
+    const unlabelled = POINTS.map(({ t, positive, tension }) => ({ t, positive, tension }));
+    expect(JSON.stringify(render(<EmotionRibbon points={unlabelled} />).toJSON())).not.toContain(
+      'Jan'
+    );
   });
 
   it('closes the fill down to the baseline so the ribbon reads as an area', () => {

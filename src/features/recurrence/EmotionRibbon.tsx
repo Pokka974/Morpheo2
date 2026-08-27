@@ -43,7 +43,14 @@ interface EmotionRibbonProps {
 }
 
 const WIDTH = 320;
-const HEIGHT = 150;
+/**
+ * 6px taller than the source design's 320×150. The design draws the clock labels
+ * on a baseline 2px from the bottom edge and relies on `overflow: visible` to let
+ * the descenders paint outside the viewport — a browser behaviour that
+ * react-native-svg does not have, since it clips to the view bounds. The extra
+ * room lands under the axis; the ribbon geometry (TOP/BOTTOM) is unchanged.
+ */
+const HEIGHT = 156;
 const PADDING_X = 6;
 const TOP = 30;
 const BOTTOM = 132;
@@ -131,69 +138,71 @@ export function EmotionRibbon({ points, testID }: EmotionRibbonProps) {
 
   return (
     <View testID={testID}>
-      <Svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" style={styles.svg}>
-        <Defs>
-          <LinearGradient id="ribbonStroke" x1="0" y1="0" x2="1" y2="0">
-            {ribbonStops.map(stop => (
-              <Stop
-                key={stop.offset}
-                offset={stop.offset}
-                stopColor={stop.color}
-                stopOpacity={stop.opacity}
-              />
-            ))}
-          </LinearGradient>
-          <LinearGradient id="ribbonFill" x1="0" y1="0" x2="1" y2="0">
-            {ribbonFillStops.map(stop => (
-              <Stop
-                key={stop.offset}
-                offset={stop.offset}
-                stopColor={stop.color}
-                stopOpacity={stop.opacity}
-              />
-            ))}
-          </LinearGradient>
-        </Defs>
+      <View style={styles.svgFrame}>
+        <Svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" height="100%">
+          <Defs>
+            <LinearGradient id="ribbonStroke" x1="0" y1="0" x2="1" y2="0">
+              {ribbonStops.map(stop => (
+                <Stop
+                  key={stop.offset}
+                  offset={stop.offset}
+                  stopColor={stop.color}
+                  stopOpacity={stop.opacity}
+                />
+              ))}
+            </LinearGradient>
+            <LinearGradient id="ribbonFill" x1="0" y1="0" x2="1" y2="0">
+              {ribbonFillStops.map(stop => (
+                <Stop
+                  key={stop.offset}
+                  offset={stop.offset}
+                  stopColor={stop.color}
+                  stopOpacity={stop.opacity}
+                />
+              ))}
+            </LinearGradient>
+          </Defs>
 
-        <Path d={fillPath} fill="url(#ribbonFill)" />
-        <Path
-          d={strokePath}
-          fill="none"
-          stroke="url(#ribbonStroke)"
-          strokeWidth={3.5}
-          strokeLinecap="round"
-        />
-        <Path
-          d={tensionPath}
-          fill="none"
-          stroke={emotionColors.fear}
-          strokeOpacity={0.5}
-          strokeWidth={2}
-          strokeDasharray="3 4"
-        />
+          <Path d={fillPath} fill="url(#ribbonFill)" />
+          <Path
+            d={strokePath}
+            fill="none"
+            stroke="url(#ribbonStroke)"
+            strokeWidth={3.5}
+            strokeLinecap="round"
+          />
+          <Path
+            d={tensionPath}
+            fill="none"
+            stroke={emotionColors.fear}
+            strokeOpacity={0.5}
+            strokeWidth={2}
+            strokeDasharray="3 4"
+          />
 
-        {peaks.map((peak, i) => (
-          <Circle key={i} cx={peak.x} cy={peak.y} r={4} fill={peak.color} />
-        ))}
+          {peaks.map((peak, i) => (
+            <Circle key={i} cx={peak.x} cy={peak.y} r={4} fill={peak.color} />
+          ))}
 
-        <G>
-          {sorted.map((point, i) =>
-            point.label ? (
-              <SvgText
-                key={point.label}
-                x={project(point).x}
-                y={AXIS_Y}
-                textAnchor={i === 0 ? 'start' : i === sorted.length - 1 ? 'end' : 'middle'}
-                fill={colors.textMuted}
-                fontSize={10}
-                fontWeight="600"
-              >
-                {point.label}
-              </SvgText>
-            ) : null
-          )}
-        </G>
-      </Svg>
+          <G>
+            {sorted.map((point, i) =>
+              point.label ? (
+                <SvgText
+                  key={point.label}
+                  x={project(point).x}
+                  y={AXIS_Y}
+                  textAnchor={i === 0 ? 'start' : i === sorted.length - 1 ? 'end' : 'middle'}
+                  fill={colors.textMuted}
+                  fontSize={10}
+                  fontWeight="600"
+                >
+                  {point.label}
+                </SvgText>
+              ) : null
+            )}
+          </G>
+        </Svg>
+      </View>
 
       <View style={styles.legend}>
         <View style={styles.legendItem}>
@@ -210,9 +219,10 @@ export function EmotionRibbon({ points, testID }: EmotionRibbonProps) {
 }
 
 const styles = StyleSheet.create({
-  svg: {
-    alignSelf: 'stretch',
-    overflow: 'visible',
+  /** See ConstellationChart — the Svg needs a parent with a definite height. */
+  svgFrame: {
+    width: '100%',
+    aspectRatio: WIDTH / HEIGHT,
   },
   legend: {
     flexDirection: 'row',
