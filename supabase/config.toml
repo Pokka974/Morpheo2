@@ -373,6 +373,19 @@ authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
 allow_dynamic_registration = false
 
+# RevenueCat authenticates with a shared secret in `Authorization`, not a Supabase JWT.
+# Under the platform default (verify_jwt = true) the gateway rejects every event with a 401
+# before the handler runs, which is indistinguishable from a wrong secret. The handler does
+# its own constant-time check on that header. Every other function keeps verify_jwt = true.
+#
+# `entrypoint` is not optional once a function is declared here: the CLI stops inferring
+# the path for a configured function and falls back to `/root/index.ts`, so both
+# `functions serve` and `functions deploy` die with `Module not found`.
+[functions.revenuecat-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/revenuecat-webhook/index.ts"
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.
