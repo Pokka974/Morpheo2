@@ -39,23 +39,55 @@ describe('PaywallScreen', () => {
     entitlementService.configure('free');
   });
 
-  it('renders both the free and premium feature comparison lists', () => {
-    const { getByText } = render(
+  it('renders both the free and premium feature comparison lists', async () => {
+    const { getByText, findByText } = render(
       <ServicesProvider services={buildRegistry()}>
         <PaywallScreen />
       </ServicesProvider>
     );
-    expect(getByText('5 AI interpretations per month')).toBeTruthy();
+    // Awaited so the price fetch settles inside the test rather than after it.
+    expect(await findByText('3 AI interpretations per month')).toBeTruthy();
+    expect(getByText('1 AI image per month — plus your first one, free')).toBeTruthy();
     expect(getByText('Unlimited AI interpretations')).toBeTruthy();
+    expect(getByText('Unlimited AI images')).toBeTruthy();
+  });
+
+  // The price is whatever the store says it is in the viewer's storefront. Hardcoding
+  // "7,99 €" would be wrong everywhere outside the eurozone and stale the first time the
+  // price is changed in the RevenueCat dashboard.
+  it('shows the price the store reports rather than a hardcoded one', async () => {
+    const registry = buildRegistry();
+    jest.spyOn(registry.entitlement, 'getPremiumPriceString').mockResolvedValue('$8.99');
+
+    const { getByText } = render(
+      <ServicesProvider services={registry}>
+        <PaywallScreen />
+      </ServicesProvider>
+    );
+    await waitFor(() => expect(getByText('$8.99 / month')).toBeTruthy());
+  });
+
+  it('omits the price line entirely when no offering is configured', async () => {
+    const registry = buildRegistry();
+    const spy = jest.spyOn(registry.entitlement, 'getPremiumPriceString').mockResolvedValue(null);
+
+    const { queryByText } = render(
+      <ServicesProvider services={registry}>
+        <PaywallScreen />
+      </ServicesProvider>
+    );
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    // A placeholder or an empty "/ month" would read as a broken screen.
+    expect(queryByText(/\/ month/)).toBeNull();
   });
 
   it('navigates back after a successful purchase', async () => {
-    const { getByText } = render(
+    const { findByText } = render(
       <ServicesProvider services={buildRegistry()}>
         <PaywallScreen />
       </ServicesProvider>
     );
-    fireEvent.press(getByText('Start Premium'));
+    fireEvent.press(await findByText('Start Premium'));
     await waitFor(() => expect(mockBack).toHaveBeenCalled());
   });
 
@@ -63,12 +95,12 @@ describe('PaywallScreen', () => {
     const registry = buildRegistry();
     jest.spyOn(registry.entitlement, 'purchasePremium').mockResolvedValueOnce({ success: false });
 
-    const { getByText } = render(
+    const { findByText } = render(
       <ServicesProvider services={registry}>
         <PaywallScreen />
       </ServicesProvider>
     );
-    fireEvent.press(getByText('Start Premium'));
+    fireEvent.press(await findByText('Start Premium'));
     await waitFor(() => expect(registry.entitlement.purchasePremium).toHaveBeenCalled());
     expect(mockBack).not.toHaveBeenCalled();
   });
@@ -82,12 +114,12 @@ describe('PaywallScreen', () => {
       })
     );
 
-    const { getByText, queryByText } = render(
+    const { findByText, queryByText } = render(
       <ServicesProvider services={registry}>
         <PaywallScreen />
       </ServicesProvider>
     );
-    fireEvent.press(getByText('Start Premium'));
+    fireEvent.press(await findByText('Start Premium'));
     await waitFor(() => expect(queryByText('Start Premium')).toBeNull());
 
     await act(async () => {
@@ -96,13 +128,13 @@ describe('PaywallScreen', () => {
     await waitFor(() => expect(mockBack).toHaveBeenCalled());
   });
 
-  it('navigates back when pressing "Maybe Later"', () => {
-    const { getByText } = render(
+  it('navigates back when pressing "Maybe later"', async () => {
+    const { findByText } = render(
       <ServicesProvider services={buildRegistry()}>
         <PaywallScreen />
       </ServicesProvider>
     );
-    fireEvent.press(getByText('Maybe Later'));
+    fireEvent.press(await findByText('Maybe later'));
     expect(mockBack).toHaveBeenCalled();
   });
 });

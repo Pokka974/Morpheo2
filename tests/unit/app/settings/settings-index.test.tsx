@@ -102,8 +102,8 @@ describe('SettingsScreen', () => {
     expect(getByText('test@example.com')).toBeTruthy();
     expect(getByText('Free')).toBeTruthy();
     // MockEntitlementService's free tier is 0 of 5 used.
-    expect(getByText('5 interpretations left')).toBeTruthy();
-    expect(getByText('0 / 5')).toBeTruthy();
+    expect(getByText('3 interpretations left')).toBeTruthy();
+    expect(getByText('0 / 3')).toBeTruthy();
   });
 
   it("names the groups from the user's side, not the system's", async () => {
@@ -390,7 +390,12 @@ describe('SettingsScreen', () => {
     );
 
     await waitFor(() => expect(getByText('0.0 KB used')).toBeTruthy());
-    // entitlementData stays null, so the Subscription row renders the "Free" fallback value.
-    expect(queryByText('Free')).toBeTruthy();
+    // entitlementData stays null. The card must not fill that in with a tier: this test
+    // previously asserted the "Free" fallback, and that fallback is precisely what showed
+    // a paying account as free when the entitlement select failed on the server.
+    expect(queryByText('Free')).toBeNull();
+    expect(queryByText('Premium')).toBeNull();
+    // The rest of the screen still renders — a failed quota fetch is not a fatal error.
+    expect(getByText('test@example.com')).toBeTruthy();
   });
 });

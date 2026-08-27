@@ -53,13 +53,42 @@ function isModerationStatus(status: string): boolean {
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  // Set once the image credit has been consumed, so every failure path -- including an
+  // unexpected throw -- can return it. `source` is which bucket consume_image_credit drew
+  // from ('monthly' or 'bonus'), because the refund has to put it back in the same one.
+  let creditConsumed: { userId: string; source: string } | null = null;
+  const refundCredit = async (reason: string) => {
+    if (!creditConsumed) return;
+    const { userId, source } = creditConsumed;
+    creditConsumed = null;
+    const { error: refundError } = await supabase.rpc('refund_image_credit', {
+      p_user_id: userId,
+      p_source: source,
+    });
+    if (refundError) {
+      console.error(`Failed to refund image credit after ${reason}:`, refundError);
+    }
+  };
+
+  /**
+   * Every error return goes through here. Flux is submitted, polled, downloaded, uploaded
+   * and recorded across a dozen separate failure points; refunding at each one by hand is
+   * how a path eventually gets missed and a user pays a credit for an image they never got.
+   * Before the credit is consumed this is just `json`.
+   */
+  const fail = async (body: { error: string; [k: string]: unknown }, status: number) => {
+    await refundCredit(body.error);
+    return json(body, status);
+  };
+
   // Unlike the original, the whole handler is wrapped: an unexpected throw used to surface as
   // an unhandled rejection with a bare 500 and no log line.
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) return json({ error: 'unauthorized' }, 401);
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const userClient = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
       global: { headers: { Authorization: authHeader } },
     });
@@ -75,25 +104,18 @@ serve(async (req: Request) => {
       return json({ error: 'missing_fields' }, 400);
     }
 
-    // Check entitlements
+    // Read only what the regeneration allowance below needs. The quota gate itself is no
+    // longer here: it lives in consume_image_credit (019_image_credit_rpc.sql), which
+    // checks and increments in one statement and carries the premium short-circuit this
+    // gate was missing.
     const { data: entitlement, error: entError } = await supabase
       .from('entitlements')
-      .select('subscription_tier, images_used_this_month, monthly_image_limit')
+      .select('subscription_tier')
       .eq('user_id', user.id)
       .single();
 
     if (entError) {
       console.error('Entitlement query failed:', entError);
-    }
-
-    if (
-      entitlement &&
-      entitlement.monthly_image_limit !== null &&
-      entitlement.images_used_this_month >= entitlement.monthly_image_limit
-    ) {
-      const nextMonth = new Date();
-      nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
-      return json({ error: 'limit_reached', resetDate: nextMonth.toISOString() }, 429);
     }
 
     // Check regeneration limit if applicable. Each call inserts a new media row
@@ -115,6 +137,36 @@ serve(async (req: Request) => {
       if (existingMedia && existingMedia.regeneration_count >= existingMedia.max_regenerations) {
         return json({ error: 'regen_limit_reached', max: existingMedia.max_regenerations }, 409);
       }
+    }
+
+    // Check + spend the image credit in one statement (019_image_credit_rpc.sql). A
+    // read-then-write here would let two concurrent taps both pass the check and both
+    // increment -- at a free limit of one image a month, that doubles the allowance.
+    // The credit is refunded by `fail` below if no image is produced.
+    //
+    // Regenerations deliberately do not spend a monthly image: the entry's own
+    // max_regenerations allowance is what bounds them, and charging a second monthly
+    // image for a regeneration would make the feature unreachable for any tier whose
+    // monthly limit is one.
+    if (!isRegeneration) {
+      const { data: creditSource, error: creditError } = await supabase.rpc(
+        'consume_image_credit',
+        { p_user_id: user.id }
+      );
+
+      if (creditError) {
+        console.error('Image credit check failed:', creditError);
+        return json({ error: 'entitlement_check_failed' }, 500);
+      }
+
+      if (creditSource === 'denied') {
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
+        nextMonth.setHours(0, 0, 0, 0);
+        return json({ error: 'limit_reached', resetDate: nextMonth.toISOString() }, 429);
+      }
+
+      creditConsumed = { userId: user.id, source: creditSource as string };
     }
 
     // Build prompt. The interpretation model writes the visual prompt while it still has the
@@ -185,7 +237,7 @@ serve(async (req: Request) => {
       });
     } catch (err) {
       console.error('Flux submit request failed:', err);
-      return json({ error: 'generation_failed' }, 503);
+      return await fail({ error: 'generation_failed' }, 503);
     }
 
     if (!submitResponse.ok) {
@@ -193,7 +245,7 @@ serve(async (req: Request) => {
       // 422 is BFL's validation/moderation rejection of the prompt itself.
       if (submitResponse.status === 422) {
         console.error('Flux rejected the prompt (422):', detail);
-        return json({ error: 'safety_blocked' }, 400);
+        return await fail({ error: 'safety_blocked' }, 400);
       }
       // The two operational failures, called out by name. Both otherwise present to the
       // user as an ordinary "generation failed, retry" — which is actively misleading,
@@ -211,14 +263,14 @@ serve(async (req: Request) => {
       } else {
         console.error(`Flux submit failed (${submitResponse.status}):`, detail);
       }
-      return json({ error: 'generation_failed' }, 503);
+      return await fail({ error: 'generation_failed' }, 503);
     }
 
     const submitData = await submitResponse.json();
     const pollingUrl: string | undefined = submitData?.polling_url;
     if (!pollingUrl) {
       console.error('Flux submit returned no polling_url:', JSON.stringify(submitData));
-      return json({ error: 'generation_failed' }, 503);
+      return await fail({ error: 'generation_failed' }, 503);
     }
 
     // Poll until Ready. Bounded by POLL_TIMEOUT_MS so a stuck task fails loudly and logged
@@ -238,12 +290,12 @@ serve(async (req: Request) => {
         });
       } catch (err) {
         console.error('Flux poll request failed:', err);
-        return json({ error: 'generation_failed' }, 503);
+        return await fail({ error: 'generation_failed' }, 503);
       }
 
       if (!pollResponse.ok) {
         console.error(`Flux poll failed (${pollResponse.status}):`, await pollResponse.text());
-        return json({ error: 'generation_failed' }, 503);
+        return await fail({ error: 'generation_failed' }, 503);
       }
 
       const pollData = await pollResponse.json();
@@ -255,11 +307,11 @@ serve(async (req: Request) => {
       }
       if (isModerationStatus(status)) {
         console.error('Flux moderated the request for dream', dreamId, '-', status);
-        return json({ error: 'safety_blocked' }, 400);
+        return await fail({ error: 'safety_blocked' }, 400);
       }
       if (status === 'Error' || status === 'Failed') {
         console.error('Flux generation failed:', JSON.stringify(pollData));
-        return json({ error: 'generation_failed' }, 503);
+        return await fail({ error: 'generation_failed' }, 503);
       }
       // 'Pending' / 'Task not found' (briefly, right after submit) -- keep polling.
     }
@@ -269,7 +321,7 @@ serve(async (req: Request) => {
         `Flux generation did not become Ready within ${POLL_TIMEOUT_MS}ms for dream`,
         dreamId
       );
-      return json({ error: 'generation_failed' }, 503);
+      return await fail({ error: 'generation_failed' }, 503);
     }
 
     // result.sample is a signed URL valid for 10 minutes; the bytes are copied into our own
@@ -279,12 +331,12 @@ serve(async (req: Request) => {
       const imageResponse = await fetch(sampleUrl, { signal: AbortSignal.timeout(30_000) });
       if (!imageResponse.ok) {
         console.error('Fetching the Flux result URL failed:', imageResponse.status);
-        return json({ error: 'generation_failed' }, 503);
+        return await fail({ error: 'generation_failed' }, 503);
       }
       imageBuffer = new Uint8Array(await imageResponse.arrayBuffer());
     } catch (err) {
       console.error('Fetching the Flux result URL failed:', err);
-      return json({ error: 'generation_failed' }, 503);
+      return await fail({ error: 'generation_failed' }, 503);
     }
 
     const storagePath = `${user.id}/${dreamId}/image-${Date.now()}.png`;
@@ -295,17 +347,19 @@ serve(async (req: Request) => {
 
     if (uploadError) {
       console.error('Storage upload failed:', uploadError);
-      return json({ error: 'upload_failed' }, 503);
+      return await fail({ error: 'upload_failed' }, 503);
     }
 
-    // 3 regenerations per entry for free users, 5 for premium (data-model.md,
-    // FR-029). A regeneration carries forward the limit + count the entry already
-    // had -- the limit is only derived fresh from the current tier on the first
-    // generation for this dream -- so a mid-cycle tier change doesn't retroactively
-    // change an in-progress entry's allowance, and the count actually climbs
-    // instead of resetting to 1 on every regenerate.
+    // No regenerations per entry for free users, 5 for premium (data-model.md, FR-029).
+    // Free gets none because three regenerations on top of one image a month is four Flux
+    // calls a month, which would leave the cost exactly where the repricing found it.
+    // A regeneration carries forward the limit + count the entry already had -- the limit
+    // is only derived fresh from the current tier on the first generation for this dream
+    // -- so a mid-cycle tier change doesn't retroactively change an in-progress entry's
+    // allowance, and the count actually climbs instead of resetting to 1 on every
+    // regenerate.
     const maxRegenerations =
-      existingMedia?.max_regenerations ?? (entitlement?.subscription_tier === 'premium' ? 5 : 3);
+      existingMedia?.max_regenerations ?? (entitlement?.subscription_tier === 'premium' ? 5 : 0);
     const regenerationCount = isRegeneration ? (existingMedia?.regeneration_count ?? 0) + 1 : 0;
 
     // Insert media record
@@ -325,22 +379,23 @@ serve(async (req: Request) => {
 
     if (insertError || !media) {
       console.error('Media insert failed:', insertError);
-      return json({ error: 'record_failed' }, 503);
+      return await fail({ error: 'record_failed' }, 503);
     }
+
+    // The image now exists in storage and is recorded against the dream, so the credit is
+    // spent for good: released here rather than after the signing call below, so a failure
+    // while minting the URL cannot hand back a credit for an image the user already owns
+    // and will see on their next load.
+    //
+    // The counter itself was already moved by consume_image_credit above -- there is
+    // deliberately no increment here. The read-modify-write that used to live at this
+    // point is what let two concurrent requests both spend the same credit.
+    creditConsumed = null;
 
     // Get signed URL (valid 1 hour)
     const { data: signedData } = await supabase.storage
       .from('dream-media')
       .createSignedUrl(storagePath, 3600);
-
-    // Increment usage counter
-    const { error: usageError } = await supabase
-      .from('entitlements')
-      .update({ images_used_this_month: (entitlement?.images_used_this_month ?? 0) + 1 })
-      .eq('user_id', user.id);
-    if (usageError) {
-      console.error('Failed to increment images_used_this_month:', usageError);
-    }
 
     return json(
       {
@@ -360,6 +415,6 @@ serve(async (req: Request) => {
     );
   } catch (err) {
     console.error('generate-image edge function error:', err);
-    return json({ error: 'generation_failed' }, 503);
+    return await fail({ error: 'generation_failed' }, 503);
   }
 });

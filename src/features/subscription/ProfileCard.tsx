@@ -21,6 +21,49 @@ interface Props {
   onUpgrade: () => void;
 }
 
+interface QuotaMeterProps {
+  /** Already-interpolated "3 interpretations left" / "1 image left". */
+  label: string;
+  used: number;
+  limit: number;
+  testID: string;
+}
+
+/**
+ * One quota: the remainder in words, the raw fraction, and a bar.
+ *
+ * The bar is decorative — the line above it already states both the remainder and the
+ * fraction, so exposing it would make a screen reader announce the same quota twice.
+ */
+function QuotaMeter({ label, used, limit, testID }: QuotaMeterProps) {
+  const { t } = useTranslation();
+  const ratio = limit > 0 ? Math.min(used / limit, 1) : 0;
+  // Usage can legitimately exceed the limit: `expire-subscriptions` drops a lapsed
+  // subscriber to free without zeroing counters, so someone who used 40 interpretations
+  // on premium lands on a limit of 3 mid-cycle. "40 / 3" reads as a rendering fault
+  // rather than as "you are over" — the line beside it already says 0 left — so the
+  // fraction reports the limit as reached and waits for the monthly reset.
+  const shown = Math.min(used, limit);
+
+  return (
+    <View style={styles.meter}>
+      <View style={styles.quotaHeader}>
+        <Text style={styles.quotaLabel}>{label}</Text>
+        <Text style={styles.quotaCount}>{t('settings.quotaFraction', { used: shown, limit })}</Text>
+      </View>
+      <View style={styles.meterTrack} testID={testID} accessible={false}>
+        <LinearGradient
+          colors={[...gradients.meter.colors]}
+          locations={[...gradients.meter.locations]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={[styles.meterFill, { width: `${ratio * 100}%` }]}
+        />
+      </View>
+    </View>
+  );
+}
+
 /**
  * The head of the Settings screen: who you are, and what you have left.
  *
@@ -33,13 +76,35 @@ interface Props {
 export function ProfileCard({ email, dreamCount, since, entitlement, onUpgrade }: Props) {
   const { t, i18n } = useTranslation();
 
-  const isPremium = entitlement?.subscriptionTier === 'premium';
+  // Deliberately three-valued. A null entitlement means the fetch has not resolved — or
+  // failed — and the card must not fill that in with "free": that is a paying account
+  // being told it is on the free tier, which is exactly what a missing column on the
+  // server looked like from inside the app. Unknown renders as nothing at all.
+  const tier = entitlement?.subscriptionTier ?? null;
+  const isPremium = tier === 'premium';
+
   const limit = entitlement?.monthlyInterpretationLimit ?? null;
   const used = entitlement?.interpretationsUsedThisMonth ?? 0;
   const remaining = limit === null ? null : Math.max(limit - used, 0);
+
+  // Images are the scarcer quota since the repricing — one a month against three
+  // interpretations — so the card carries a second meter rather than leaving the number
+  // discoverable only by hitting the limit.
+  const imageLimit = entitlement?.monthlyImageLimit ?? null;
+  const imagesUsed = entitlement?.imagesUsedThisMonth ?? 0;
+  const imagesRemaining = imageLimit === null ? null : Math.max(imageLimit - imagesUsed, 0);
+
+  // The one-time welcome image sits outside the monthly cycle, so it is stated on its own
+  // line rather than folded into the meter above it: adding it to the fraction would draw
+  // a bar that refills once and never again, and hiding it would leave the user unaware
+  // of a credit they are holding.
+  const welcomeImages = entitlement?.bonusImageCredits ?? 0;
+
   // An unlimited tier has no meter to draw: a bar that is always full reads as a
-  // warning rather than as "you have everything".
-  const ratio = limit && limit > 0 ? Math.min(used / limit, 1) : 0;
+  // warning rather than as "you have everything". An unknown tier has nothing to draw
+  // either — "Unlimited" is as wrong a guess as "Free" when the fetch has not landed.
+  const hasQuota = tier !== null && !isPremium && (limit !== null || imageLimit !== null);
+  const isUnlimited = tier !== null && !hasQuota;
 
   return (
     <LinearGradient
@@ -73,37 +138,41 @@ export function ProfileCard({ email, dreamCount, since, entitlement, onUpgrade }
               : t('settings.profileMetaNoDate', { count: dreamCount })}
           </Text>
         </View>
-        <View style={[styles.badge, isPremium ? styles.badgePremium : styles.badgeFree]}>
-          <Text style={[styles.badgeLabel, isPremium ? styles.badgeLabelPremium : null]}>
-            {isPremium ? t('settings.tierPremium') : t('settings.tierFree')}
-          </Text>
-        </View>
+        {tier === null ? null : (
+          <View style={[styles.badge, isPremium ? styles.badgePremium : styles.badgeFree]}>
+            <Text style={[styles.badgeLabel, isPremium ? styles.badgeLabelPremium : null]}>
+              {isPremium ? t('settings.tierPremium') : t('settings.tierFree')}
+            </Text>
+          </View>
+        )}
       </View>
 
-      {isPremium || limit === null ? (
-        <Text style={styles.quotaUnlimited}>{t('settings.quotaUnlimited')}</Text>
-      ) : (
+      {hasQuota ? (
         <View style={styles.quota}>
-          <View style={styles.quotaHeader}>
-            <Text style={styles.quotaLabel}>
-              {t('settings.quotaRemaining', { count: remaining ?? 0 })}
-            </Text>
-            <Text style={styles.quotaCount}>{t('settings.quotaFraction', { used, limit })}</Text>
-          </View>
-          {/*
-            The meter is decorative: the line above it already states the remainder and
-            the fraction in words, so exposing the bar too would make a screen reader
-            announce the same quota twice.
-          */}
-          <View style={styles.meterTrack} testID="quota-meter" accessible={false}>
-            <LinearGradient
-              colors={[...gradients.meter.colors]}
-              locations={[...gradients.meter.locations]}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={[styles.meterFill, { width: `${ratio * 100}%` }]}
+          {limit !== null ? (
+            <QuotaMeter
+              label={t('settings.quotaRemaining', { count: remaining ?? 0 })}
+              used={used}
+              limit={limit}
+              testID="quota-meter"
             />
-          </View>
+          ) : null}
+
+          {imageLimit !== null ? (
+            <QuotaMeter
+              label={t('settings.quotaImagesRemaining', { count: imagesRemaining ?? 0 })}
+              used={imagesUsed}
+              limit={imageLimit}
+              testID="image-quota-meter"
+            />
+          ) : null}
+
+          {welcomeImages > 0 ? (
+            <Text style={styles.welcomeCredit}>
+              {t('settings.quotaWelcomeImage', { count: welcomeImages })}
+            </Text>
+          ) : null}
+
           <View style={styles.quotaFooter}>
             <Text style={styles.quotaFooterText} numberOfLines={1}>
               {entitlement
@@ -125,7 +194,9 @@ export function ProfileCard({ email, dreamCount, since, entitlement, onUpgrade }
             </Pressable>
           </View>
         </View>
-      )}
+      ) : isUnlimited ? (
+        <Text style={styles.quotaUnlimited}>{t('settings.quotaUnlimited')}</Text>
+      ) : null}
     </LinearGradient>
   );
 }
@@ -185,6 +256,10 @@ const styles = StyleSheet.create({
     color: colors.accentText,
   },
   quota: {
+    gap: 10,
+  },
+  /** One label-fraction-bar group. Tighter than the gap between two of them. */
+  meter: {
     gap: 7,
   },
   quotaHeader: {
@@ -225,6 +300,16 @@ const styles = StyleSheet.create({
   quotaUnlimited: {
     ...typography.meta,
     color: colors.textSecondary,
+  },
+  /**
+   * Amber, because this is the positive end of a scale — a credit the account holds —
+   * which is exactly what the design reserves the hue for, alongside the meter fill and
+   * the free-tier badge.
+   */
+  welcomeCredit: {
+    ...typography.meta,
+    fontSize: 12,
+    color: colors.highlight,
   },
   upgradeLink: {
     ...typography.chip,

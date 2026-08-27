@@ -110,7 +110,7 @@ describe('generate-image Edge Function regeneration limits', () => {
   // same "2 remaining" a free user would after one regeneration.
   it('derives max_regenerations from subscription_tier instead of hardcoding it', () => {
     expect(source).not.toMatch(/max_regenerations:\s*3\b/);
-    expect(source).toContain("entitlement?.subscription_tier === 'premium' ? 5 : 3");
+    expect(source).toContain("entitlement?.subscription_tier === 'premium' ? 5 : 0");
   });
 
   // Regression guard: each call inserts a new media row rather than updating one
@@ -124,5 +124,46 @@ describe('generate-image Edge Function regeneration limits', () => {
 
   it("carries an existing entry's max_regenerations forward on regeneration rather than re-deriving it from the current tier", () => {
     expect(source).toContain('existingMedia?.max_regenerations ??');
+  });
+});
+
+describe('generate-image Edge Function image credits', () => {
+  const source = readFile('supabase/functions/generate-image/index.ts');
+
+  // Regression guard: the quota gate used to be a SELECT of images_used_this_month, a
+  // comparison, and — much later, after the Flux round trip — an UPDATE to used + 1. Two
+  // concurrent requests both read N and both wrote N + 1. Migration 012 fixed the identical
+  // bug on the interpretation path; the image path kept it until the free limit dropped to
+  // one image a month, at which point two taps doubled the allowance.
+  it('spends the credit through the atomic RPC, not a read-modify-write', () => {
+    expect(source).toContain('consume_image_credit');
+    expect(source).not.toMatch(/images_used_this_month:\s*\(/);
+  });
+
+  it('refunds the credit when no image is produced', () => {
+    expect(source).toContain('refund_image_credit');
+    // Every error return routes through `fail`, which refunds first. A bare `return json`
+    // after the credit is spent is how a user pays for an image they never received.
+    expect(source).toContain('return await fail({');
+  });
+
+  it('records which bucket the credit came from so the refund restores the right one', () => {
+    // consume_image_credit draws from the monthly allowance first and the one-time welcome
+    // credit second (019). Refunding the wrong one would silently convert a lifetime credit
+    // into a monthly one, or vice versa.
+    expect(source).toContain('p_source');
+    expect(source).toContain('creditConsumed = { userId: user.id, source:');
+  });
+
+  it('does not charge a monthly image for a regeneration', () => {
+    // The entry's own max_regenerations bounds regenerations. Charging a second monthly
+    // image would make the feature unreachable for any tier whose monthly limit is one.
+    expect(source).toMatch(/if \(!isRegeneration\) \{[\s\S]*?consume_image_credit/);
+  });
+
+  it('leaves the premium short-circuit to the RPC rather than re-checking the limit here', () => {
+    // The old inline gate had no `subscription_tier === 'premium'` branch, so a premium row
+    // that still carried a monthly_image_limit (nothing ever nulls one) was capped.
+    expect(source).not.toContain('monthly_image_limit');
   });
 });

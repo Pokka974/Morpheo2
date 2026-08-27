@@ -181,7 +181,12 @@ Generate an AI image for a dream. Enforces entitlement and content safety.
 }
 ```
 
-**Entitlement check**: Same pattern as interpret — checks `images_used < monthly_image_limit`.
+**Entitlement check**: Same pattern as interpret — one call to `consume_image_credit(user_id)`,
+which checks and increments in a single statement. It draws from `images_used_this_month`
+first and falls back to the one-time `bonus_image_credits` (the welcome image), returning
+`'monthly'`, `'bonus'` or `'denied'`. Regenerations do not spend a credit — they are bounded
+by the entry's own `max_regenerations`. Any failure after consumption calls
+`refund_image_credit(user_id, source)`.
 
 **Content safety check**: Input description is evaluated against a blocklist + Claude content safety heuristic before calling OpenAI.
 
@@ -194,16 +199,17 @@ Generate an AI image for a dream. Enforces entitlement and content safety.
     "storage_path": "string",
     "signed_url": "string (1h expiry)",
     "regeneration_count": 0,
-    "max_regenerations": 3
+    "max_regenerations": 0
   }
 }
 ```
 
 **Error responses**:
 - `400` — content safety block `{ "error": "safety_blocked", "reason": "input" | "output" }`
-- `429` — monthly image limit exceeded
-- `409` — regeneration limit reached `{ "error": "regen_limit_reached", "max": 3 }`
-- `503` — OpenAI image API unavailable
+- `429` — monthly image limit exceeded `{ "error": "limit_reached", "resetDate": "ISO-8601" }`
+- `409` — regeneration limit reached `{ "error": "regen_limit_reached", "max": 0 }` (0 free, 5 premium)
+- `500` — entitlement check failed `{ "error": "entitlement_check_failed" }`
+- `503` — image provider unavailable
 
 ---
 

@@ -45,8 +45,8 @@ describe('UsageIndicator', () => {
         <UsageIndicator />
       </ServicesProvider>
     );
-    // 0 used of 5 -> 5 remaining.
-    await waitFor(() => expect(getByText('5 interpretations left this month')).toBeTruthy());
+    // 0 used of 3 -> 3 remaining.
+    await waitFor(() => expect(getByText('3 interpretations left this month')).toBeTruthy());
   });
 
   it('shows the premium nudge badge', async () => {
@@ -66,17 +66,18 @@ describe('UsageIndicator', () => {
         <UsageIndicator />
       </ServicesProvider>
     );
-    await waitFor(() => expect(getByText(/0 of 5 interpretations used/)).toBeTruthy());
+    await waitFor(() => expect(getByText(/0 of 3 interpretations used/)).toBeTruthy());
   });
 
   it('uses singular phrasing when exactly one interpretation remains', async () => {
     const entitlement = new MockEntitlementService();
     jest.spyOn(entitlement, 'fetchEntitlement').mockResolvedValue({
       subscriptionTier: 'free',
-      interpretationsUsedThisMonth: 4,
-      monthlyInterpretationLimit: 5,
+      interpretationsUsedThisMonth: 2,
+      monthlyInterpretationLimit: 3,
       imagesUsedThisMonth: 0,
-      monthlyImageLimit: 5,
+      monthlyImageLimit: 1,
+      bonusImageCredits: 1,
       resetDate: new Date(),
       subscriptionExpiresAt: null,
     });

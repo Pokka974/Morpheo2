@@ -104,6 +104,40 @@ describe('Morpheo Constitution Verification (T133)', () => {
     it('generate-image Edge Function checks entitlement server-side', () => {
       const source = readFile('supabase/functions/generate-image/index.ts');
       expect(source).toContain('entitlements');
+      // Same one-statement check-and-increment as the interpretation path, for the same
+      // reason (019_image_credit_rpc.sql).
+      expect(source).toContain('consume_image_credit');
+
+      const rpc = readFile('supabase/migrations/019_image_credit_rpc.sql');
+      expect(rpc).toContain('monthly_image_limit');
+      expect(rpc).toContain('images_used_this_month + 1');
+      // The one-time welcome image is spent only after the month's allowance.
+      expect(rpc).toContain('bonus_image_credits');
+    });
+
+    it('generate-image refunds the credit when no image is produced', () => {
+      const source = readFile('supabase/functions/generate-image/index.ts');
+      expect(source).toContain('refund_image_credit');
+    });
+
+    it('image usage counters are not writable by the client', () => {
+      const rpc = readFile('supabase/migrations/019_image_credit_rpc.sql');
+      expect(rpc).toContain('REVOKE ALL ON FUNCTION consume_image_credit');
+      expect(rpc).toContain('REVOKE ALL ON FUNCTION refund_image_credit');
+      expect(rpc).toContain('GRANT EXECUTE ON FUNCTION consume_image_credit(UUID) TO service_role');
+      expect(rpc).toContain(
+        'GRANT EXECUTE ON FUNCTION refund_image_credit(UUID, TEXT) TO service_role'
+      );
+    });
+
+    it('the one-time welcome image is not refilled by the monthly reset cron', () => {
+      // cron.schedule stores its command string unparsed, so a job body that picked up
+      // bonus_image_credits would schedule cleanly and then hand every free user a second
+      // free image on the 1st of every month, forever, with nothing failing.
+      const cron = readFile('supabase/migrations/007_pg_cron.sql');
+      const reconciliation = readFile('supabase/migrations/011_schema_reconciliation.sql');
+      expect(cron).not.toContain('bonus_image_credits');
+      expect(reconciliation).not.toContain('bonus_image_credits');
     });
 
     it('generate-video Edge Function checks premium entitlement server-side', () => {

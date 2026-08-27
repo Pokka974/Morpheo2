@@ -67,9 +67,10 @@ One row per user. Managed exclusively by the RevenueCat webhook Edge Function.
 | `user_id` | `uuid` | UNIQUE NOT NULL FK → `profiles.id` ON DELETE CASCADE | |
 | `subscription_tier` | `text` | NOT NULL DEFAULT `'free'` CHECK IN ('free','premium') | |
 | `interpretations_used_this_month` | `integer` | NOT NULL DEFAULT `0` CHECK >= 0 | Consumed via `consume_interpretation_credit()`, which checks the limit and increments in one statement; returned by `refund_interpretation_credit()` when no interpretation is produced |
-| `images_used_this_month` | `integer` | NOT NULL DEFAULT `0` CHECK >= 0 | Incremented by image generation Edge Function |
-| `monthly_interpretation_limit` | `integer` | NOT NULL DEFAULT `5` | 5 free / NULL = unlimited for premium |
-| `monthly_image_limit` | `integer` | NOT NULL DEFAULT `3` | 3 free / NULL = unlimited for premium |
+| `images_used_this_month` | `integer` | NOT NULL DEFAULT `0` CHECK >= 0 | Consumed via `consume_image_credit()`, which checks the limit and increments in one statement; returned by `refund_image_credit()` when no image is produced |
+| `monthly_interpretation_limit` | `integer` | DEFAULT `3` | 3 free / NULL = unlimited for premium |
+| `monthly_image_limit` | `integer` | DEFAULT `1` | 1 free / NULL = unlimited for premium |
+| `bonus_image_credits` | `integer` | NOT NULL DEFAULT `1` | The one-time welcome image. A lifetime credit, spent only once the month's allowance is gone, and deliberately **not** touched by the monthly reset |
 | `reset_date` | `date` | NOT NULL | First day of next calendar month; set on creation, updated by reset cron |
 | `revenuecat_customer_id` | `text` | NULLABLE | |
 | `subscription_expires_at` | `timestamptz` | NULLABLE | Null for free tier |
@@ -77,7 +78,7 @@ One row per user. Managed exclusively by the RevenueCat webhook Edge Function.
 
 **RLS**: User can SELECT their own row. No client-side UPDATE permitted. Service role key only for writes.
 
-**Monthly reset**: A Supabase cron job (pg_cron, `reset-monthly-entitlements`, runs 00:05 UTC on the 1st of each month) resets `interpretations_used_this_month = 0`, `images_used_this_month = 0`, and advances `reset_date`. A second job (`expire-subscriptions`, daily at 00:15 UTC) downgrades `subscription_tier` on both `entitlements` and `profiles` once `subscription_expires_at` has passed — a safety net for missed RevenueCat webhooks.
+**Monthly reset**: A Supabase cron job (pg_cron, `reset-monthly-entitlements`, runs 00:05 UTC on the 1st of each month) resets `interpretations_used_this_month = 0`, `images_used_this_month = 0`, and advances `reset_date`. It deliberately leaves `bonus_image_credits` alone — that credit is granted once per account, not once per month. A second job (`expire-subscriptions`, daily at 00:15 UTC) downgrades `subscription_tier` on both `entitlements` and `profiles` once `subscription_expires_at` has passed — a safety net for missed RevenueCat webhooks.
 
 ---
 
@@ -184,7 +185,7 @@ One dream can have one image and one video (separate rows by `media_type`).
 | `safety_input_passed` | `boolean` | NULLABLE | Null until evaluated |
 | `safety_output_passed` | `boolean` | NULLABLE | Null until output received |
 | `regeneration_count` | `integer` | NOT NULL DEFAULT `0` | |
-| `max_regenerations` | `integer` | NOT NULL | 3 free / 5 premium; set at row creation |
+| `max_regenerations` | `integer` | NOT NULL DEFAULT `0` | 0 free / 5 premium; set at row creation and carried forward across regenerations |
 | `error_message` | `text` | NULLABLE | Set on failure |
 | `created_at` | `timestamptz` | NOT NULL DEFAULT `now()` | |
 | `updated_at` | `timestamptz` | NOT NULL DEFAULT `now()` | |

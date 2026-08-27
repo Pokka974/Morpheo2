@@ -8,8 +8,9 @@ const FREE: Entitlement = {
   subscriptionTier: 'free',
   interpretationsUsedThisMonth: 7,
   monthlyInterpretationLimit: 10,
-  imagesUsedThisMonth: 2,
-  monthlyImageLimit: 5,
+  imagesUsedThisMonth: 1,
+  monthlyImageLimit: 1,
+  bonusImageCredits: 0,
   resetDate: new Date('2026-09-01T00:00:00.000Z'),
   subscriptionExpiresAt: null,
 };
@@ -80,7 +81,7 @@ describe('ProfileCard', () => {
     const { getByText, queryByTestId } = renderCard({ entitlement: PREMIUM });
 
     expect(getByText('Premium')).toBeTruthy();
-    expect(getByText('Unlimited interpretations')).toBeTruthy();
+    expect(getByText('Unlimited interpretations and images')).toBeTruthy();
     // A bar that is always full would read as a warning rather than as "you have everything".
     expect(queryByTestId('quota-meter')).toBeNull();
   });
@@ -91,11 +92,59 @@ describe('ProfileCard', () => {
     // free-tier default (or a manually edited value). The meter must key off the
     // tier, not assume the limit column was cleared on upgrade.
     const { getByText, queryByTestId } = renderCard({
-      entitlement: { ...PREMIUM, monthlyInterpretationLimit: 5, interpretationsUsedThisMonth: 5 },
+      entitlement: {
+        ...PREMIUM,
+        monthlyInterpretationLimit: 3,
+        interpretationsUsedThisMonth: 3,
+        monthlyImageLimit: 1,
+        imagesUsedThisMonth: 1,
+      },
     });
 
-    expect(getByText('Unlimited interpretations')).toBeTruthy();
+    expect(getByText('Unlimited interpretations and images')).toBeTruthy();
     expect(queryByTestId('quota-meter')).toBeNull();
+    expect(queryByTestId('image-quota-meter')).toBeNull();
+  });
+
+  // Images are the scarcer quota since the repricing — one a month against three
+  // interpretations — so leaving them off the card would make the tighter of the two
+  // limits discoverable only by hitting it.
+  it('meters images alongside interpretations', () => {
+    const { getByText, getByTestId } = renderCard({
+      entitlement: { ...FREE, monthlyImageLimit: 1, imagesUsedThisMonth: 0 },
+    });
+
+    expect(getByText('1 image left')).toBeTruthy();
+    expect(getByText('0 / 1')).toBeTruthy();
+    expect(getByTestId('image-quota-meter').props.accessible).toBe(false);
+  });
+
+  it('never reports a negative image remainder when usage has overrun the limit', () => {
+    const { getByText } = renderCard({
+      entitlement: { ...FREE, monthlyImageLimit: 1, imagesUsedThisMonth: 3 },
+    });
+
+    expect(getByText('0 images left')).toBeTruthy();
+  });
+
+  // The welcome image sits outside the monthly cycle, so it gets its own line rather than
+  // being folded into the meter: adding it to the fraction would draw a bar that refills
+  // once and never again.
+  it('states the one-time welcome image separately from the monthly meter', () => {
+    const { getByText } = renderCard({
+      entitlement: { ...FREE, monthlyImageLimit: 1, imagesUsedThisMonth: 1, bonusImageCredits: 1 },
+    });
+
+    expect(getByText('0 images left')).toBeTruthy();
+    expect(getByText('+ 1 welcome image, yours whenever you want it')).toBeTruthy();
+  });
+
+  it('drops the welcome line once the credit is spent', () => {
+    const { queryByText } = renderCard({
+      entitlement: { ...FREE, bonusImageCredits: 0 },
+    });
+
+    expect(queryByText(/welcome image/)).toBeNull();
   });
 
   it('offers the upgrade route from the quota line', () => {
@@ -112,5 +161,36 @@ describe('ProfileCard', () => {
     // No entitlement means no known limit, so the card says nothing it cannot back up.
     expect(getByText('julien@morpheo.app')).toBeTruthy();
     expect(queryByTestId('quota-meter')).toBeNull();
+    expect(queryByTestId('image-quota-meter')).toBeNull();
+  });
+
+  // Regression guard. A premium account whose entitlement fetch fails -- which is what a
+  // column missing on the server looks like from inside the app, since PostgREST rejects
+  // the whole select -- used to render the "Free" badge next to "Unlimited interpretations
+  // and images". Telling a paying user they are on the free tier is worse than telling
+  // them nothing, and the contradiction hid the actual fault.
+  it('claims no tier at all when the entitlement is unknown', () => {
+    const { queryByText } = renderCard({ entitlement: null });
+
+    expect(queryByText('Free')).toBeNull();
+    expect(queryByText('Premium')).toBeNull();
+    expect(queryByText('Unlimited interpretations and images')).toBeNull();
+  });
+
+  // expire-subscriptions downgrades a lapsed subscriber's tier without zeroing the
+  // counters, so someone who used 40 interpretations on premium lands mid-cycle on a
+  // limit of 3. "40 / 3" reads as a rendering fault rather than as "you are over".
+  it('reports a lowered limit as reached rather than printing a fraction above one', () => {
+    const { getByText } = renderCard({
+      entitlement: {
+        ...FREE,
+        subscriptionTier: 'free',
+        monthlyInterpretationLimit: 3,
+        interpretationsUsedThisMonth: 40,
+      },
+    });
+
+    expect(getByText('0 interpretations left')).toBeTruthy();
+    expect(getByText('3 / 3')).toBeTruthy();
   });
 });

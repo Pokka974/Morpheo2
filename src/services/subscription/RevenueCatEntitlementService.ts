@@ -16,7 +16,7 @@ export class RevenueCatEntitlementService implements EntitlementService {
     const { data, error }: { data: unknown; error: unknown } = await supabase
       .from('entitlements')
       .select(
-        'subscription_tier, interpretations_used_this_month, monthly_interpretation_limit, images_used_this_month, monthly_image_limit, reset_date, subscription_expires_at'
+        'subscription_tier, interpretations_used_this_month, monthly_interpretation_limit, images_used_this_month, monthly_image_limit, bonus_image_credits, reset_date, subscription_expires_at'
       )
       .single();
 
@@ -33,6 +33,10 @@ export class RevenueCatEntitlementService implements EntitlementService {
       monthlyInterpretationLimit: e['monthly_interpretation_limit'] as number | null,
       imagesUsedThisMonth: e['images_used_this_month'] as number,
       monthlyImageLimit: e['monthly_image_limit'] as number | null,
+      // Defaults to 0 rather than 1: a row read before migration 018 has no such column,
+      // and the safe reading of "unknown" is that the welcome image is already spent —
+      // the server gate is the one that decides either way.
+      bonusImageCredits: (e['bonus_image_credits'] as number | null) ?? 0,
       resetDate,
       subscriptionExpiresAt: e['subscription_expires_at']
         ? new Date(e['subscription_expires_at'] as string)
@@ -51,13 +55,30 @@ export class RevenueCatEntitlementService implements EntitlementService {
     const e = await this.fetchEntitlement();
     if (e.subscriptionTier === 'premium') return true;
     if (e.monthlyImageLimit === null) return true;
-    return e.imagesUsedThisMonth < e.monthlyImageLimit;
+    // Mirrors consume_image_credit (019): the month's allowance first, then the one-time
+    // welcome image. A free account that has spent its monthly image but still holds the
+    // welcome credit can generate — this is the only reason a new user is not paywalled
+    // on their first dream.
+    return e.imagesUsedThisMonth < e.monthlyImageLimit || e.bonusImageCredits > 0;
   }
 
   async isPremium(): Promise<boolean> {
     // Server-authoritative check: tampered client SDK state cannot affect this
     const e = await this.fetchEntitlement();
     return e.subscriptionTier === 'premium';
+  }
+
+  async getPremiumPriceString(): Promise<string | null> {
+    // `priceString` is the store's own localised rendering of the price it will actually
+    // charge in this storefront. Hardcoding "7,99 €" would be a lie everywhere outside
+    // the eurozone, and stale the first time the price is changed in the dashboard.
+    try {
+      const offerings = await Purchases.getOfferings();
+      return offerings.current?.availablePackages[0]?.product.priceString ?? null;
+    } catch (err) {
+      console.error('Failed to read the premium price from RevenueCat:', err);
+      return null;
+    }
   }
 
   async purchasePremium(): Promise<{ success: boolean }> {
