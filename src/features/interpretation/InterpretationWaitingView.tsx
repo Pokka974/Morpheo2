@@ -372,7 +372,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   orbHalo: {
-    ...StyleSheet.absoluteFillObject,
+    // RN 0.86 dropped `absoluteFillObject`; `absoluteFill` is now the plain frozen
+    // object it used to be the registered-ID twin of, so it spreads the same way.
+    ...StyleSheet.absoluteFill,
     borderRadius: radius.full,
     backgroundColor: colors.accent,
   },

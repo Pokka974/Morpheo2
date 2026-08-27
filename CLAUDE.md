@@ -42,7 +42,7 @@ tests/
 |---|-----------|--------|
 | C1 | Account deletion phrase | Exact string `DELETE MY ACCOUNT` — matches Edge Function contract |
 | C2 | Idle timeout key | `AsyncStorage` key `lock_idle_timeout_minutes` — NOT `profiles.notification_reminder_time` |
-| C3 | Voice dictation | `@react-native-voice/voice` for STT — NOT `expo-speech` (TTS-only) |
+| C3 | Voice dictation | `expo-speech-recognition` for STT — NOT `expo-speech` (TTS-only). Superseded `@react-native-voice/voice`, a legacy bridge module that cannot run on RN 0.85+ (bridgeless-only) |
 | H1 | Luma training opt-out | `{ "do_not_train": true }` MUST be included in every Luma API call |
 | H2 | SQLite emotion filter | `json_each()` subquery — NOT PostgreSQL `@>` array syntax |
 | H3 | generation_jobs RLS | SELECT policy for owner — enables client polling |

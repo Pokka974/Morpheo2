@@ -176,9 +176,14 @@ describe('Morpheo Constitution Verification (T133)', () => {
   });
 
   describe('Principle IX — Voice dictation uses correct library (C3 fix)', () => {
-    it('DreamLogScreen uses @react-native-voice/voice not expo-speech', () => {
+    it('DreamLogScreen uses expo-speech-recognition, not expo-speech', () => {
       const source = readFile('src/app/(main)/log/index.tsx');
-      expect(source).toContain('@react-native-voice/voice');
+      expect(source).toContain("from 'expo-speech-recognition'");
+      // Not a bare `.not.toContain('expo-speech')` — that substring lives inside
+      // 'expo-speech-recognition' itself. Match the import specifier exactly.
+      expect(source).not.toMatch(/from 'expo-speech'/);
+      // The predecessor is a legacy bridge module and cannot run on RN 0.85+.
+      expect(source).not.toContain('@react-native-voice/voice');
     });
   });
 

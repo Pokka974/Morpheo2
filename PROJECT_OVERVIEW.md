@@ -20,7 +20,7 @@ Morpheo is a mobile app (iOS/Android, one codebase) where a user logs their drea
 | Payments | RevenueCat (`react-native-purchases`) | `RevenueCatEntitlementService`, webhook handler in `supabase/functions/webhooks` |
 | Auth | Supabase Auth + `expo-apple-authentication` + `@react-native-google-signin/google-signin` | Sign-in/sign-up screens, `SupabaseAuthService` |
 | Local security | `expo-local-authentication` + `expo-secure-store` | Face ID/biometric app lock (`ExpoLocalLockService`, `lock.tsx`) |
-| Voice input | `@react-native-voice/voice` | Speech-to-text dream dictation (NOT `expo-speech`, which is TTS-only) |
+| Voice input | `expo-speech-recognition` | Speech-to-text dream dictation (NOT `expo-speech`, which is TTS-only) |
 | State (global, planned) | Zustand ^5 | Listed as a dependency; not yet clearly wired into a store in the sampled files |
 | Test framework | Jest 29 + `jest-expo` + `@testing-library/react-native` | `npm test` / `npm run test:ci`; 31 test files under `tests/unit`, `tests/integration`, `tests/e2e` |
 | Lint/format | ESLint 8 + Prettier 3 + Husky/lint-staged | Enforced pre-commit and in CI |

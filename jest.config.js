@@ -4,7 +4,7 @@ module.exports = {
   preset: 'jest-expo',
 
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|drizzle-orm|@shopify/flash-list)',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|drizzle-orm|@shopify/flash-list|standard-navigation)',
   ],
   // Gesture handler asserts its native TurboModule at import time, which no unit
   // test has. Its own setup file stubs the module and swaps the gesture components
@@ -31,10 +31,6 @@ module.exports = {
   testTimeout: 20000,
 
   moduleNameMapper: {
-    // Custom NativeModules mock adds .default so jest-expo's setup.js doesn't throw
-    // when calling Object.defineProperty on the mock result (RN 0.76 CJS compat fix)
-    'react-native/Libraries/BatchedBridge/NativeModules':
-      '<rootDir>/src/__mocks__/NativeModules.js',
     // Expo native modules — prevent requireNativeModule() from throwing in unit tests
     '^expo-secure-store$': '<rootDir>/__mocks__/expo-secure-store.js',
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',
@@ -44,6 +40,7 @@ module.exports = {
     '^expo-linear-gradient$': '<rootDir>/__mocks__/expo-linear-gradient.js',
     '^expo-font$': '<rootDir>/__mocks__/expo-font.js',
     '^expo-localization$': '<rootDir>/__mocks__/expo-localization.js',
+    '^expo-speech-recognition$': '<rootDir>/__mocks__/expo-speech-recognition.js',
     '^@app/(.*)$': '<rootDir>/src/app/$1',
     '^@features/(.*)$': '<rootDir>/src/features/$1',
     '^@services/(.*)$': '<rootDir>/src/services/$1',

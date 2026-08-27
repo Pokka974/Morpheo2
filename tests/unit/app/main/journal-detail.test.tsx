@@ -248,7 +248,7 @@ describe('DreamDetailScreen', () => {
     const { getAllByLabelText, getByLabelText, queryByLabelText } = renderScreen();
 
     await waitFor(() => expect(getAllByLabelText('Dream illustration').length).toBeGreaterThan(0));
-    fireEvent.press(getAllByLabelText('Dream illustration')[0]);
+    fireEvent.press(getAllByLabelText('Dream illustration')[0]!);
 
     await waitFor(() => expect(getByLabelText('Close')).toBeTruthy());
     fireEvent.press(getByLabelText('Close'));

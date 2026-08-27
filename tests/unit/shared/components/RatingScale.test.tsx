@@ -18,7 +18,7 @@ describe('<RatingScale />', () => {
 
     const steps = getAllByRole('button');
     expect(steps).toHaveLength(5);
-    fireEvent.press(steps[2]);
+    fireEvent.press(steps[2]!);
     expect(onChange).toHaveBeenCalledWith(3);
   });
 
