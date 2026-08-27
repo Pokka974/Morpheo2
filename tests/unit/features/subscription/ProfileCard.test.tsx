@@ -161,5 +161,36 @@ describe('ProfileCard', () => {
     // No entitlement means no known limit, so the card says nothing it cannot back up.
     expect(getByText('julien@morpheo.app')).toBeTruthy();
     expect(queryByTestId('quota-meter')).toBeNull();
+    expect(queryByTestId('image-quota-meter')).toBeNull();
+  });
+
+  // Regression guard. A premium account whose entitlement fetch fails -- which is what a
+  // column missing on the server looks like from inside the app, since PostgREST rejects
+  // the whole select -- used to render the "Free" badge next to "Unlimited interpretations
+  // and images". Telling a paying user they are on the free tier is worse than telling
+  // them nothing, and the contradiction hid the actual fault.
+  it('claims no tier at all when the entitlement is unknown', () => {
+    const { queryByText } = renderCard({ entitlement: null });
+
+    expect(queryByText('Free')).toBeNull();
+    expect(queryByText('Premium')).toBeNull();
+    expect(queryByText('Unlimited interpretations and images')).toBeNull();
+  });
+
+  // expire-subscriptions downgrades a lapsed subscriber's tier without zeroing the
+  // counters, so someone who used 40 interpretations on premium lands mid-cycle on a
+  // limit of 3. "40 / 3" reads as a rendering fault rather than as "you are over".
+  it('reports a lowered limit as reached rather than printing a fraction above one', () => {
+    const { getByText } = renderCard({
+      entitlement: {
+        ...FREE,
+        subscriptionTier: 'free',
+        monthlyInterpretationLimit: 3,
+        interpretationsUsedThisMonth: 40,
+      },
+    });
+
+    expect(getByText('0 interpretations left')).toBeTruthy();
+    expect(getByText('3 / 3')).toBeTruthy();
   });
 });

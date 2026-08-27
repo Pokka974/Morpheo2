@@ -38,12 +38,18 @@ interface QuotaMeterProps {
 function QuotaMeter({ label, used, limit, testID }: QuotaMeterProps) {
   const { t } = useTranslation();
   const ratio = limit > 0 ? Math.min(used / limit, 1) : 0;
+  // Usage can legitimately exceed the limit: `expire-subscriptions` drops a lapsed
+  // subscriber to free without zeroing counters, so someone who used 40 interpretations
+  // on premium lands on a limit of 3 mid-cycle. "40 / 3" reads as a rendering fault
+  // rather than as "you are over" — the line beside it already says 0 left — so the
+  // fraction reports the limit as reached and waits for the monthly reset.
+  const shown = Math.min(used, limit);
 
   return (
     <View style={styles.meter}>
       <View style={styles.quotaHeader}>
         <Text style={styles.quotaLabel}>{label}</Text>
-        <Text style={styles.quotaCount}>{t('settings.quotaFraction', { used, limit })}</Text>
+        <Text style={styles.quotaCount}>{t('settings.quotaFraction', { used: shown, limit })}</Text>
       </View>
       <View style={styles.meterTrack} testID={testID} accessible={false}>
         <LinearGradient
@@ -70,7 +76,12 @@ function QuotaMeter({ label, used, limit, testID }: QuotaMeterProps) {
 export function ProfileCard({ email, dreamCount, since, entitlement, onUpgrade }: Props) {
   const { t, i18n } = useTranslation();
 
-  const isPremium = entitlement?.subscriptionTier === 'premium';
+  // Deliberately three-valued. A null entitlement means the fetch has not resolved — or
+  // failed — and the card must not fill that in with "free": that is a paying account
+  // being told it is on the free tier, which is exactly what a missing column on the
+  // server looked like from inside the app. Unknown renders as nothing at all.
+  const tier = entitlement?.subscriptionTier ?? null;
+  const isPremium = tier === 'premium';
 
   const limit = entitlement?.monthlyInterpretationLimit ?? null;
   const used = entitlement?.interpretationsUsedThisMonth ?? 0;
@@ -90,8 +101,10 @@ export function ProfileCard({ email, dreamCount, since, entitlement, onUpgrade }
   const welcomeImages = entitlement?.bonusImageCredits ?? 0;
 
   // An unlimited tier has no meter to draw: a bar that is always full reads as a
-  // warning rather than as "you have everything".
-  const hasQuota = !isPremium && (limit !== null || imageLimit !== null);
+  // warning rather than as "you have everything". An unknown tier has nothing to draw
+  // either — "Unlimited" is as wrong a guess as "Free" when the fetch has not landed.
+  const hasQuota = tier !== null && !isPremium && (limit !== null || imageLimit !== null);
+  const isUnlimited = tier !== null && !hasQuota;
 
   return (
     <LinearGradient
@@ -125,11 +138,13 @@ export function ProfileCard({ email, dreamCount, since, entitlement, onUpgrade }
               : t('settings.profileMetaNoDate', { count: dreamCount })}
           </Text>
         </View>
-        <View style={[styles.badge, isPremium ? styles.badgePremium : styles.badgeFree]}>
-          <Text style={[styles.badgeLabel, isPremium ? styles.badgeLabelPremium : null]}>
-            {isPremium ? t('settings.tierPremium') : t('settings.tierFree')}
-          </Text>
-        </View>
+        {tier === null ? null : (
+          <View style={[styles.badge, isPremium ? styles.badgePremium : styles.badgeFree]}>
+            <Text style={[styles.badgeLabel, isPremium ? styles.badgeLabelPremium : null]}>
+              {isPremium ? t('settings.tierPremium') : t('settings.tierFree')}
+            </Text>
+          </View>
+        )}
       </View>
 
       {hasQuota ? (
@@ -179,9 +194,9 @@ export function ProfileCard({ email, dreamCount, since, entitlement, onUpgrade }
             </Pressable>
           </View>
         </View>
-      ) : (
+      ) : isUnlimited ? (
         <Text style={styles.quotaUnlimited}>{t('settings.quotaUnlimited')}</Text>
-      )}
+      ) : null}
     </LinearGradient>
   );
 }
