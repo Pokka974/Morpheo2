@@ -1,0 +1,3 @@
+# No blank issues: every issue should carry the priority / points / area triage
+# labels, and only the forms prompt for them.
+blank_issues_enabled: false

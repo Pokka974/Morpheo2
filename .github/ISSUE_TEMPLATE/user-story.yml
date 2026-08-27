@@ -1,0 +1,97 @@
+name: User story
+description: New user-facing capability from the spec
+title: '<the capability, phrased as an outcome>'
+labels: ['type/user-story']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The dropdowns below name the labels to apply. GitHub cannot apply them from a
+        form, so set `priority/*`, `points/*` and `area/*` by hand after opening —
+        the triage board reads the labels, not this body.
+
+  - type: textarea
+    id: story
+    attributes:
+      label: Story
+      description: Who wants this, and what it gets them.
+      value: |
+        As a <dreamer / free-tier user / subscriber>, I want <capability> so that <outcome>.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: >-
+        Where this sits today — the screen, the Edge Function, the spec section under
+        `specs/001-morpheo-app/`. What already exists that this builds on.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Apply the matching `priority/*` label.
+      options:
+        - priority/P0 — blocks revenue, compliance, or a working build
+        - priority/P1 — required to ship v1
+        - priority/P2 — should ship with v1 if capacity allows
+        - priority/P3 — hygiene; can follow v1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: points
+    attributes:
+      label: Points
+      description: Fibonacci estimate. Apply the matching `points/*` label.
+      options:
+        - points/1
+        - points/2
+        - points/3
+        - points/5
+        - points/8
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Apply the matching `area/*` label(s).
+      multiple: true
+      options:
+        - area/mobile — React Native app, screens, local persistence
+        - area/backend — Supabase schema, migrations, Edge Functions
+        - area/ci — CI pipeline, tooling, repo hygiene
+        - area/release — store submission and production configuration
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checkboxes a reviewer can tick off, one observable behaviour each.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: surface
+    attributes:
+      label: Surfaces this touches
+      description: >-
+        Each ticked box pulls in a gate from the Definition of Done — design tokens and
+        i18n for UI, a migration for schema, the adapter pattern for integrations.
+      options:
+        - label: UI — must consume `src/theme/tokens.ts` and the shared components, no hardcoded values
+        - label: Copy — every string through `useTranslation()`, keyed in both `en.json` and `fr.json`
+        - label: Database schema — needs a migration under `supabase/migrations/`
+        - label: External integration — must sit behind a `src/services/` interface, consumed via `useServices()`
+        - label: Entitlements — the server-side gate in the Edge Function is the real one
