@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#0d0d1a"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.morpheo.app",
@@ -32,7 +34,10 @@
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -66,9 +71,11 @@
     ],
     "scheme": "morpheo",
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "4f550712-e936-457c-8359-c563a7bf04a3"
       }
-    }
+    },
+    "owner": "pokka97410"
   }
 }
