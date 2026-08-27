@@ -148,10 +148,20 @@ Edge Function secrets (set via `supabase secrets set`):
 
 ```bash
 supabase start            # Start local Supabase
-supabase db push          # Apply migrations
-supabase db seed          # Seed system_prompts
+supabase db reset         # Replay 001..N from scratch, then the seed files
+npm run db:verify         # db reset + execute every cron.job body (what CI runs)
 supabase functions serve  # Serve Edge Functions locally
 ```
+
+`supabase/config.toml` lists `seed/system_prompts.sql` and `storage.sql` under
+`[db.seed]`, so `db reset` applies both — there is no separate seed command.
+
+The `Migrations` workflow runs the same two steps on every PR touching `supabase/**`
+(it drives the CLI and `psql` directly, so it needs no Node install).
+`cron.schedule()` stores its command string without parsing it, so a job body naming a
+dropped column schedules cleanly and then fails every night in production; that is why
+`supabase/ci/run_cron_jobs.sql` executes each body once, inside a transaction it rolls
+back.
 
 ## Architecture Decisions
 

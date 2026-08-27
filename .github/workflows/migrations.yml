@@ -1,0 +1,44 @@
+name: Migrations
+
+# Gated on supabase/** because the job boots a Postgres container: there is no reason to
+# pay for it on a PR that only touches React Native code.
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/migrations.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/migrations.yml'
+
+jobs:
+  apply-migrations:
+    name: Apply Migrations
+    runs-on: ubuntu-latest
+    env:
+      DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned: the -x service names below are validated against this CLI release.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.114.0
+
+      # Only the database. Every other service is excluded — none of them are needed to
+      # decide whether the SQL is valid, and each one is an image pull.
+      - name: Start local Postgres
+        run: supabase start -x realtime,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor,gotrue,storage-api
+
+      # The actual gate: drops the database and replays migrations 001..N followed by the
+      # seed files, exiting non-zero on the first SQL error.
+      - name: Apply every migration and seed from scratch
+        run: supabase db reset
+
+      # cron.schedule() stores its command unparsed, so a broken job body survives the
+      # step above. Run each one once.
+      - name: Execute each scheduled cron job body
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/ci/run_cron_jobs.sql
