@@ -81,7 +81,7 @@ describe('ProfileCard', () => {
     const { getByText, queryByTestId } = renderCard({ entitlement: PREMIUM });
 
     expect(getByText('Premium')).toBeTruthy();
-    expect(getByText('Unlimited interpretations')).toBeTruthy();
+    expect(getByText('Unlimited interpretations and images')).toBeTruthy();
     // A bar that is always full would read as a warning rather than as "you have everything".
     expect(queryByTestId('quota-meter')).toBeNull();
   });
@@ -92,11 +92,59 @@ describe('ProfileCard', () => {
     // free-tier default (or a manually edited value). The meter must key off the
     // tier, not assume the limit column was cleared on upgrade.
     const { getByText, queryByTestId } = renderCard({
-      entitlement: { ...PREMIUM, monthlyInterpretationLimit: 5, interpretationsUsedThisMonth: 5 },
+      entitlement: {
+        ...PREMIUM,
+        monthlyInterpretationLimit: 3,
+        interpretationsUsedThisMonth: 3,
+        monthlyImageLimit: 1,
+        imagesUsedThisMonth: 1,
+      },
     });
 
-    expect(getByText('Unlimited interpretations')).toBeTruthy();
+    expect(getByText('Unlimited interpretations and images')).toBeTruthy();
     expect(queryByTestId('quota-meter')).toBeNull();
+    expect(queryByTestId('image-quota-meter')).toBeNull();
+  });
+
+  // Images are the scarcer quota since the repricing — one a month against three
+  // interpretations — so leaving them off the card would make the tighter of the two
+  // limits discoverable only by hitting it.
+  it('meters images alongside interpretations', () => {
+    const { getByText, getByTestId } = renderCard({
+      entitlement: { ...FREE, monthlyImageLimit: 1, imagesUsedThisMonth: 0 },
+    });
+
+    expect(getByText('1 image left')).toBeTruthy();
+    expect(getByText('0 / 1')).toBeTruthy();
+    expect(getByTestId('image-quota-meter').props.accessible).toBe(false);
+  });
+
+  it('never reports a negative image remainder when usage has overrun the limit', () => {
+    const { getByText } = renderCard({
+      entitlement: { ...FREE, monthlyImageLimit: 1, imagesUsedThisMonth: 3 },
+    });
+
+    expect(getByText('0 images left')).toBeTruthy();
+  });
+
+  // The welcome image sits outside the monthly cycle, so it gets its own line rather than
+  // being folded into the meter: adding it to the fraction would draw a bar that refills
+  // once and never again.
+  it('states the one-time welcome image separately from the monthly meter', () => {
+    const { getByText } = renderCard({
+      entitlement: { ...FREE, monthlyImageLimit: 1, imagesUsedThisMonth: 1, bonusImageCredits: 1 },
+    });
+
+    expect(getByText('0 images left')).toBeTruthy();
+    expect(getByText('+ 1 welcome image, yours whenever you want it')).toBeTruthy();
+  });
+
+  it('drops the welcome line once the credit is spent', () => {
+    const { queryByText } = renderCard({
+      entitlement: { ...FREE, bonusImageCredits: 0 },
+    });
+
+    expect(queryByText(/welcome image/)).toBeNull();
   });
 
   it('offers the upgrade route from the quota line', () => {
