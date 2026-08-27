@@ -18,6 +18,9 @@ jest.mock('@features/../supabase/client', () => ({
 const mockSelectWhere = jest.fn();
 const mockRunAsync = jest.fn();
 const mockGetAllAsync = jest.fn();
+/** Backs `dreamExistsLocally`: the parent-dream lookup every interpretation and media
+ * row is checked against before it is inserted. Defaults to "the dream is here". */
+const mockGetFirstAsync = jest.fn();
 jest.mock('@db/client', () => ({
   db: {
     select: jest.fn(() => ({
@@ -29,6 +32,7 @@ jest.mock('@db/client', () => ({
   sqlite: {
     runAsync: (...args: unknown[]) => mockRunAsync(...args),
     getAllAsync: (...args: unknown[]) => mockGetAllAsync(...args),
+    getFirstAsync: (...args: unknown[]) => mockGetFirstAsync(...args),
   },
 }));
 
@@ -37,6 +41,13 @@ jest.mock('@db/client', () => ({
 const mockPurgeDreamLocally = jest.fn();
 jest.mock('@features/dream-log/dreamRepository', () => ({
   purgeDreamLocally: (...args: unknown[]) => mockPurgeDreamLocally(...args),
+}));
+
+// The upsert-per-term itself is covered in recurrenceRepository.test.ts; what matters
+// here is that the pull folds every synced interpretation into it.
+const mockRecordRecurrence = jest.fn();
+jest.mock('@features/recurrence/recurrenceRepository', () => ({
+  recordRecurrence: (...args: unknown[]) => mockRecordRecurrence(...args),
 }));
 
 import { pullRemoteChanges } from '@features/sync/pullService';
@@ -106,6 +117,8 @@ describe('pullRemoteChanges', () => {
     mockSelectWhere.mockReset().mockResolvedValue([]);
     mockRunAsync.mockReset().mockResolvedValue(undefined);
     mockGetAllAsync.mockReset().mockResolvedValue([]);
+    mockGetFirstAsync.mockReset().mockResolvedValue({ id: 'dream-1' });
+    mockRecordRecurrence.mockReset().mockResolvedValue(undefined);
     mediaCache.getSignedUrl.mockReset().mockResolvedValue('https://example.com/signed.png');
     mediaCache.cacheMedia.mockReset().mockResolvedValue('/local/media/media-1.png');
     mediaCache.removeCachedMedia.mockReset().mockResolvedValue(undefined);
@@ -392,6 +405,136 @@ describe('pullRemoteChanges', () => {
       expect.stringContaining('INSERT OR IGNORE INTO interpretations'),
       expect.arrayContaining(['interp-1'])
     );
+  });
+
+  /**
+   * `interpretations.dream_id` and `media.dream_id` are `NOT NULL REFERENCES dreams(id)`
+   * with `PRAGMA foreign_keys = ON`, so a child row whose dream was deleted remotely
+   * used to throw "FOREIGN KEY constraint failed" out of the entire pull — before the
+   * cursor was written, so every later cycle refetched the same page and failed on the
+   * same row. That stall is what left the journal list imageless: the media pull died
+   * on one orphan and never inserted any of the rows behind it.
+   */
+  describe('a child row whose dream is not on this device', () => {
+    const orphanInterpretation = {
+      id: 'interp-orphan',
+      dream_id: 'dream-deleted',
+      overall_reading: 'reading',
+      keywords: ['a'],
+      emotions: ['calm'],
+      cultural_references: [],
+      confidence: 'high',
+      is_degraded: false,
+      prompt_version: 'v1',
+      model_used: 'claude',
+      created_at: '2026-08-01T00:00:00.000Z',
+    };
+
+    const liveInterpretation = { ...orphanInterpretation, id: 'interp-1', dream_id: 'dream-1' };
+
+    const orphanMedia = {
+      id: 'media-orphan',
+      dream_id: 'dream-deleted',
+      media_type: 'image',
+      generation_status: 'complete',
+      storage_key: 'storage/media-orphan.png',
+      regeneration_count: 0,
+      max_regenerations: 3,
+      error_message: null,
+      created_at: '2026-08-01T00:00:00.000Z',
+      updated_at: '2026-08-01T00:00:00.000Z',
+    };
+
+    const liveMedia = { ...orphanMedia, id: 'media-1', dream_id: 'dream-1' };
+
+    /** Only `dream-1` is on this device; `dream-deleted` is gone. */
+    function onlyDreamOneIsLocal() {
+      mockGetFirstAsync.mockImplementation((_sql: string, id: string) =>
+        Promise.resolve(id === 'dream-1' ? { id } : null)
+      );
+    }
+
+    it('skips the orphan interpretation and still applies the rows behind it', async () => {
+      onlyDreamOneIsLocal();
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'interpretations')
+          return chainable({ data: [orphanInterpretation, liveInterpretation], error: null });
+        return chainable(EMPTY);
+      });
+
+      await pullRemoteChanges('user-1');
+
+      expect(mockRunAsync).not.toHaveBeenCalledWith(
+        expect.stringContaining('INSERT OR IGNORE INTO interpretations'),
+        expect.arrayContaining(['interp-orphan'])
+      );
+      expect(mockRunAsync).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT OR IGNORE INTO interpretations'),
+        expect.arrayContaining(['interp-1'])
+      );
+    });
+
+    it('skips the orphan media row and still applies the rows behind it', async () => {
+      onlyDreamOneIsLocal();
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'media') return chainable({ data: [orphanMedia, liveMedia], error: null });
+        return chainable(EMPTY);
+      });
+
+      await pullRemoteChanges('user-1');
+
+      expect(mockRunAsync).not.toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO media'),
+        expect.arrayContaining(['media-orphan'])
+      );
+      expect(mockRunAsync).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO media'),
+        expect.arrayContaining(['media-1'])
+      );
+    });
+
+    /**
+     * An orphan is indistinguishable here from a dream that simply hasn't synced yet,
+     * so the stored cursor stops at the last row actually applied. Advancing past the
+     * skipped row would drop it on this device permanently.
+     */
+    it('does not advance the stored cursor past a skipped row', async () => {
+      onlyDreamOneIsLocal();
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'interpretations')
+          return chainable({
+            data: [
+              { ...liveInterpretation, created_at: '2026-08-01T00:00:00.000Z' },
+              { ...orphanInterpretation, created_at: '2026-08-02T00:00:00.000Z' },
+              { ...liveInterpretation, id: 'interp-2', created_at: '2026-08-03T00:00:00.000Z' },
+            ],
+            error: null,
+          });
+        return chainable(EMPTY);
+      });
+
+      await pullRemoteChanges('user-1');
+
+      expect(await AsyncStorage.getItem('sync_interpretations_last_pulled_at')).toBe(
+        '2026-08-01T00:00:00.000Z'
+      );
+    });
+
+    it('names the skipped rows once rather than failing the pull', async () => {
+      onlyDreamOneIsLocal();
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'interpretations')
+          return chainable({ data: [orphanInterpretation], error: null });
+        return chainable(EMPTY);
+      });
+
+      await expect(pullRemoteChanges('user-1')).resolves.toBeUndefined();
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Skipped 1 interpretations whose dream is not on this device')
+      );
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+    });
   });
 
   it('upserts media while preserving the existing local_cache_path (which has no remote counterpart)', async () => {
@@ -688,6 +831,119 @@ describe('pullRemoteChanges', () => {
     );
   });
 
+  /**
+   * The constellation reads `recurrence_patterns`, which only ever got written by the
+   * screen that ran an interpretation. A device that pulled those interpretations from
+   * elsewhere had an empty table and was told it had "not enough dreams yet", however
+   * full its journal was.
+   */
+  describe('rebuilding recurrence patterns from the interpretations on this device', () => {
+    const interpretationRow = {
+      dream_id: 'dream-1',
+      keywords: '["ocean","flight"]',
+      emotions: '["awe"]',
+      themes: '["freedom"]',
+      created_at: '2026-08-01T00:00:00.000Z',
+    };
+
+    /** getAllAsync serves both the recurrence rebuild and the media hydration; only
+     * the rebuild's query names `FROM interpretations`. */
+    function respondToRebuildWith(rows: unknown[]) {
+      mockGetAllAsync.mockImplementation((sql: string) =>
+        Promise.resolve(sql.includes('FROM interpretations') ? rows : [])
+      );
+    }
+
+    it('records keywords, emotions and themes for a synced interpretation', async () => {
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+      respondToRebuildWith([interpretationRow]);
+
+      await pullRemoteChanges('user-1');
+
+      expect(mockRecordRecurrence).toHaveBeenCalledWith(
+        'user-1',
+        'dream-1',
+        'keyword',
+        ['ocean', 'flight'],
+        '2026-08-01T00:00:00.000Z'
+      );
+      expect(mockRecordRecurrence).toHaveBeenCalledWith(
+        'user-1',
+        'dream-1',
+        'emotion',
+        ['awe'],
+        '2026-08-01T00:00:00.000Z'
+      );
+      expect(mockRecordRecurrence).toHaveBeenCalledWith(
+        'user-1',
+        'dream-1',
+        'theme',
+        ['freedom'],
+        '2026-08-01T00:00:00.000Z'
+      );
+    });
+
+    /** `getTopRecurrences` filters on `last_seen_at`, so stamping a backfill with the
+     * current time would make every old symbol look like it recurred today. */
+    it("stamps each pattern with the interpretation's own timestamp, not now", async () => {
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+      respondToRebuildWith([interpretationRow]);
+
+      await pullRemoteChanges('user-1');
+
+      for (const call of mockRecordRecurrence.mock.calls) {
+        expect(call[4]).toBe('2026-08-01T00:00:00.000Z');
+      }
+    });
+
+    it('folds each interpretation once, resuming from its stored cursor', async () => {
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+      respondToRebuildWith([interpretationRow]);
+
+      await pullRemoteChanges('user-1');
+
+      expect(await AsyncStorage.getItem('sync_recurrence_folded_through')).toBe(
+        '2026-08-01T00:00:00.000Z'
+      );
+      const [sql, bindings] = mockGetAllAsync.mock.calls.find(([q]) =>
+        (q as string).includes('FROM interpretations')
+      ) as [string, string[]];
+      expect(sql).toContain('i.created_at > ?');
+      expect(bindings[0]).toBe('1970-01-01T00:00:00.000Z');
+    });
+
+    it('costs a dream its stars rather than the whole rebuild when a term list is malformed', async () => {
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+      respondToRebuildWith([
+        { ...interpretationRow, keywords: 'not json at all' },
+        {
+          dream_id: 'dream-2',
+          keywords: '["forest"]',
+          emotions: '[]',
+          themes: '[]',
+          created_at: '2026-08-02T00:00:00.000Z',
+        },
+      ]);
+
+      await pullRemoteChanges('user-1');
+
+      expect(mockRecordRecurrence).toHaveBeenCalledWith(
+        'user-1',
+        'dream-1',
+        'keyword',
+        [],
+        expect.any(String)
+      );
+      expect(mockRecordRecurrence).toHaveBeenCalledWith(
+        'user-1',
+        'dream-2',
+        'keyword',
+        ['forest'],
+        expect.any(String)
+      );
+    });
+  });
+
   describe('media cache hydration (an image generated on another device has no local file)', () => {
     it('downloads a synced image that has no cached file and records the local path', async () => {
       mockFrom.mockImplementation(() => chainable(EMPTY));
@@ -706,12 +962,23 @@ describe('pullRemoteChanges', () => {
       );
     });
 
+    /** The one `getAllAsync` call that is the media-hydration query. */
+    function hydrationQuery(): string {
+      const call = mockGetAllAsync.mock.calls.find(([sql]) =>
+        (sql as string).includes('FROM media')
+      );
+      if (!call) throw new Error('hydration never queried media');
+      return call[0] as string;
+    }
+
     it('only considers completed images that have a remote object but no local file', async () => {
       mockFrom.mockImplementation(() => chainable(EMPTY));
 
       await pullRemoteChanges('user-1', mediaCache);
 
-      const [sql] = mockGetAllAsync.mock.calls[0] as [string, number];
+      // The recurrence rebuild also reads through getAllAsync, so pick the hydration
+      // query by what it selects rather than by call order.
+      const sql = hydrationQuery();
       expect(sql).toContain("generation_status = 'complete'");
       expect(sql).toContain('storage_key IS NOT NULL');
       expect(sql).toContain('local_cache_path IS NULL');
@@ -754,7 +1021,9 @@ describe('pullRemoteChanges', () => {
 
       await pullRemoteChanges('user-1');
 
-      expect(mockGetAllAsync).not.toHaveBeenCalled();
+      expect(
+        mockGetAllAsync.mock.calls.some(([sql]) => (sql as string).includes('FROM media'))
+      ).toBe(false);
       expect(mediaCache.getSignedUrl).not.toHaveBeenCalled();
     });
   });

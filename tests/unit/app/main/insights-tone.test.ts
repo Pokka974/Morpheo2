@@ -97,6 +97,27 @@ describe('buildRibbon', () => {
     expect(result[result.length - 1]!.label).toBeDefined();
   });
 
+  /**
+   * Over a short span the six bucket midpoints are only hours apart, so the ends and
+   * the middle can all format to the same calendar day. Two identical labels on one
+   * axis say nothing, and `EmotionRibbon` used to key on the label text — so the
+   * duplicate also cost one of them its React key.
+   */
+  it('never labels two buckets with the same date', () => {
+    // Four dreams inside a single 25 August: a span of hours, not weeks.
+    const oneDay = ['06:00', '09:00', '15:00', '23:00'].map(time => ({
+      occurredAt: `2026-08-25T${time}:00.000Z`,
+      emotions: ['joy'],
+    }));
+
+    const labels = buildRibbon(oneDay, 'fr')
+      .map(p => p.label)
+      .filter((l): l is string => Boolean(l));
+
+    expect(labels.length).toBeGreaterThan(0);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+
   it('formats its date labels in the caller’s locale', () => {
     const spread = [1, 10, 20, 31].map(n => day(n, 'joy'));
 

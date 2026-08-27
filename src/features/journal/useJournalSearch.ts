@@ -1,16 +1,16 @@
 import { useState, useCallback, useRef } from 'react';
-import { db } from '@db/client';
-import { sql } from 'drizzle-orm';
-
-export interface SearchResult {
-  id: string;
-  description: string;
-  occurredAt: string;
-  syncStatus: string;
-}
+import { sqlite } from '@db/client';
+import type { JournalEntry } from './DreamCard';
+import {
+  JOURNAL_ENTRY_COLUMNS,
+  JOURNAL_ENTRY_JOINS,
+  JOURNAL_ENTRY_ORDER,
+  mapJournalEntryRow,
+  type JournalEntryRow,
+} from './journalEntryQuery';
 
 export function useJournalSearch() {
-  const [results, setResults] = useState<SearchResult[] | null>(null);
+  const [results, setResults] = useState<JournalEntry[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -27,23 +27,34 @@ export function useJournalSearch() {
     debounceTimer.current = setTimeout(() => {
       try {
         const like = `%${query}%`;
-        // Search description + interpretation keywords (left join)
-        const rows = db.all(sql`
-          SELECT DISTINCT d.id, d.description, d.occurred_at as occurredAt, d.sync_status as syncStatus
+        // Matching joins `interpretations` a second time, as `si`: the card's own `i`
+        // join is pinned to the *newest* interpretation, which would silently narrow
+        // what a keyword search can find on a dream that has more than one.
+        const stmt = sqlite.prepareSync(`
+          SELECT DISTINCT ${JOURNAL_ENTRY_COLUMNS}
           FROM dreams d
-          LEFT JOIN interpretations i ON i.dream_id = d.id
+          ${JOURNAL_ENTRY_JOINS}
+          LEFT JOIN interpretations si ON si.dream_id = d.id
           WHERE d.is_deleted = 0
             AND (
-              d.description LIKE ${like}
-              OR i.keywords LIKE ${like}
+              d.description LIKE ?
+              OR si.keywords LIKE ?
             )
-          -- Tie-break on logged_at: occurred_at is date-only, so same-night dreams
-          -- would otherwise come back in arbitrary order.
-          ORDER BY d.occurred_at DESC, d.logged_at DESC
+          ${JOURNAL_ENTRY_ORDER}
           LIMIT 50
         `);
-        setResults(rows as unknown as SearchResult[]);
-      } catch {
+        // Finalized explicitly: this runs on every debounced keystroke, and a prepared
+        // statement that is never finalized holds its SQLite resources for the life of
+        // the process.
+        let rows: JournalEntryRow[];
+        try {
+          rows = Array.from(stmt.executeSync([like, like])) as unknown as JournalEntryRow[];
+        } finally {
+          stmt.finalizeSync();
+        }
+        setResults(rows.map(mapJournalEntryRow));
+      } catch (err) {
+        console.error('Journal search failed:', err);
         setResults([]);
       } finally {
         setIsSearching(false);
