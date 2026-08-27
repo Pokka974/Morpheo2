@@ -43,6 +43,10 @@ export class ExpoStorageService implements StorageService {
     return cached ? getFilePath(mediaId) : null;
   }
 
+  async removeCachedMedia(mediaId: string): Promise<void> {
+    await FileSystem.deleteAsync(getFilePath(mediaId), { idempotent: true });
+  }
+
   async evictToLimit(limitBytes: number): Promise<void> {
     await ensureCacheDir();
     const readdir = await FileSystem.readDirectoryAsync(CACHE_DIR);

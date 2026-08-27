@@ -161,7 +161,7 @@ export default function JournalListScreen() {
       const session = await auth.getSession();
       if (session) {
         try {
-          await syncPendingDreams();
+          await syncPendingDreams(makeMediaCache(services));
         } catch (err) {
           console.error('Push sync on pull-to-refresh failed:', err);
         }

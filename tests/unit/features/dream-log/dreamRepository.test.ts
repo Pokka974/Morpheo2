@@ -11,11 +11,24 @@ const mockFrom = jest.fn((..._args: unknown[]) => {
   return { where: (...args: unknown[]) => mockSelectWhere(...args) };
 });
 
+const mockRunAsync = jest.fn();
+const mockGetAllAsync = jest.fn();
+/** Runs the callback immediately, so the ordering of the statements inside a purge
+ * transaction shows up in `mockRunAsync`'s call order exactly as written. */
+const mockWithTransactionAsync = jest.fn(async (fn: () => Promise<void>) => {
+  await fn();
+});
+
 jest.mock('@db/client', () => ({
   db: {
     insert: jest.fn(() => ({ values: (...args: unknown[]) => mockValues(...args) })),
     select: jest.fn(() => ({ from: (...args: unknown[]) => mockFrom(...args) })),
     update: jest.fn(() => ({ set: (...args: unknown[]) => mockSet(...args) })),
+  },
+  sqlite: {
+    runAsync: (...args: unknown[]) => mockRunAsync(...args),
+    getAllAsync: (...args: unknown[]) => mockGetAllAsync(...args),
+    withTransactionAsync: (...args: [() => Promise<void>]) => mockWithTransactionAsync(...args),
   },
 }));
 
@@ -24,11 +37,13 @@ import {
   saveDream,
   updateDream,
   deleteDream,
+  purgeDreamLocally,
   getPendingDreams,
   markSynced,
   getDreams,
 } from '@features/dream-log/dreamRepository';
 import type { Dream } from '@db/schema';
+import type { MediaCacheDeps } from '@features/sync/mediaCache';
 
 // SQLite operations are exercised here against a mocked `db` (chainable insert/select/update),
 // isolating dreamRepository's own logic from the real expo-sqlite driver.
@@ -156,7 +171,11 @@ describe('dreamRepository', () => {
   });
 
   describe('deleteDream', () => {
-    it('soft-deletes by setting isDeleted=true, bumping lastModifiedAt, and syncStatus=local', async () => {
+    // The row that survives here is not a soft delete the user can see — every screen
+    // filters on is_deleted — it is the outbound queue entry for the permanent deletion.
+    // Purging here instead would destroy the only record that the deletion still has to
+    // reach Supabase, and an entry deleted offline would return on the next pull.
+    it('queues the deletion by setting isDeleted=true, bumping lastModifiedAt, and syncStatus=local', async () => {
       mockUpdateWhere.mockReset().mockResolvedValue(undefined);
       mockSet.mockClear();
       await deleteDream('dream-1');
@@ -169,6 +188,68 @@ describe('dreamRepository', () => {
       expect(setArg['syncStatus']).toBe('local');
       expect(typeof setArg['lastModifiedAt']).toBe('string');
       expect(new Date(setArg['lastModifiedAt'] as string).toString()).not.toBe('Invalid Date');
+    });
+  });
+
+  describe('purgeDreamLocally', () => {
+    // Only `removeCachedMedia` is read here; the other two members exist to satisfy
+    // MediaCacheDeps and would only couple this test to the hydration path.
+    const removeCachedMedia = jest.fn<Promise<void>, [string]>();
+    const deps: MediaCacheDeps = {
+      getSignedUrl: async () => '',
+      cacheMedia: async () => '',
+      removeCachedMedia,
+    };
+
+    beforeEach(() => {
+      mockRunAsync.mockReset().mockResolvedValue(undefined);
+      mockGetAllAsync.mockReset().mockResolvedValue([]);
+      mockWithTransactionAsync.mockClear();
+      removeCachedMedia.mockReset().mockResolvedValue(undefined);
+    });
+
+    // Unlike Postgres, the local schema declares plain foreign keys with
+    // PRAGMA foreign_keys = ON and no ON DELETE CASCADE — deleting the dream first
+    // raises a constraint failure and the entry survives.
+    it('deletes media and interpretations before the dream itself, in one transaction', async () => {
+      await purgeDreamLocally('dream-1');
+
+      const statements = mockRunAsync.mock.calls.map(c => String(c[0]));
+      expect(statements).toEqual([
+        'DELETE FROM media WHERE dream_id = ?',
+        'DELETE FROM interpretations WHERE dream_id = ?',
+        'DELETE FROM dreams WHERE id = ?',
+      ]);
+      expect(mockWithTransactionAsync).toHaveBeenCalledTimes(1);
+    });
+
+    it('removes the cached image file of every media row it is about to delete', async () => {
+      mockGetAllAsync.mockResolvedValue([{ id: 'media-1' }, { id: 'media-2' }]);
+
+      await purgeDreamLocally('dream-1', deps);
+
+      expect(removeCachedMedia).toHaveBeenCalledWith('media-1');
+      expect(removeCachedMedia).toHaveBeenCalledWith('media-2');
+    });
+
+    // The cached file is derived data under a 200MB LRU cap; the record itself is what
+    // FR-032 is actually about, and must not survive because a file was locked.
+    it('still purges the records when a cached file cannot be removed', async () => {
+      mockGetAllAsync.mockResolvedValue([{ id: 'media-1' }]);
+      removeCachedMedia.mockRejectedValueOnce(new Error('EBUSY'));
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await purgeDreamLocally('dream-1', deps);
+
+      expect(mockRunAsync).toHaveBeenCalledWith('DELETE FROM dreams WHERE id = ?', 'dream-1');
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('skips the cache sweep entirely when no media cache is supplied', async () => {
+      await purgeDreamLocally('dream-1');
+
+      expect(mockGetAllAsync).not.toHaveBeenCalled();
     });
   });
 

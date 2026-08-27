@@ -2,6 +2,7 @@ import { eq, and } from 'drizzle-orm';
 import { db, sqlite } from '@db/client';
 import { dreams } from '@db/schema';
 import type { Dream, NewDream } from '@db/schema';
+import type { MediaCacheDeps } from '@features/sync/mediaCache';
 
 const MIN_DESCRIPTION_LENGTH_FOR_INTERPRETATION = 20;
 
@@ -51,12 +52,61 @@ export async function updateDream(
     .where(eq(dreams.id, id));
 }
 
+/**
+ * Step one of a two-step permanent deletion (FR-032). The row is *not* the deletion
+ * — it is the outbound queue entry for one: every screen already filters on
+ * `is_deleted = 0`, so the entry is gone as far as the user is concerned, and
+ * `syncStatus = 'local'` puts it in front of the next drain. `syncService` performs
+ * the server-side purge and then calls `purgeDreamLocally` to finish the job.
+ *
+ * Purging here instead would delete the only record that the deletion ever has to
+ * reach Supabase — an entry deleted offline would come straight back on the next
+ * pull.
+ */
 export async function deleteDream(id: string): Promise<void> {
   const now = new Date().toISOString();
   await db
     .update(dreams)
     .set({ isDeleted: true, lastModifiedAt: now, syncStatus: 'local' })
     .where(eq(dreams.id, id));
+}
+
+/**
+ * Step two: removes the entry, its interpretation, its media rows and their cached
+ * image files from this device for good.
+ *
+ * Called once the server side is confirmed gone (`syncService`, for the device that
+ * requested the deletion) or once a pull has established that it is gone remotely
+ * (`pullService`, for every other device).
+ *
+ * Children are deleted before the parent because — unlike Postgres, where
+ * `interpretations` and `media` carry `ON DELETE CASCADE` — the local schema in
+ * `db/client.ts` declares plain foreign keys with `PRAGMA foreign_keys = ON`, so
+ * deleting the dream first raises a constraint failure. `dreams.linked_dream_id` is
+ * `ON DELETE SET NULL` on both sides and needs no handling.
+ */
+export async function purgeDreamLocally(id: string, deps?: MediaCacheDeps): Promise<void> {
+  if (deps) {
+    const mediaRows = await sqlite.getAllAsync<{ id: string }>(
+      `SELECT id FROM media WHERE dream_id = ?`,
+      id
+    );
+    for (const row of mediaRows) {
+      try {
+        await deps.removeCachedMedia(row.id);
+      } catch (err) {
+        // The cached file is derived data under a 200MB LRU cap — worth removing, never
+        // worth abandoning the purge of the record itself over.
+        console.error(`Failed to remove the cached file for media ${row.id}:`, err);
+      }
+    }
+  }
+
+  await sqlite.withTransactionAsync(async () => {
+    await sqlite.runAsync(`DELETE FROM media WHERE dream_id = ?`, id);
+    await sqlite.runAsync(`DELETE FROM interpretations WHERE dream_id = ?`, id);
+    await sqlite.runAsync(`DELETE FROM dreams WHERE id = ?`, id);
+  });
 }
 
 export async function getPendingDreams(): Promise<Dream[]> {

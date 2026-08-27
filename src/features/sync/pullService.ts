@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { supabase } from '../../supabase/client';
 import { db, sqlite } from '@db/client';
 import { dreams, media } from '@db/schema';
+import { purgeDreamLocally } from '@features/dream-log/dreamRepository';
 import type { MediaCacheDeps } from './mediaCache';
 
 const PAGE_SIZE = 200;
@@ -87,10 +88,10 @@ export async function pullRemoteChanges(
   userId: string,
   mediaCache?: MediaCacheDeps
 ): Promise<void> {
-  await tryPull('dreams', () => pullDreams(userId));
-  await tryPull('dream deletions', () => reconcileDreamDeletions(userId));
+  await tryPull('dreams', () => pullDreams(userId, mediaCache));
+  await tryPull('dream deletions', () => reconcileDreamDeletions(userId, mediaCache));
   await tryPull('interpretations', () => pullInterpretations(userId));
-  await tryPull('media', () => pullMedia(userId));
+  await tryPull('media', () => pullMedia(userId, mediaCache));
   // Last, and only once the rows it works from are actually present.
   if (mediaCache) await tryPull('media cache', () => hydrateMediaCache(mediaCache));
 }
@@ -216,7 +217,7 @@ async function getCursor(key: string): Promise<string> {
   return (await AsyncStorage.getItem(key)) ?? EPOCH;
 }
 
-async function pullDreams(userId: string): Promise<void> {
+async function pullDreams(userId: string, deps?: MediaCacheDeps): Promise<void> {
   let cursor = await getCursor(CURSOR_KEYS.dreams);
 
   for (;;) {
@@ -238,7 +239,7 @@ async function pullDreams(userId: string): Promise<void> {
     if (!data || data.length === 0) return;
 
     for (const row of data as RemoteDream[]) {
-      await applyRemoteDream(row);
+      await applyRemoteDream(row, deps);
     }
 
     cursor = data[data.length - 1]!['last_modified_at'] as string;
@@ -251,9 +252,14 @@ async function pullDreams(userId: string): Promise<void> {
 /**
  * Last-write-wins: a local row that was edited more recently than this remote
  * snapshot is left alone, so a pull can never clobber an edit that just hasn't
- * pushed yet. Otherwise the remote row (soft-delete included — `is_deleted`
- * mirrors straight across, same soft-delete pattern the rest of the app uses)
- * replaces the local one and is marked `synced` since it now matches the server.
+ * pushed yet. Otherwise the remote row replaces the local one and is marked
+ * `synced` since it now matches the server.
+ *
+ * A remote row still carrying `is_deleted` is purged locally instead of mirrored.
+ * Deletion is a hard delete on both sides now (FR-032), so this only ever fires for
+ * rows soft-deleted by a build that predates that change — but leaving them as local
+ * tombstones would mean their text, interpretation and image survive on this device
+ * forever, which is the very thing the deletion was supposed to prevent.
  *
  * `ON CONFLICT DO UPDATE` naming every synced column, rather than `INSERT OR
  * REPLACE`, is deliberate: `day_stress` and `presleep_substances` (the private
@@ -263,13 +269,18 @@ async function pullDreams(userId: string): Promise<void> {
  * instead means an existing row keeps whatever it already had, and a brand-new
  * row falls back to the column defaults exactly once.
  */
-async function applyRemoteDream(row: RemoteDream): Promise<void> {
+async function applyRemoteDream(row: RemoteDream, deps?: MediaCacheDeps): Promise<void> {
   const existing = await db.select().from(dreams).where(eq(dreams.id, row.id));
   const local = existing[0];
   if (
     local &&
     new Date(local.lastModifiedAt).getTime() >= new Date(row.last_modified_at).getTime()
   ) {
+    return;
+  }
+
+  if (row.is_deleted) {
+    await purgeDreamLocally(row.id, deps);
     return;
   }
 
@@ -329,16 +340,19 @@ async function applyRemoteDream(row: RemoteDream): Promise<void> {
 /**
  * The incremental pull above can only ever see a deletion if the row still exists
  * remotely with a fresher `last_modified_at` than what this device already has. But
- * `dreams_delete_own` RLS lets the owner hard-delete a row outright (e.g. via the
- * Supabase dashboard's row-delete action), which leaves nothing behind for an
- * incremental "what changed since my cursor" query to find — and a dashboard edit
- * that flips `is_deleted` without touching `last_modified_at` is invisible to it
- * too. This closes both gaps by diffing the full set of remote *active* dream ids
- * against every dream this device believes is synced and still active: anything
- * missing from the remote set gets marked deleted locally, regardless of how it
- * disappeared server-side.
+ * `dreams_delete_own` RLS lets the owner hard-delete a row outright, which leaves
+ * nothing behind for an incremental "what changed since my cursor" query to find —
+ * and a dashboard edit that flips `is_deleted` without touching `last_modified_at`
+ * is invisible to it too. This closes both gaps by diffing the full set of remote
+ * *active* dream ids against every dream this device believes is synced and still
+ * active: anything missing from the remote set is purged locally, regardless of how
+ * it disappeared server-side.
+ *
+ * That diff is also how a deletion made on another device now reaches this one:
+ * `syncService.purgeDream` deletes the remote row outright, so there is no tombstone
+ * for the incremental pull to carry and this is the pass that notices.
  */
-async function reconcileDreamDeletions(userId: string): Promise<void> {
+async function reconcileDreamDeletions(userId: string, deps?: MediaCacheDeps): Promise<void> {
   const { data, error } = await supabase
     .from('dreams')
     .select('id')
@@ -365,7 +379,7 @@ async function reconcileDreamDeletions(userId: string): Promise<void> {
 
   for (const local of candidates) {
     if (!remoteActiveIds.has(local.id)) {
-      await sqlite.runAsync(`UPDATE dreams SET is_deleted = 1 WHERE id = ?`, local.id);
+      await purgeDreamLocally(local.id, deps);
     }
   }
 }
@@ -425,7 +439,7 @@ async function pullInterpretations(userId: string): Promise<void> {
   }
 }
 
-async function pullMedia(userId: string): Promise<void> {
+async function pullMedia(userId: string, deps?: MediaCacheDeps): Promise<void> {
   let cursor = await getCursor(CURSOR_KEYS.media);
 
   for (;;) {
@@ -447,7 +461,7 @@ async function pullMedia(userId: string): Promise<void> {
     if (!data || data.length === 0) return;
 
     for (const row of data as RemoteMedia[]) {
-      await applyRemoteMedia(row);
+      await applyRemoteMedia(row, deps);
     }
 
     cursor = data[data.length - 1]!['updated_at'] as string;
@@ -459,10 +473,40 @@ async function pullMedia(userId: string): Promise<void> {
 
 /** `local_cache_path` is a device-local file path with no remote counterpart — it
  * has to be read back and re-supplied on every upsert or it would be wiped out
- * every time this device pulls its own media row back down. */
-async function applyRemoteMedia(row: RemoteMedia): Promise<void> {
+ * every time this device pulls its own media row back down.
+ *
+ * Unless the object underneath it changed. A regeneration updates the media row in
+ * place, so the row arrives here with the same id and a *different* `storage_key`,
+ * and the cached file — named after the id — is now the superseded image. Carrying
+ * the path forward would leave this device showing the old picture forever, since
+ * `hydrateMediaCache` only fills in null paths and `cacheMedia` skips a file that
+ * already exists. Dropping both the file and the path re-queues it for download on
+ * this same pass.
+ *
+ * The `existing.storageKey !== null` guard matters: the device that generated the
+ * image writes its own row through `persistLocally`, which has no `storage_key` to
+ * write, so every first generation would otherwise throw away the file it had just
+ * downloaded and fetch it a second time. */
+async function applyRemoteMedia(row: RemoteMedia, deps?: MediaCacheDeps): Promise<void> {
   const existing = await db.select().from(media).where(eq(media.id, row.id));
-  const localCachePath = existing[0]?.localCachePath ?? null;
+  const previousStorageKey = existing[0]?.storageKey ?? null;
+  const objectReplaced =
+    previousStorageKey !== null &&
+    row.storage_key !== null &&
+    previousStorageKey !== row.storage_key;
+
+  let localCachePath = existing[0]?.localCachePath ?? null;
+  if (objectReplaced && localCachePath && deps) {
+    try {
+      await deps.removeCachedMedia(row.id);
+      localCachePath = null;
+    } catch (err) {
+      // Keep the stale path rather than clearing it while the file is still there:
+      // `cacheMedia` would short-circuit on it and re-record the same stale image.
+      // The next pull sees the same mismatch and tries again.
+      console.error(`Failed to drop the superseded cache file for media ${row.id}:`, err);
+    }
+  }
 
   await sqlite.runAsync(
     `INSERT INTO media

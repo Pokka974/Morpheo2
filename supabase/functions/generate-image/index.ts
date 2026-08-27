@@ -50,6 +50,79 @@ function isModerationStatus(status: string): boolean {
   return status === 'Content Moderated' || status === 'Request Moderated';
 }
 
+type ServiceClient = ReturnType<typeof createClient>;
+
+/**
+ * Retires everything the generation that just succeeded replaced: the object the live row
+ * used to point at, plus any *other* image row for this dream and the object behind it.
+ *
+ * The second half exists because rows written before this function updated in place are
+ * still out there -- an entry regenerated to the premium limit holds six rows and six PNGs,
+ * five of each unreachable. It is swept the next time that entry is generated.
+ *
+ * Every failure here is logged and swallowed. This runs after the media row is already
+ * committed, so the caller owns their image either way; turning a failed bucket delete into
+ * a failed generation would charge them for it instead. A key that survives is a leak, not
+ * a corruption -- it is unreferenced, and the next regeneration tries again.
+ */
+async function cleanUpSupersededMedia(
+  supabase: ServiceClient,
+  opts: {
+    dreamId: string;
+    liveMediaId: string;
+    previousStorageKey: string | null;
+    newStorageKey: string;
+  }
+): Promise<void> {
+  try {
+    const staleKeys: string[] = [];
+    if (opts.previousStorageKey && opts.previousStorageKey !== opts.newStorageKey) {
+      staleKeys.push(opts.previousStorageKey);
+    }
+
+    const { data: siblings, error: siblingError } = await supabase
+      .from('media')
+      .select('id, storage_key')
+      .eq('dream_id', opts.dreamId)
+      .eq('media_type', 'image')
+      .neq('id', opts.liveMediaId);
+
+    if (siblingError) {
+      console.error('Superseded media lookup failed:', siblingError);
+    }
+
+    const siblingRows = (siblings ?? []) as Array<{ id: string; storage_key: string | null }>;
+    for (const row of siblingRows) {
+      if (row.storage_key && row.storage_key !== opts.newStorageKey)
+        staleKeys.push(row.storage_key);
+    }
+
+    if (staleKeys.length > 0) {
+      const { error: removeError } = await supabase.storage.from('dream-media').remove(staleKeys);
+      if (removeError) {
+        console.error('Removing superseded storage objects failed:', removeError);
+      }
+    }
+
+    // Rows go last: the key is the only pointer to the object, so dropping the row first
+    // would make an object that failed to delete permanently unreachable.
+    if (siblingRows.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('media')
+        .delete()
+        .in(
+          'id',
+          siblingRows.map(row => row.id)
+        );
+      if (deleteError) {
+        console.error('Deleting superseded media rows failed:', deleteError);
+      }
+    }
+  } catch (err) {
+    console.error('Superseded media cleanup failed:', err);
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -118,25 +191,35 @@ serve(async (req: Request) => {
       console.error('Entitlement query failed:', entError);
     }
 
-    // Check regeneration limit if applicable. Each call inserts a new media row
-    // rather than updating one in place, so the running count has to be read off
-    // the most recent row and carried forward below -- it cannot live on the row
-    // being checked here.
-    let existingMedia: { regeneration_count: number; max_regenerations: number } | null = null;
-    if (isRegeneration) {
-      const { data } = await supabase
-        .from('media')
-        .select('regeneration_count, max_regenerations')
-        .eq('dream_id', dreamId)
-        .eq('media_type', 'image')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      existingMedia = data;
+    // The dream's current image row, if it has one. Read on every call, not just a
+    // regeneration: this row is updated in place below rather than joined by a second
+    // insert, which is what keeps one live row -- and one live storage object -- per
+    // dream. The FR-031 path (re-generate after an edit) arrives with `isRegeneration`
+    // unset and would otherwise leave the superseded row behind exactly like a
+    // regeneration used to.
+    //
+    // `maybeSingle` because a first generation legitimately finds nothing. `order` +
+    // `limit(1)` because rows predating this change can still be duplicated; the newest
+    // is the live one and the rest are swept up by `cleanUpSupersededMedia`.
+    const { data: existingMedia, error: existingMediaError } = await supabase
+      .from('media')
+      .select('id, storage_key, regeneration_count, max_regenerations')
+      .eq('dream_id', dreamId)
+      .eq('media_type', 'image')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-      if (existingMedia && existingMedia.regeneration_count >= existingMedia.max_regenerations) {
-        return json({ error: 'regen_limit_reached', max: existingMedia.max_regenerations }, 409);
-      }
+    if (existingMediaError) {
+      console.error('Existing media lookup failed:', existingMediaError);
+    }
+
+    if (
+      isRegeneration &&
+      existingMedia &&
+      existingMedia.regeneration_count >= existingMedia.max_regenerations
+    ) {
+      return json({ error: 'regen_limit_reached', max: existingMedia.max_regenerations }, 409);
     }
 
     // Check + spend the image credit in one statement (019_image_credit_rpc.sql). A
@@ -360,27 +443,64 @@ serve(async (req: Request) => {
     // regenerate.
     const maxRegenerations =
       existingMedia?.max_regenerations ?? (entitlement?.subscription_tier === 'premium' ? 5 : 0);
-    const regenerationCount = isRegeneration ? (existingMedia?.regeneration_count ?? 0) + 1 : 0;
+    // Only a regeneration advances the count. A non-regeneration call over an entry
+    // that already has an image (FR-031's re-generate after an edit) carries the
+    // existing count forward untouched -- resetting it to 0 there would hand back a
+    // fresh regeneration allowance for the price of an edit.
+    const regenerationCount = isRegeneration
+      ? (existingMedia?.regeneration_count ?? 0) + 1
+      : (existingMedia?.regeneration_count ?? 0);
 
-    // Insert media record
-    const { data: media, error: insertError } = await supabase
-      .from('media')
-      .insert({
-        dream_id: dreamId,
-        user_id: user.id,
-        media_type: 'image',
-        storage_key: storagePath,
-        generation_status: 'complete',
-        regeneration_count: regenerationCount,
-        max_regenerations: maxRegenerations,
-      })
-      .select()
-      .single();
+    // Update the dream's existing image row in place, or create the first one. Updating
+    // rather than inserting is what bounds an entry to a single row and a single stored
+    // object no matter how many times it is regenerated.
+    //
+    // `updated_at` is set by hand because `media` carries no BEFORE UPDATE trigger, and
+    // the client's pull sync pages on `gt('updated_at', cursor)` -- an unbumped timestamp
+    // would make the regeneration invisible to every other device.
+    const { data: media, error: writeError } = existingMedia
+      ? await supabase
+          .from('media')
+          .update({
+            storage_key: storagePath,
+            generation_status: 'complete',
+            regeneration_count: regenerationCount,
+            max_regenerations: maxRegenerations,
+            error_message: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingMedia.id)
+          .select()
+          .single()
+      : await supabase
+          .from('media')
+          .insert({
+            dream_id: dreamId,
+            user_id: user.id,
+            media_type: 'image',
+            storage_key: storagePath,
+            generation_status: 'complete',
+            regeneration_count: regenerationCount,
+            max_regenerations: maxRegenerations,
+          })
+          .select()
+          .single();
 
-    if (insertError || !media) {
-      console.error('Media insert failed:', insertError);
+    if (writeError || !media) {
+      console.error('Media write failed:', writeError);
       return await fail({ error: 'record_failed' }, 503);
     }
+
+    // Strictly after the row write, so a failure anywhere upstream leaves the previous
+    // image and its row exactly as they were. Best-effort by design: the user has already
+    // paid a credit and owns the new image, and a bucket that failed to drop an object is
+    // not a reason to fail the request they are waiting on.
+    await cleanUpSupersededMedia(supabase, {
+      dreamId,
+      liveMediaId: media.id as string,
+      previousStorageKey: existingMedia?.storage_key ?? null,
+      newStorageKey: storagePath,
+    });
 
     // The image now exists in storage and is recorded against the dream, so the credit is
     // spent for good: released here rather than after the signing call below, so a failure

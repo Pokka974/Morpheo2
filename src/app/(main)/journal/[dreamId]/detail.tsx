@@ -19,6 +19,8 @@ import { useTranslation } from 'react-i18next';
 
 import { sqlite as db } from '@db/client';
 import { deleteDream } from '@features/dream-log/dreamRepository';
+import { syncPendingDreams } from '@features/dream-log/syncService';
+import { makeMediaCache } from '@features/sync/mediaCache';
 import { isLucidLevel, type Lucidity, type Tone } from '@features/dream-log/dreamMetadata';
 import { bedtimeStraddlesMidnight, formatNightLabel } from '@features/dream-log/nightLabel';
 import { getRecurrenceChains, type RecurrenceChain } from '@features/recurrence/recurrenceChains';
@@ -106,7 +108,8 @@ export default function DreamDetailScreen() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { imageGeneration, auth } = useServices();
+  const services = useServices();
+  const { imageGeneration, auth } = services;
 
   const [dream, setDream] = useState<DreamDetail | null>(null);
   const [interpretation, setInterpretation] = useState<InterpretationResult | null>(null);
@@ -226,6 +229,12 @@ export default function DreamDetailScreen() {
 
   const confirmDelete = async () => {
     await deleteDream(dreamId);
+    // The entry is already gone from every screen; this starts the server-side purge
+    // now rather than at the next foreground/reconnect. Best-effort — the dream stays
+    // queued and drains later if this device is offline.
+    syncPendingDreams(makeMediaCache(services)).catch((err: unknown) => {
+      console.error('Immediate purge after delete failed; dream stays queued:', err);
+    });
     router.back();
   };
 

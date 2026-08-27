@@ -157,7 +157,7 @@ function AppNavigator() {
     if (!session) return;
 
     try {
-      await syncPendingDreams();
+      await syncPendingDreams(mediaCache);
     } catch (err) {
       console.error('Push sync on foreground failed:', err);
     }

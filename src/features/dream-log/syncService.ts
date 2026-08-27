@@ -1,5 +1,6 @@
 import { supabase } from '../../supabase/client';
-import { getPendingDreams, markSynced } from './dreamRepository';
+import { getPendingDreams, markSynced, purgeDreamLocally } from './dreamRepository';
+import type { MediaCacheDeps } from '@features/sync/mediaCache';
 import type { Dream } from '@db/schema';
 
 /**
@@ -13,7 +14,13 @@ export interface SyncOutcome {
   failures: Array<{ dreamId: string; error: unknown }>;
 }
 
-export async function syncPendingDreams(): Promise<SyncOutcome> {
+/**
+ * `deps` is only needed by the deletion path, which removes each purged dream's
+ * cached image file. It is optional so the call sites that can never enqueue a
+ * deletion (the post-save drain in the log screen, the dev seeder) stay unchanged;
+ * everywhere a deletion can reach, pass `makeMediaCache(services)`.
+ */
+export async function syncPendingDreams(deps?: MediaCacheDeps): Promise<SyncOutcome> {
   const outcome: SyncOutcome = { syncedIds: [], failures: [] };
   const pending = await getPendingDreams();
   if (pending.length === 0) return outcome;
@@ -23,7 +30,7 @@ export async function syncPendingDreams(): Promise<SyncOutcome> {
   );
 
   for (const dream of sorted) {
-    const error = await syncDream(dream);
+    const error = await syncDream(dream, deps);
     if (error === null) outcome.syncedIds.push(dream.id);
     else outcome.failures.push({ dreamId: dream.id, error });
   }
@@ -45,7 +52,12 @@ export async function syncDreamForInterpretation(dreamId: string): Promise<void>
 }
 
 /** Returns `null` on success, or the error that stopped this dream from syncing. */
-async function syncDream(dream: Dream): Promise<unknown> {
+async function syncDream(dream: Dream, deps?: MediaCacheDeps): Promise<unknown> {
+  // A locally deleted dream is a purge request, not an update to push (FR-032). Pushing
+  // `is_deleted = true` — what this used to do — left the text, the interpretation, the
+  // media rows and the stored PNG on the server indefinitely.
+  if (dream.isDeleted) return purgeDream(dream, deps);
+
   try {
     const { error } = await supabase.from('dreams').upsert(
       {
@@ -99,6 +111,62 @@ async function syncDream(dream: Dream): Promise<unknown> {
     console.error('Dream sync failed for', dream.id, err);
     return err;
   }
+}
+
+/**
+ * Permanently removes a deleted dream from Supabase, then from this device.
+ *
+ * Runs on the user's own client rather than through an Edge Function: `dreams_delete_own`
+ * plus `GRANT ... DELETE ON dreams TO authenticated` (008) already allow the row delete,
+ * `dream_media_delete_own` allows the object delete, and `interpretations` / `media` follow
+ * the dream via `ON DELETE CASCADE` — referential actions run with the referencing table's
+ * owner rights, so those two tables needing no DELETE policy of their own is not a problem.
+ *
+ * Order is the whole design here. The storage object goes first because `storage_key` is the
+ * only pointer to it: delete the rows first and a failed bucket call orphans the PNG with
+ * nothing left in the database to ever find it again. If the bucket call fails, the dream
+ * keeps its pending status and the next drain retries — removing an already-absent key is
+ * not an error, so a retry is safe.
+ *
+ * Returns `null` on success, or the error that stopped it, matching `syncDream`.
+ */
+async function purgeDream(dream: Dream, deps?: MediaCacheDeps): Promise<unknown> {
+  try {
+    const { data: mediaRows, error: mediaError } = await supabase
+      .from('media')
+      .select('id, storage_key')
+      .eq('dream_id', dream.id);
+
+    if (mediaError) throw asAuthAware(mediaError);
+
+    const storageKeys = ((mediaRows ?? []) as Array<{ storage_key: string | null }>)
+      .map(row => row.storage_key)
+      .filter((key): key is string => typeof key === 'string' && key.length > 0);
+
+    if (storageKeys.length > 0) {
+      const { error: removeError } = await supabase.storage.from('dream-media').remove(storageKeys);
+      if (removeError) throw removeError;
+    }
+
+    const { error: deleteError } = await supabase.from('dreams').delete().eq('id', dream.id);
+    if (deleteError) throw asAuthAware(deleteError);
+
+    // Only now is the local row safe to drop: until this point it is the sole record
+    // that a deletion still has to reach the server.
+    await purgeDreamLocally(dream.id, deps);
+    return null;
+  } catch (err) {
+    if (err instanceof AuthExpiredError) throw err;
+    console.error('Dream purge failed for', dream.id, err);
+    return err;
+  }
+}
+
+/** PostgREST reports an expired session as a data-layer error; the queue has to treat it
+ * as an auth failure so the caller can refresh instead of retrying forever. */
+function asAuthAware(error: { code?: string | null; message?: string | null }): unknown {
+  if (error.code === 'PGRST301' || error.message?.includes('401')) return new AuthExpiredError();
+  return error;
 }
 
 /**

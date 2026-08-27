@@ -66,6 +66,13 @@ export class FluxImageGenerationService implements ImageGenerationService {
     if (result.signedUrl && result.generationStatus === 'complete') {
       let localPath: string | null = null;
       try {
+        // A regeneration updates the media row in place, so the new image comes back
+        // under the id the old one was cached against — and `cacheMedia` short-circuits
+        // on an existing file. Without dropping it first, "regenerate" would download
+        // nothing and go on displaying the previous picture.
+        if (request.isRegeneration) {
+          await this.storage.removeCachedMedia(result.id);
+        }
         localPath = await this.storage.cacheMedia(result.id, result.signedUrl);
       } catch {
         localPath = null;

@@ -26,12 +26,12 @@ export function useSyncOnConnect(auth: AuthService, mediaCache: MediaCacheDeps) 
           // Push this device's own pending changes first, so they reach the server
           // before the pull reconciles down — otherwise an in-flight local edit
           // could look like something the pull should discard.
-          await syncPendingDreams();
+          await syncPendingDreams(mediaCache);
         } catch (err) {
           if (err instanceof AuthExpiredError) {
             try {
               await auth.getSession();
-              await syncPendingDreams();
+              await syncPendingDreams(mediaCache);
             } catch {
               // Session refresh failed: surface via notification
             }
