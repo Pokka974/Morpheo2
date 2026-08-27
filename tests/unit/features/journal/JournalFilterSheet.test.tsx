@@ -150,7 +150,7 @@ describe('JournalFilterSheet', () => {
   it('marks the selected emotion as a radio, not a checkbox', () => {
     const { getAllByLabelText } = renderSheet({ filters: { emotion: 'fear' } });
     const [chip] = getAllByLabelText(/fear/);
-    expect(chip.props.accessibilityRole).toBe('radio');
-    expect(chip.props.accessibilityState.selected).toBe(true);
+    expect(chip!.props.accessibilityRole).toBe('radio');
+    expect(chip!.props.accessibilityState.selected).toBe(true);
   });
 });

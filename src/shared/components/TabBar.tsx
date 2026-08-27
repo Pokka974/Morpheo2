@@ -3,8 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { StackActions } from '@react-navigation/native';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { StackActions } from 'expo-router/react-navigation';
+import type { BottomTabBarProps } from 'expo-router/js-tabs';
 
 import { ActionButton } from '@shared/components/Button';
 import { colors, MIN_TOUCH_TARGET, sizes, spacing, typography } from '@theme/tokens';

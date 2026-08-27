@@ -20,7 +20,10 @@ export const FALLBACK_LANGUAGE = 'en';
  * platform reports no locale at all — which it does in some test and CI runtimes.
  */
 export function resolveDeviceLanguage(): string {
-  let locales: ReturnType<typeof getLocales> = [];
+  // Not initialised to `[]`: expo-localization 57 types getLocales() as a non-empty
+  // tuple, which an empty array does not satisfy. The catch returns outright, so the
+  // variable is definitely assigned by the time it is read anyway.
+  let locales: ReturnType<typeof getLocales>;
   try {
     locales = getLocales();
   } catch {

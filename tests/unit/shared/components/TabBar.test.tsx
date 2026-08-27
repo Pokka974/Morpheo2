@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
-import { StackActions } from '@react-navigation/native';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { StackActions } from 'expo-router/react-navigation';
+import type { BottomTabBarProps } from 'expo-router/js-tabs';
 
 import { TabBar } from '@shared/components/TabBar';
 

@@ -12,7 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import type Voice from '@react-native-voice/voice';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 
 import { Button } from '@shared/components/Button';
 import { SegmentedControl } from '@shared/components/SegmentedControl';
@@ -156,17 +156,26 @@ export default function DreamLogScreen() {
     }
   };
 
+  // Only final results are appended: with `interimResults` off the recognizer still
+  // emits partials on some Android services, and appending those would stutter the
+  // same words into the description as the utterance firms up.
+  useSpeechRecognitionEvent('result', event => {
+    if (!event.isFinal) return;
+    const transcript = event.results[0]?.transcript;
+    if (transcript) {
+      setDescription(prev => (prev ? prev + ' ' + transcript : transcript));
+    }
+  });
+
   const startVoice = async () => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const VoiceModule = (require('@react-native-voice/voice') as { default: typeof Voice })
-        .default;
-      VoiceModule.onSpeechResults = e => {
-        if (e.value?.[0]) {
-          setDescription(prev => (prev ? prev + ' ' + e.value![0] : e.value![0]!));
-        }
-      };
-      await VoiceModule.start('en-US');
+      const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!granted) throw new Error('Speech recognition permission denied');
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: false,
+        continuous: true,
+      });
       setIsListening(true);
       setElapsed(0);
       elapsedTimer.current = setInterval(() => setElapsed(s => s + 1), 1000);
@@ -178,20 +187,25 @@ export default function DreamLogScreen() {
     }
   };
 
-  const stopVoice = async () => {
+  const stopVoice = () => {
     if (elapsedTimer.current) {
       clearInterval(elapsedTimer.current);
       elapsedTimer.current = null;
     }
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const VoiceModule = (require('@react-native-voice/voice') as { default: typeof Voice })
-        .default;
-      await VoiceModule.stop();
+      ExpoSpeechRecognitionModule.stop();
     } finally {
       setIsListening(false);
     }
   };
+
+  // The old bridge module surfaced no error channel at all, so a recognizer that died
+  // mid-session left the UI listening to nothing. Treat it like a failed start.
+  useSpeechRecognitionEvent('error', () => {
+    stopVoice();
+    setError(t('log.micUnavailable'));
+    setMode('write');
+  });
 
   const handleModeChange = (next: Mode) => {
     if (next === mode) return;
@@ -200,7 +214,7 @@ export default function DreamLogScreen() {
     if (next === 'dictate') {
       void startVoice();
     } else if (isListening) {
-      void stopVoice();
+      stopVoice();
     }
   };
 
@@ -470,14 +484,7 @@ export default function DreamLogScreen() {
           </View>
         </View>
 
-        {isListening ? (
-          <RecordingBar
-            elapsedSeconds={elapsed}
-            onStop={() => {
-              void stopVoice();
-            }}
-          />
-        ) : null}
+        {isListening ? <RecordingBar elapsedSeconds={elapsed} onStop={stopVoice} /> : null}
 
         <EmotionPicker selected={emotions} onChange={setEmotions} />
 
