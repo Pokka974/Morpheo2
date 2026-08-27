@@ -197,6 +197,8 @@ back.
 | `supabase/migrations/011_schema_reconciliation.sql` | Missing `profiles` columns; column-level write grants |
 | `supabase/migrations/012_entitlement_credit_rpc.sql` | Atomic interpretation-credit consume/refund |
 | `supabase/migrations/017_flux_image_prompt.sql` | `interpretations.image_prompt` + `system_prompts.image_prompt_directive` |
+| `supabase/migrations/018_free_tier_limits.sql` | Free tier: 3 interpretations/mo, 1 image/mo + `bonus_image_credits` (the one-time welcome image, **never** reset by cron), 0 free regenerations |
+| `supabase/migrations/019_image_credit_rpc.sql` | Atomic image-credit consume/refund — monthly allowance first, welcome credit second |
 | `tests/integration/schema-contract.test.ts` | Asserts every queried column exists in the migrations |
 | `specs/001-morpheo-app/` | Full specification, plan, tasks |
 | `.specify/memory/constitution.md` | Morpheo governance constitution |

@@ -202,6 +202,7 @@ describe('Supabase schema contract', () => {
     it.each([
       ['entitlements', 'subscription_tier'],
       ['entitlements', 'images_used_this_month'],
+      ['entitlements', 'bonus_image_credits'],
       ['profiles', 'subscription_tier'],
       ['profiles', 'notification_reminders_enabled'],
       ['profiles', 'deletion_scheduled_at'],

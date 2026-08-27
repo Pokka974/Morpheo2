@@ -35,12 +35,15 @@ jest.mock('@services/../supabase/client', () => ({
   },
 }));
 
+// The free-tier defaults set by migration 018: 3 interpretations a month, 1 image a
+// month, plus a one-time welcome image that never resets.
 const FREE_ENTITLEMENT = {
   subscription_tier: 'free',
-  interpretations_used_this_month: 3,
-  monthly_interpretation_limit: 5,
-  images_used_this_month: 2,
-  monthly_image_limit: 3,
+  interpretations_used_this_month: 1,
+  monthly_interpretation_limit: 3,
+  images_used_this_month: 0,
+  monthly_image_limit: 1,
+  bonus_image_credits: 1,
   reset_date: '2026-09-01',
   subscription_expires_at: null,
 };
@@ -89,9 +92,31 @@ describe('RevenueCatEntitlementService', () => {
   });
 
   describe('canGenerateImage', () => {
-    it('returns false when free tier image limit exhausted', async () => {
+    it('returns false when both the monthly image and the welcome credit are spent', async () => {
       mockSingle.mockResolvedValue({
-        data: { ...FREE_ENTITLEMENT, images_used_this_month: 3 },
+        data: { ...FREE_ENTITLEMENT, images_used_this_month: 1, bonus_image_credits: 0 },
+        error: null,
+      });
+      expect(await service.canGenerateImage()).toBe(false);
+    });
+
+    // The welcome credit is the whole reason a brand-new free account is not paywalled
+    // on the second image of its first month. Mirrors consume_image_credit (019).
+    it('returns true when the monthly image is spent but the welcome credit remains', async () => {
+      mockSingle.mockResolvedValue({
+        data: { ...FREE_ENTITLEMENT, images_used_this_month: 1, bonus_image_credits: 1 },
+        error: null,
+      });
+      expect(await service.canGenerateImage()).toBe(true);
+    });
+
+    it('treats a row with no bonus_image_credits column as having no welcome credit', async () => {
+      // A client reading a row written before migration 018 must not assume a credit that
+      // the server gate will then refuse.
+      const preMigration: Record<string, unknown> = { ...FREE_ENTITLEMENT };
+      delete preMigration['bonus_image_credits'];
+      mockSingle.mockResolvedValue({
+        data: { ...preMigration, images_used_this_month: 1 },
         error: null,
       });
       expect(await service.canGenerateImage()).toBe(false);
@@ -103,6 +128,21 @@ describe('RevenueCatEntitlementService', () => {
 
     it('returns true for premium regardless of count', async () => {
       mockSingle.mockResolvedValue({ data: PREMIUM_ENTITLEMENT, error: null });
+      expect(await service.canGenerateImage()).toBe(true);
+    });
+
+    it('returns true for premium even on a row that still carries a monthly limit', async () => {
+      // Nothing nulls these columns on upgrade — the RevenueCat webhook only flips the
+      // tier — so the short-circuit is what makes premium unlimited, here and in the RPC.
+      mockSingle.mockResolvedValue({
+        data: {
+          ...FREE_ENTITLEMENT,
+          subscription_tier: 'premium',
+          images_used_this_month: 9,
+          bonus_image_credits: 0,
+        },
+        error: null,
+      });
       expect(await service.canGenerateImage()).toBe(true);
     });
 
@@ -118,7 +158,7 @@ describe('RevenueCatEntitlementService', () => {
   describe('canInterpret', () => {
     it('returns false when free tier limit exhausted', async () => {
       mockSingle.mockResolvedValue({
-        data: { ...FREE_ENTITLEMENT, interpretations_used_this_month: 5 },
+        data: { ...FREE_ENTITLEMENT, interpretations_used_this_month: 3 },
         error: null,
       });
       expect(await service.canInterpret()).toBe(false);
@@ -180,6 +220,35 @@ describe('RevenueCatEntitlementService', () => {
       mockPurchasePackage.mockRejectedValue(new Error('User cancelled'));
       const result = await service.purchasePremium();
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe('getPremiumPriceString', () => {
+    it("returns the store's own localised price string", async () => {
+      // priceString is what the store will actually charge in this storefront, already
+      // formatted for it. The paywall shows this rather than a literal "7,99 €", which
+      // would be wrong outside the eurozone and stale after any dashboard price change.
+      mockGetOfferings.mockResolvedValue({
+        current: { availablePackages: [{ product: { priceString: '7,99 €' } }] },
+      });
+      expect(await service.getPremiumPriceString()).toBe('7,99 €');
+    });
+
+    it('returns null when no offering is configured', async () => {
+      mockGetOfferings.mockResolvedValue({ current: null });
+      expect(await service.getPremiumPriceString()).toBeNull();
+    });
+
+    it('returns null when the current offering has no packages', async () => {
+      mockGetOfferings.mockResolvedValue({ current: { availablePackages: [] } });
+      expect(await service.getPremiumPriceString()).toBeNull();
+    });
+
+    it('returns null rather than throwing when RevenueCat is unreachable', async () => {
+      const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockGetOfferings.mockRejectedValue(new Error('offline'));
+      expect(await service.getPremiumPriceString()).toBeNull();
+      spy.mockRestore();
     });
   });
 

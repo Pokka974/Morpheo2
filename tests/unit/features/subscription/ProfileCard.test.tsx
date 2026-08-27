@@ -8,8 +8,9 @@ const FREE: Entitlement = {
   subscriptionTier: 'free',
   interpretationsUsedThisMonth: 7,
   monthlyInterpretationLimit: 10,
-  imagesUsedThisMonth: 2,
-  monthlyImageLimit: 5,
+  imagesUsedThisMonth: 1,
+  monthlyImageLimit: 1,
+  bonusImageCredits: 0,
   resetDate: new Date('2026-09-01T00:00:00.000Z'),
   subscriptionExpiresAt: null,
 };

@@ -1,36 +1,59 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { useServices } from '@services/useServices';
-import { colors, spacing } from '@theme/tokens';
+import { Button } from '@shared/components/Button';
+import { Card } from '@shared/components/Card';
+import { CheckIcon } from '@shared/components/icons';
+import { colors, fontSize, radius, spacing, typography } from '@theme/tokens';
 
-const FREE_FEATURES = [
-  '5 AI interpretations per month',
-  '3 AI images per month',
-  'Basic journal & search',
-  'Top 3 recurring themes',
-];
+/**
+ * The two tiers, as i18n keys rather than strings. The numbers in the copy
+ * (3 interpretations, 1 image + the welcome one) are the free-tier defaults set by
+ * migration 018 — if those defaults ever move, these keys move with them.
+ */
+const FREE_FEATURE_KEYS = [
+  'paywall.freeInterpretations',
+  'paywall.freeImages',
+  'paywall.freeJournal',
+  'paywall.freeInsights',
+] as const;
 
-const PREMIUM_FEATURES = [
-  'Unlimited AI interpretations',
-  'Unlimited AI images',
-  'Full recurrence analytics',
-  'All-time insights dashboard',
-];
+const PREMIUM_FEATURE_KEYS = [
+  'paywall.premiumInterpretations',
+  'paywall.premiumImages',
+  'paywall.premiumInsights',
+  'paywall.premiumRecurrence',
+] as const;
+
+const CHECK_SIZE = 16;
 
 export default function PaywallScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { entitlement } = useServices();
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [price, setPrice] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    entitlement
+      .getPremiumPriceString()
+      .then(value => {
+        if (active) setPrice(value);
+      })
+      .catch((err: unknown) => {
+        // Non-blocking: the screen simply goes without the price line.
+        console.error('Failed to load the premium price:', err);
+      });
+    return () => {
+      active = false;
+    };
+  }, [entitlement]);
 
   const handlePurchase = async () => {
     setIsPurchasing(true);
@@ -47,97 +70,73 @@ export default function PaywallScreen() {
       style={styles.container}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]}
     >
-      <Text style={styles.title}>Unlock Morpheo Premium</Text>
-      <Text style={styles.subtitle}>Everything you need for deeper dream insights</Text>
+      <Text style={styles.title}>{t('paywall.title')}</Text>
+      <Text style={styles.subtitle}>{t('paywall.subtitle')}</Text>
 
       <View style={styles.comparison}>
-        <View style={styles.tier}>
-          <Text style={styles.tierLabel}>Free</Text>
-          {FREE_FEATURES.map(f => (
-            <View key={f} style={styles.featureRow}>
-              <Text style={styles.featureCheck}>✓</Text>
-              <Text style={styles.featureText}>{f}</Text>
+        <Card style={styles.tier}>
+          <Text style={styles.tierLabel}>{t('paywall.tierFree')}</Text>
+          {FREE_FEATURE_KEYS.map(key => (
+            <View key={key} style={styles.featureRow}>
+              <CheckIcon size={CHECK_SIZE} color={colors.textMuted} />
+              <Text style={styles.featureText}>{t(key)}</Text>
             </View>
           ))}
-        </View>
+        </Card>
 
-        <View style={[styles.tier, styles.premiumTier]}>
-          <Text style={styles.tierLabel}>Premium ⭐</Text>
-          {PREMIUM_FEATURES.map(f => (
-            <View key={f} style={styles.featureRow}>
-              <Text style={styles.premiumCheck}>✓</Text>
-              <Text style={[styles.featureText, styles.premiumFeatureText]}>{f}</Text>
+        <Card variant="mystic" style={styles.tier}>
+          <View style={styles.premiumHeader}>
+            <Text style={styles.tierLabel}>{t('paywall.tierPremium')}</Text>
+            {/*
+              Only rendered once the store has answered. RevenueCat returns the price it
+              will actually charge in the viewer's storefront, already localised, so there
+              is nothing here to hardcode and nothing to go stale when the price changes.
+            */}
+            {price ? <Text style={styles.price}>{t('paywall.price', { price })}</Text> : null}
+          </View>
+          {PREMIUM_FEATURE_KEYS.map(key => (
+            <View key={key} style={styles.featureRow}>
+              <CheckIcon size={CHECK_SIZE} color={colors.accentText} />
+              <Text style={[styles.featureText, styles.premiumFeatureText]}>{t(key)}</Text>
             </View>
           ))}
-        </View>
+        </Card>
       </View>
 
-      <TouchableOpacity
-        style={[styles.purchaseButton, isPurchasing && styles.purchaseButtonDisabled]}
+      <Button
+        label={t('paywall.cta')}
         onPress={() => {
           void handlePurchase();
         }}
-        disabled={isPurchasing}
-        accessibilityRole="button"
-      >
-        {isPurchasing ? (
-          <ActivityIndicator color={colors.textPrimary} />
-        ) : (
-          <Text style={styles.purchaseButtonText}>Start Premium</Text>
-        )}
-      </TouchableOpacity>
+        loading={isPurchasing}
+        fullWidth
+        testID="paywall-purchase"
+      />
 
-      <TouchableOpacity
-        style={styles.laterButton}
-        onPress={() => router.back()}
-        accessibilityRole="button"
-      >
-        <Text style={styles.laterText}>Maybe Later</Text>
-      </TouchableOpacity>
+      <Button label={t('paywall.later')} onPress={() => router.back()} variant="ghost" fullWidth />
 
-      <Text style={styles.legal}>
-        Subscription auto-renews. Cancel anytime in App Store / Play Store settings.
-      </Text>
+      <Text style={styles.legal}>{t('paywall.legal')}</Text>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
-  title: { fontSize: 24, color: colors.textPrimary, fontWeight: '700', textAlign: 'center' },
-  subtitle: { fontSize: 14, color: colors.textMuted, textAlign: 'center' },
+  content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl },
+  title: { ...typography.screenTitle, textAlign: 'center' },
+  subtitle: { ...typography.meta, textAlign: 'center', marginBottom: spacing.xs },
   comparison: { gap: spacing.md },
-  tier: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: spacing.md,
+  tier: { gap: spacing.sm, borderRadius: radius.panel },
+  tierLabel: { ...typography.cardTitle },
+  premiumHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  premiumTier: {
-    borderWidth: 2,
-    borderColor: colors.accent,
-  },
-  tierLabel: {
-    fontSize: 16,
-    color: colors.textPrimary,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-  },
+  price: { ...typography.meta, color: colors.highlight },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  featureCheck: { color: colors.textMuted, fontSize: 14, width: 16 },
-  featureText: { color: colors.textMuted, fontSize: 13, flex: 1 },
-  premiumCheck: { color: colors.accent, fontSize: 14, width: 16 },
+  featureText: { ...typography.meta, flex: 1 },
   premiumFeatureText: { color: colors.textSecondary },
-  purchaseButton: {
-    backgroundColor: colors.accent,
-    padding: spacing.md,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  purchaseButtonDisabled: { opacity: 0.6 },
-  purchaseButtonText: { color: colors.textPrimary, fontSize: 17, fontWeight: '700' },
-  laterButton: { alignItems: 'center', padding: spacing.sm },
-  laterText: { color: colors.textMuted, fontSize: 14 },
-  legal: { fontSize: 11, color: colors.textMuted, textAlign: 'center' },
+  legal: { ...typography.meta, fontSize: fontSize.xs, textAlign: 'center' },
 });

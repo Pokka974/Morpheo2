@@ -240,14 +240,16 @@ Mock implementations must support configurable response scenarios:
 
 ### Scenario 4.3: Regeneration limit enforcement
 
-**Steps**:
+**Steps** (premium, `max_regenerations = 5`):
 1. Generate an image successfully (regeneration_count = 0)
-2. Tap "Regenerate" 3 times (reaches free-tier limit of 3)
-3. Tap "Regenerate" a 4th time
+2. Tap "Regenerate" 5 times (reaches the premium limit)
+3. Tap "Regenerate" a 6th time
 
 **Expected outcomes**:
-- Steps 1-3: Each regeneration replaces the previous image; count increments
-- Step 4: User informed the limit is reached; premium upgrade prompt shown
+- Steps 1-2: Each regeneration replaces the previous image; count increments
+- Step 3: User informed the limit is reached
+- On free (`max_regenerations = 0`) the "Regenerate" action is never offered at all
+- Regenerations do not spend a monthly image credit — only the first generation does
 - Verify server-side: `media.regeneration_count` does not exceed `max_regenerations`
 
 ### Scenario 4.4: Image generation failure → entry unaffected

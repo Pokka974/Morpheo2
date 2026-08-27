@@ -7,7 +7,7 @@ import { useServices } from '@services/useServices';
 import type { Entitlement } from '@services/entitlement/EntitlementService';
 import { colors, gradients, radius, spacing, typography } from '@theme/tokens';
 
-const DEFAULT_FREE_LIMIT = 5;
+const DEFAULT_FREE_LIMIT = 3;
 
 /**
  * The free-tier quota nudge from the design's "États" sheet: an amber-bordered card

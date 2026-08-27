@@ -5,9 +5,10 @@ export type MockMode = 'free' | 'premium' | 'limit_exceeded' | 'premium_required
 const FREE_ENTITLEMENT: Entitlement = {
   subscriptionTier: 'free',
   interpretationsUsedThisMonth: 0,
-  monthlyInterpretationLimit: 5,
+  monthlyInterpretationLimit: 3,
   imagesUsedThisMonth: 0,
-  monthlyImageLimit: 5,
+  monthlyImageLimit: 1,
+  bonusImageCredits: 1,
   resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
   subscriptionExpiresAt: null,
 };
@@ -30,7 +31,14 @@ export class MockEntitlementService implements EntitlementService {
       };
     }
     if (this.mode === 'limit_exceeded') {
-      return { ...FREE_ENTITLEMENT, interpretationsUsedThisMonth: 5 };
+      // Both quotas exhausted, welcome image included — otherwise a screen under test
+      // could still generate an image while claiming to be at its limit.
+      return {
+        ...FREE_ENTITLEMENT,
+        interpretationsUsedThisMonth: 3,
+        imagesUsedThisMonth: 1,
+        bonusImageCredits: 0,
+      };
     }
     return FREE_ENTITLEMENT;
   }
@@ -45,6 +53,10 @@ export class MockEntitlementService implements EntitlementService {
 
   async isPremium(): Promise<boolean> {
     return this.mode === 'premium';
+  }
+
+  async getPremiumPriceString(): Promise<string | null> {
+    return '7,99 €';
   }
 
   async purchasePremium(): Promise<{ success: boolean }> {

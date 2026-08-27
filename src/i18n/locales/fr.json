@@ -158,6 +158,24 @@
     "nightCount": "{{count}} nuit",
     "nightCount_other": "{{count}} nuits"
   },
+  "paywall": {
+    "title": "Passez à Morpheo Premium",
+    "subtitle": "Tout ce qu'il faut pour explorer vos rêves en profondeur",
+    "tierFree": "Gratuit",
+    "tierPremium": "Premium",
+    "price": "{{price}} / mois",
+    "freeInterpretations": "3 interprétations IA par mois",
+    "freeImages": "1 image IA par mois — et la première offerte",
+    "freeJournal": "Journal, historique et recherche illimités",
+    "freeInsights": "Tendances basiques — vos 3 thèmes principaux sur 30 jours",
+    "premiumInterpretations": "Interprétations IA illimitées",
+    "premiumImages": "Images IA illimitées",
+    "premiumInsights": "Analyse avancée des tendances et insights personnels complets",
+    "premiumRecurrence": "Analyse complète des rêves récurrents, sur toute période",
+    "cta": "Passer au premium",
+    "later": "Plus tard",
+    "legal": "Abonnement à renouvellement automatique. Résiliable à tout moment dans les réglages de l'App Store / du Play Store."
+  },
   "log": {
     "title": "Nouveau rêve",
     "placeholder": "Racontez votre rêve…",

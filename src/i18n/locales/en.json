@@ -158,6 +158,24 @@
     "nightCount": "{{count}} night",
     "nightCount_other": "{{count}} nights"
   },
+  "paywall": {
+    "title": "Unlock Morpheo Premium",
+    "subtitle": "Everything you need for deeper dream insights",
+    "tierFree": "Free",
+    "tierPremium": "Premium",
+    "price": "{{price}} / month",
+    "freeInterpretations": "3 AI interpretations per month",
+    "freeImages": "1 AI image per month — plus your first one, free",
+    "freeJournal": "Unlimited journal, history and search",
+    "freeInsights": "Basic trends — your top 3 themes over 30 days",
+    "premiumInterpretations": "Unlimited AI interpretations",
+    "premiumImages": "Unlimited AI images",
+    "premiumInsights": "Advanced trends and complete personal insights",
+    "premiumRecurrence": "Full recurring-dream analysis, over any period",
+    "cta": "Start Premium",
+    "later": "Maybe later",
+    "legal": "Subscription auto-renews. Cancel anytime in App Store / Play Store settings."
+  },
   "log": {
     "title": "New dream",
     "placeholder": "Tell your dream…",

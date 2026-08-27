@@ -102,8 +102,8 @@ describe('SettingsScreen', () => {
     expect(getByText('test@example.com')).toBeTruthy();
     expect(getByText('Free')).toBeTruthy();
     // MockEntitlementService's free tier is 0 of 5 used.
-    expect(getByText('5 interpretations left')).toBeTruthy();
-    expect(getByText('0 / 5')).toBeTruthy();
+    expect(getByText('3 interpretations left')).toBeTruthy();
+    expect(getByText('0 / 3')).toBeTruthy();
   });
 
   it("names the groups from the user's side, not the system's", async () => {

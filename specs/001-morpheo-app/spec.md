@@ -209,9 +209,9 @@ limit, and premium video gate.
 5. **Given** a user who dislikes the generated image, **When** they tap "Regenerate",
    **Then** a new image is generated, the original is replaced, and the regeneration count
    for this entry increments.
-6. **Given** a free user who has reached the per-entry regeneration limit (3 times),
-   **When** they attempt another regeneration, **Then** they are informed the limit for
-   this entry is reached; a premium upgrade option is shown.
+6. **Given** a free user, who has no per-entry regenerations, **When** they view a
+   generated image, **Then** no "Regenerate" action is offered and a premium upgrade
+   option is shown in its place.
 7. **Given** a premium user, **When** they view an entry, **Then** a "Generate Video"
    option is available in addition to the static image; the regeneration limit for premium
    users is 5 times per entry.
@@ -317,8 +317,9 @@ client-side state does not bypass a server gate.
 **Acceptance Scenarios**:
 
 1. **Given** a free user who has not yet encountered a premium feature, **When** they view
-   the app, **Then** the free tier limits (5 interpretations/month, 3 image
-   generations/month, no video, basic insights) are communicated in the Upgrade screen and
+   the app, **Then** the free tier limits (3 interpretations/month, 1 image
+   generation/month plus a one-time welcome image, no video, basic insights) are
+   communicated in the Upgrade screen and
    contextually at each premium feature entry point.
 2. **Given** a free user with 1 interpretation remaining for the month, **When** they open
    the log screen, **Then** a subtle indicator ("1 free interpretation remaining — resets
@@ -509,8 +510,8 @@ export → verify file contents; trigger deletion → verify all backend data is
   MUST respect the device's notification permission state.
 - **FR-028**: AI provider integrations MUST apply a model-training opt-out by default when
   the provider offers one; no user action is required to activate this protection.
-- **FR-029**: Image regeneration is limited to 3 per entry for free users and 5 per entry
-  for premium users; these limits MUST be enforced server-side.
+- **FR-029**: Image regeneration is unavailable to free users (0 per entry) and limited to
+  5 per entry for premium users; these limits MUST be enforced server-side.
 - **FR-030**: Video generation is a premium-only feature; the option is visible to all
   users, with a premium upgrade prompt shown to free users before any request is made.
 - **FR-034**: The app MUST accept dream descriptions written in any language. The AI
@@ -596,10 +597,15 @@ export → verify file contents; trigger deletion → verify all backend data is
 - The minimum viable dream description length for interpretation is 20 characters
   (approximately one short sentence). This default may be tuned based on AI provider
   feedback during integration testing.
-- Free tier defaults: 5 interpretations per month, 3 image generations per month, 0 video
+- Free tier defaults: 3 interpretations per month, 1 image generation per month, 0 video
   generations, basic recurrence insights (top 3 symbols/emotions, 30-day window). Counters
   reset at 00:00 UTC on the 1st of each calendar month. These limits are business decisions
   subject to revision before launch.
+- In addition to the monthly image, every account is granted **one lifetime welcome image**
+  (`entitlements.bonus_image_credits`), spent only once the month's allowance is gone and
+  never restored by the monthly reset. It exists so a new account can illustrate a dream on
+  the day it signs up rather than waiting for the 1st of the month; the signup month
+  therefore allows two images, and every month after allows one.
 - Voice-to-text uses the device's native speech recognition; no additional AI provider
   consent is required for voice input alone.
 - Social login supports Google and Apple at launch; additional providers are out of scope.
