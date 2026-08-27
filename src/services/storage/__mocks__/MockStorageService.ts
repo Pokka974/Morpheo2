@@ -17,6 +17,10 @@ export class MockStorageService implements StorageService {
     return this.cache.get(mediaId) ?? null;
   }
 
+  async removeCachedMedia(mediaId: string): Promise<void> {
+    this.cache.delete(mediaId);
+  }
+
   async evictToLimit(_limitBytes: number): Promise<void> {
     this.cache.clear();
   }

@@ -44,6 +44,14 @@ jest.mock('@features/dream-log/dreamRepository', () => ({
   deleteDream: (...args: unknown[]) => mockDeleteDream(...args),
 }));
 
+// The screen kicks the outbound drain straight after a confirmed delete, so the real
+// module — and through it `supabase/client`, which throws without env vars — would
+// otherwise be pulled into this render-level test.
+const mockSyncPendingDreams = jest.fn().mockResolvedValue({ syncedIds: [], failures: [] });
+jest.mock('@features/dream-log/syncService', () => ({
+  syncPendingDreams: (...args: unknown[]) => mockSyncPendingDreams(...args),
+}));
+
 const imageService = new MockImageGenerationService();
 
 function buildRegistry(): ServiceRegistry {

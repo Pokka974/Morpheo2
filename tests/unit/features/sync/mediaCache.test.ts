@@ -4,17 +4,19 @@ import type { ServiceRegistry } from '@services/registry';
 describe('makeMediaCache', () => {
   const getSignedUrl = jest.fn().mockResolvedValue('https://example.com/signed.png');
   const cacheMedia = jest.fn().mockResolvedValue('/local/media/media-1.png');
+  const removeCachedMedia = jest.fn().mockResolvedValue(undefined);
 
-  // Only the two members the adapter reads; the rest of the registry is irrelevant
+  // Only the members the adapter reads; the rest of the registry is irrelevant
   // here and standing it up would only couple this test to unrelated services.
   const services = {
     imageGeneration: { getSignedUrl },
-    storage: { cacheMedia },
+    storage: { cacheMedia, removeCachedMedia },
   } as unknown as ServiceRegistry;
 
   beforeEach(() => {
     getSignedUrl.mockClear();
     cacheMedia.mockClear();
+    removeCachedMedia.mockClear();
   });
 
   it('delegates signing to the image generation service', async () => {
@@ -29,5 +31,12 @@ describe('makeMediaCache', () => {
       makeMediaCache(services).cacheMedia('media-1', 'https://example.com/signed.png')
     ).resolves.toBe('/local/media/media-1.png');
     expect(cacheMedia).toHaveBeenCalledWith('media-1', 'https://example.com/signed.png');
+  });
+
+  // Needed by both the regeneration path (the row keeps its id while the image behind
+  // it changes) and the deletion purge, which has to take the cached file with it.
+  it('delegates cache removal to the storage service', async () => {
+    await expect(makeMediaCache(services).removeCachedMedia('media-1')).resolves.toBeUndefined();
+    expect(removeCachedMedia).toHaveBeenCalledWith('media-1');
   });
 });

@@ -32,6 +32,13 @@ jest.mock('@db/client', () => ({
   },
 }));
 
+// The local purge itself (children before parent, cache files, transaction) is covered
+// in dreamRepository.test.ts. What matters here is only that the pull reaches for it.
+const mockPurgeDreamLocally = jest.fn();
+jest.mock('@features/dream-log/dreamRepository', () => ({
+  purgeDreamLocally: (...args: unknown[]) => mockPurgeDreamLocally(...args),
+}));
+
 import { pullRemoteChanges } from '@features/sync/pullService';
 
 /** Builds a chainable query-builder stub matching how pullService calls the
@@ -87,6 +94,7 @@ const STALE_SESSION = {
 const mediaCache = {
   getSignedUrl: jest.fn<Promise<string>, [string]>(),
   cacheMedia: jest.fn<Promise<string>, [string, string]>(),
+  removeCachedMedia: jest.fn<Promise<void>, [string]>(),
 };
 
 describe('pullRemoteChanges', () => {
@@ -100,6 +108,8 @@ describe('pullRemoteChanges', () => {
     mockGetAllAsync.mockReset().mockResolvedValue([]);
     mediaCache.getSignedUrl.mockReset().mockResolvedValue('https://example.com/signed.png');
     mediaCache.cacheMedia.mockReset().mockResolvedValue('/local/media/media-1.png');
+    mediaCache.removeCachedMedia.mockReset().mockResolvedValue(undefined);
+    mockPurgeDreamLocally.mockReset().mockResolvedValue(undefined);
     mockRefreshSession.mockReset().mockResolvedValue({ data: { session: {} }, error: null });
     await AsyncStorage.clear();
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -127,23 +137,24 @@ describe('pullRemoteChanges', () => {
     expect(dreamsBuilder.gt).toHaveBeenCalledWith('last_modified_at', '1970-01-01T00:00:00.000Z');
   });
 
-  it('mirrors a remote deletion as a local soft-delete, matching the app-wide is_deleted pattern', async () => {
+  // Deletion is a hard delete on both sides now (FR-032), so a remote row still
+  // carrying is_deleted only arrives from a build predating that. Writing it in as a
+  // local tombstone — what this used to do — would leave the text, interpretation and
+  // image sitting on this device permanently.
+  it('purges a remote soft-deleted dream locally instead of mirroring the tombstone', async () => {
     const deleted = { ...baseRemoteDream, id: 'dream-deleted', is_deleted: true };
     mockFrom.mockImplementation((table: string) => {
       if (table === 'dreams') return chainable({ data: [deleted], error: null });
       return chainable(EMPTY);
     });
 
-    await pullRemoteChanges('user-1');
+    await pullRemoteChanges('user-1', mediaCache);
 
-    expect(mockRunAsync).toHaveBeenCalledWith(
+    expect(mockPurgeDreamLocally).toHaveBeenCalledWith('dream-deleted', mediaCache);
+    expect(mockRunAsync).not.toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO dreams'),
       expect.arrayContaining(['dream-deleted'])
     );
-    const call = mockRunAsync.mock.calls.find(c => (c[1] as unknown[]).includes('dream-deleted'))!;
-    const bindings = call[1] as unknown[];
-    // is_deleted is the 9th bound parameter (0-indexed 8) in the INSERT statement.
-    expect(bindings[8]).toBe(1);
   });
 
   describe('deletion reconciliation (catches a hard delete or a dashboard edit that never bumped last_modified_at)', () => {
@@ -161,7 +172,7 @@ describe('pullRemoteChanges', () => {
       };
     }
 
-    it('marks a synced local dream deleted when it is absent from the remote active set', async () => {
+    it('purges a synced local dream when it is absent from the remote active set', async () => {
       mockFrom.mockImplementation(sequencedDreamsResponses([EMPTY, { data: [], error: null }]));
       mockSelectWhere.mockResolvedValue([
         {
@@ -179,12 +190,9 @@ describe('pullRemoteChanges', () => {
         },
       ]);
 
-      await pullRemoteChanges('user-1');
+      await pullRemoteChanges('user-1', mediaCache);
 
-      expect(mockRunAsync).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE dreams SET is_deleted = 1 WHERE id = ?'),
-        'dream-1'
-      );
+      expect(mockPurgeDreamLocally).toHaveBeenCalledWith('dream-1', mediaCache);
     });
 
     it('leaves a local dream alone when it is still present in the remote active set', async () => {
@@ -207,12 +215,9 @@ describe('pullRemoteChanges', () => {
         },
       ]);
 
-      await pullRemoteChanges('user-1');
+      await pullRemoteChanges('user-1', mediaCache);
 
-      expect(mockRunAsync).not.toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE dreams SET is_deleted = 1 WHERE id = ?'),
-        expect.anything()
-      );
+      expect(mockPurgeDreamLocally).not.toHaveBeenCalled();
     });
 
     it('does not fail the whole pull when the reconciliation query errors', async () => {
@@ -434,6 +439,97 @@ describe('pullRemoteChanges', () => {
       expect.stringContaining('INSERT INTO media'),
       expect.arrayContaining(['media-1', '/local/cache/media-1.jpg'])
     );
+  });
+
+  describe('media cache invalidation (a regeneration keeps the row id and swaps the object)', () => {
+    /** One local media row and the remote version of it, differing only in storage_key. */
+    function stageMediaRow(localStorageKey: string | null, remoteStorageKey: string): void {
+      mockSelectWhere.mockResolvedValue([
+        {
+          id: 'media-1',
+          dreamId: 'dream-1',
+          mediaType: 'image',
+          generationStatus: 'complete',
+          storageKey: localStorageKey,
+          localCachePath: '/local/cache/media-1.jpg',
+          regenerationCount: 0,
+          maxRegenerations: 5,
+          errorMessage: null,
+          createdAt: '2026-08-01T00:00:00.000Z',
+          updatedAt: '2026-08-01T00:00:00.000Z',
+        },
+      ]);
+      mockFrom.mockImplementation((table: string) => {
+        if (table !== 'media') return chainable(EMPTY);
+        return chainable({
+          data: [
+            {
+              id: 'media-1',
+              dream_id: 'dream-1',
+              media_type: 'image',
+              generation_status: 'complete',
+              storage_key: remoteStorageKey,
+              regeneration_count: 1,
+              max_regenerations: 5,
+              error_message: null,
+              created_at: '2026-08-01T00:00:00.000Z',
+              updated_at: '2026-08-02T00:00:00.000Z',
+            },
+          ],
+          error: null,
+        });
+      });
+    }
+
+    /** The `local_cache_path` binding is the 6th (0-indexed 5) in the INSERT statement. */
+    function boundCachePath(): unknown {
+      const call = mockRunAsync.mock.calls.find(c => String(c[0]).includes('INSERT INTO media'))!;
+      return (call[1] as unknown[])[5];
+    }
+
+    // Without this the row keeps a path to the superseded image, hydration skips it
+    // (it only fills null paths) and the device shows the old picture forever.
+    it('drops the cached file and the path when the object behind the row changed', async () => {
+      stageMediaRow('storage/image-1.png', 'storage/image-2.png');
+
+      await pullRemoteChanges('user-1', mediaCache);
+
+      expect(mediaCache.removeCachedMedia).toHaveBeenCalledWith('media-1');
+      expect(boundCachePath()).toBeNull();
+    });
+
+    // The generating device writes its own row through persistLocally, which has no
+    // storage_key to write — so a null local key means "not seen yet", not "changed".
+    // Treating it as a change would discard the file that generation just downloaded.
+    it('leaves the cache alone when the local row simply never recorded a storage_key', async () => {
+      stageMediaRow(null, 'storage/image-1.png');
+
+      await pullRemoteChanges('user-1', mediaCache);
+
+      expect(mediaCache.removeCachedMedia).not.toHaveBeenCalled();
+      expect(boundCachePath()).toBe('/local/cache/media-1.jpg');
+    });
+
+    it('leaves the cache alone when the object is unchanged', async () => {
+      stageMediaRow('storage/image-1.png', 'storage/image-1.png');
+
+      await pullRemoteChanges('user-1', mediaCache);
+
+      expect(mediaCache.removeCachedMedia).not.toHaveBeenCalled();
+      expect(boundCachePath()).toBe('/local/cache/media-1.jpg');
+    });
+
+    // Clearing the path while the file is still on disk would be worse than keeping it:
+    // cacheMedia short-circuits on an existing file and would re-record the stale image
+    // as if it were fresh.
+    it('keeps the stale path when the file could not be removed', async () => {
+      stageMediaRow('storage/image-1.png', 'storage/image-2.png');
+      mediaCache.removeCachedMedia.mockRejectedValueOnce(new Error('EBUSY'));
+
+      await pullRemoteChanges('user-1', mediaCache);
+
+      expect(boundCachePath()).toBe('/local/cache/media-1.jpg');
+    });
   });
 
   it('refreshes the session and retries once when PostgREST rejects the token as issued in the future', async () => {

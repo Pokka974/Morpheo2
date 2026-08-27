@@ -7,10 +7,11 @@ import { renderHook } from '@testing-library/react-native';
 import { useAuthSync } from '@features/auth/useAuthSync';
 
 /** The hook only forwards this to `pullRemoteChanges`, which is mocked here, so a
- * pair of no-op stubs is enough to satisfy the dependency. */
+ * set of no-op stubs is enough to satisfy the dependency. */
 const mediaCache = {
   getSignedUrl: jest.fn(async () => 'https://example.com/signed.png'),
   cacheMedia: jest.fn(async () => '/local/path.png'),
+  removeCachedMedia: jest.fn(async () => {}),
 };
 
 import type { AuthService, AuthSession } from '@services/auth/AuthService';
@@ -86,6 +87,7 @@ describe('useAuthSync', () => {
       expect.objectContaining({
         getSignedUrl: expect.any(Function),
         cacheMedia: expect.any(Function),
+        removeCachedMedia: expect.any(Function),
       })
     );
   });

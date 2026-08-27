@@ -105,6 +105,29 @@ describe('ExpoStorageService', () => {
     });
   });
 
+  describe('removeCachedMedia', () => {
+    it('deletes the cached file for one media id', async () => {
+      mockFiles['file://cache/morpheo/media/media-001'] = { exists: true };
+
+      await service.removeCachedMedia('media-001');
+
+      expect(mockDeletedPaths).toEqual(['file://cache/morpheo/media/media-001']);
+      expect(await service.isCached('media-001')).toBe(false);
+    });
+
+    it('derives the path the same way cacheMedia does, sanitising included', async () => {
+      await service.removeCachedMedia('media/with/slashes');
+
+      expect(mockDeletedPaths).toEqual(['file://cache/morpheo/media/media_with_slashes']);
+    });
+
+    // Callers treat this as cleanup, not a precondition — a purge or a regeneration must
+    // not fail because the file was already evicted by the 200MB LRU cap.
+    it('is a no-op when the file is not there', async () => {
+      await expect(service.removeCachedMedia('never-cached')).resolves.toBeUndefined();
+    });
+  });
+
   describe('evictToLimit', () => {
     it('evicts oldest files until under limit', async () => {
       mockDirContents = ['old-file', 'new-file'];

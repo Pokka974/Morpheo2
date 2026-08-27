@@ -29,10 +29,11 @@ import { renderHook } from '@testing-library/react-native';
 import { useSyncOnConnect } from '@features/dream-log/useSyncOnConnect';
 
 /** The hook only forwards this to `pullRemoteChanges`, which is mocked here, so a
- * pair of no-op stubs is enough to satisfy the dependency. */
+ * set of no-op stubs is enough to satisfy the dependency. */
 const mediaCache = {
   getSignedUrl: jest.fn(async () => 'https://example.com/signed.png'),
   cacheMedia: jest.fn(async () => '/local/path.png'),
+  removeCachedMedia: jest.fn(async () => {}),
 };
 
 import { AuthExpiredError } from '@features/dream-log/syncService';
@@ -192,6 +193,7 @@ describe('useSyncOnConnect', () => {
       expect.objectContaining({
         getSignedUrl: expect.any(Function),
         cacheMedia: expect.any(Function),
+        removeCachedMedia: expect.any(Function),
       })
     );
   });

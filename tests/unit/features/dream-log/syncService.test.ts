@@ -1,17 +1,35 @@
 const mockUpsert = jest.fn();
 const mockGetPendingDreams = jest.fn();
 const mockMarkSynced = jest.fn();
+const mockPurgeDreamLocally = jest.fn();
+/** `.select('id, storage_key').eq('dream_id', ...)` — the builder is awaited directly. */
+const mockMediaSelect = jest.fn();
+const mockDreamsDelete = jest.fn();
+const mockStorageRemove = jest.fn();
 
 // Mock supabase client before import to avoid env var validation throwing
 jest.mock('@features/../supabase/client', () => ({
   supabase: {
-    from: jest.fn(() => ({ upsert: (...args: unknown[]) => mockUpsert(...args) })),
+    from: jest.fn((table: string) => ({
+      upsert: (...args: unknown[]) => mockUpsert(...args),
+      select: (...args: unknown[]) => {
+        void args;
+        return { eq: () => mockMediaSelect(table) };
+      },
+      delete: () => ({ eq: (...args: unknown[]) => mockDreamsDelete(table, ...args) }),
+    })),
+    storage: {
+      from: (bucket: string) => ({
+        remove: (...args: unknown[]) => mockStorageRemove(bucket, ...args),
+      }),
+    },
   },
 }));
 
 jest.mock('@features/dream-log/dreamRepository', () => ({
   getPendingDreams: (...args: unknown[]) => mockGetPendingDreams(...args),
   markSynced: (...args: unknown[]) => mockMarkSynced(...args),
+  purgeDreamLocally: (...args: unknown[]) => mockPurgeDreamLocally(...args),
 }));
 
 import {
@@ -74,6 +92,10 @@ describe('syncPendingDreams', () => {
     mockUpsert.mockReset();
     mockGetPendingDreams.mockReset();
     mockMarkSynced.mockReset().mockResolvedValue(undefined);
+    mockPurgeDreamLocally.mockReset().mockResolvedValue(undefined);
+    mockMediaSelect.mockReset().mockResolvedValue({ data: [], error: null });
+    mockDreamsDelete.mockReset().mockResolvedValue({ error: null });
+    mockStorageRemove.mockReset().mockResolvedValue({ data: [], error: null });
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -267,6 +289,94 @@ describe('syncPendingDreams', () => {
 
     expect(outcome.syncedIds).toEqual(['dream-x']);
     expect(outcome.failures).toEqual([]);
+  });
+
+  // FR-032: a confirmed deletion removes the entry, its interpretation and its media from
+  // both the device and the backend. Pushing `is_deleted = true` — what this used to do —
+  // left every one of those on the server forever.
+  describe('a locally deleted dream is purged rather than pushed', () => {
+    const deleted = () => makeDream({ id: 'dream-gone', isDeleted: true });
+    const deps = { removeCachedMedia: jest.fn() } as unknown as Parameters<
+      typeof syncPendingDreams
+    >[0];
+
+    it('removes the stored objects, deletes the row, then purges locally — never upserts', async () => {
+      mockGetPendingDreams.mockResolvedValue([deleted()]);
+      mockMediaSelect.mockResolvedValue({
+        data: [
+          { id: 'media-1', storage_key: 'user-1/dream-gone/image-1.png' },
+          { id: 'media-2', storage_key: 'user-1/dream-gone/image-2.png' },
+        ],
+        error: null,
+      });
+
+      const outcome = await syncPendingDreams(deps);
+
+      expect(mockStorageRemove).toHaveBeenCalledWith('dream-media', [
+        'user-1/dream-gone/image-1.png',
+        'user-1/dream-gone/image-2.png',
+      ]);
+      expect(mockDreamsDelete).toHaveBeenCalledWith('dreams', 'id', 'dream-gone');
+      expect(mockPurgeDreamLocally).toHaveBeenCalledWith('dream-gone', deps);
+      expect(mockUpsert).not.toHaveBeenCalled();
+      expect(mockMarkSynced).not.toHaveBeenCalled();
+      expect(outcome.syncedIds).toEqual(['dream-gone']);
+    });
+
+    it('skips the bucket call for a dream whose media never produced an object', async () => {
+      mockGetPendingDreams.mockResolvedValue([deleted()]);
+      mockMediaSelect.mockResolvedValue({
+        data: [{ id: 'media-1', storage_key: null }],
+        error: null,
+      });
+
+      await syncPendingDreams(deps);
+
+      expect(mockStorageRemove).not.toHaveBeenCalled();
+      expect(mockDreamsDelete).toHaveBeenCalledWith('dreams', 'id', 'dream-gone');
+    });
+
+    // `storage_key` is the only pointer to the object. Deleting the row first would leave
+    // a PNG in the bucket that nothing in the database can ever name again.
+    it('leaves the dream queued when the objects could not be removed', async () => {
+      mockGetPendingDreams.mockResolvedValue([deleted()]);
+      mockMediaSelect.mockResolvedValue({
+        data: [{ id: 'media-1', storage_key: 'user-1/dream-gone/image-1.png' }],
+        error: null,
+      });
+      mockStorageRemove.mockResolvedValue({ data: null, error: { message: 'bucket unreachable' } });
+
+      const outcome = await syncPendingDreams(deps);
+
+      expect(mockDreamsDelete).not.toHaveBeenCalled();
+      expect(mockPurgeDreamLocally).not.toHaveBeenCalled();
+      expect(outcome.syncedIds).toEqual([]);
+      expect(outcome.failures).toEqual([
+        {
+          dreamId: 'dream-gone',
+          error: expect.objectContaining({ message: 'bucket unreachable' }),
+        },
+      ]);
+    });
+
+    // The local row is the only record that the deletion still has to reach Supabase.
+    it('keeps the local record when the remote row delete fails', async () => {
+      mockGetPendingDreams.mockResolvedValue([deleted()]);
+      mockDreamsDelete.mockResolvedValue({ error: { message: 'constraint violation' } });
+
+      const outcome = await syncPendingDreams(deps);
+
+      expect(mockPurgeDreamLocally).not.toHaveBeenCalled();
+      expect(outcome.failures).toHaveLength(1);
+    });
+
+    it('surfaces an expired session as AuthExpiredError so the caller can refresh', async () => {
+      mockGetPendingDreams.mockResolvedValue([deleted()]);
+      mockDreamsDelete.mockResolvedValue({ error: { code: 'PGRST301', message: 'jwt expired' } });
+
+      await expect(syncPendingDreams(deps)).rejects.toThrow(AuthExpiredError);
+      expect(mockPurgeDreamLocally).not.toHaveBeenCalled();
+    });
   });
 
   describe('syncDreamForInterpretation', () => {

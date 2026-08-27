@@ -167,3 +167,73 @@ describe('generate-image Edge Function image credits', () => {
     expect(source).not.toContain('monthly_image_limit');
   });
 });
+
+// Every regeneration used to upload a new PNG and insert a new media row, leaving the
+// superseded object and row behind forever: an entry regenerated to the premium limit held
+// six PNGs and six rows, five of each unreachable (issue #4).
+describe('generate-image Edge Function media cleanup', () => {
+  const source = readFile('supabase/functions/generate-image/index.ts');
+
+  /** Just the cleanup helper, so ordering and error-handling assertions can't be
+   * satisfied by unrelated code elsewhere in the file. */
+  function cleanupBody(): string {
+    const start = source.indexOf('async function cleanUpSupersededMedia');
+    const end = source.indexOf('serve(async (req: Request)');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    return source.slice(start, end);
+  }
+
+  it('updates the dream’s existing media row instead of inserting a second one', () => {
+    expect(source).toContain(".eq('id', existingMedia.id)");
+    // The lookup that feeds the update has to carry the row id and the key it is about to
+    // replace — reading only the counters is what made an in-place update impossible.
+    expect(source).toContain("select('id, storage_key, regeneration_count, max_regenerations')");
+  });
+
+  // `media` has no BEFORE UPDATE trigger, and the client's pull sync pages on
+  // `gt('updated_at', cursor)`. An unbumped timestamp makes the regeneration invisible to
+  // every other device — the row is updated and never travels.
+  it('bumps updated_at by hand on the in-place update', () => {
+    expect(source).toMatch(/updated_at: new Date\(\)\.toISOString\(\)/);
+  });
+
+  it('removes the superseded storage object rather than orphaning it', () => {
+    expect(source).toContain("supabase.storage.from('dream-media').remove(staleKeys)");
+  });
+
+  // Rows are the only pointer to their objects: dropping a row before its object is gone
+  // makes that object permanently unreachable.
+  it('deletes superseded rows only after their objects have been removed', () => {
+    const cleanup = cleanupBody();
+    const removeAt = cleanup.indexOf('.remove(staleKeys)');
+    const deleteAt = cleanup.indexOf('.delete()');
+    expect(removeAt).toBeGreaterThan(-1);
+    expect(deleteAt).toBeGreaterThan(removeAt);
+  });
+
+  // The user has already paid a credit and owns the image by this point; a bucket that
+  // failed to drop an object is not a reason to fail the request they are waiting on.
+  it('never fails the generation over a cleanup error', () => {
+    const cleanup = cleanupBody();
+    expect(cleanup).toContain('console.error');
+    expect(cleanup).not.toContain('fail(');
+    expect(cleanup).not.toContain('throw');
+  });
+
+  // A regeneration that dies mid-flight must leave the previous image and row intact, so
+  // nothing is destroyed until the new row is committed.
+  it('runs cleanup strictly after the media row write succeeds', () => {
+    const writeCheckAt = source.indexOf('if (writeError || !media)');
+    const cleanupCallAt = source.indexOf('await cleanUpSupersededMedia(supabase, {');
+    expect(writeCheckAt).toBeGreaterThan(-1);
+    expect(cleanupCallAt).toBeGreaterThan(writeCheckAt);
+  });
+
+  // FR-031's re-generate-after-edit arrives with isRegeneration unset. Resetting the count
+  // there would hand back a full regeneration allowance for the price of an edit.
+  it('never resets an existing regeneration count to zero', () => {
+    expect(source).not.toMatch(/regeneration_count:\s*0\b/);
+    expect(source).toContain('(existingMedia?.regeneration_count ?? 0)');
+  });
+});
