@@ -93,9 +93,15 @@ describe('PrivacyScreen', () => {
   });
 
   it('shows a spinner while saving is in flight', async () => {
-    mockMaybeSingle.mockResolvedValue({ data: { ai_consent_granted: false, ai_consent_granted_at: null } });
+    mockMaybeSingle.mockResolvedValue({
+      data: { ai_consent_granted: false, ai_consent_granted_at: null },
+    });
     let resolveEq: (v: unknown) => void = () => {};
-    mockUpdateEq.mockReturnValue(new Promise(resolve => { resolveEq = resolve; }));
+    mockUpdateEq.mockReturnValue(
+      new Promise(resolve => {
+        resolveEq = resolve;
+      })
+    );
 
     const { getByText, queryByText, UNSAFE_getByType } = render(<PrivacyScreen />);
     await waitFor(() => expect(getByText('Grant consent')).toBeTruthy());
@@ -114,7 +120,9 @@ describe('PrivacyScreen', () => {
   });
 
   it('updateConsent guards against a missing user mid-flow (isSaving still resets via finally)', async () => {
-    mockMaybeSingle.mockResolvedValue({ data: { ai_consent_granted: false, ai_consent_granted_at: null } });
+    mockMaybeSingle.mockResolvedValue({
+      data: { ai_consent_granted: false, ai_consent_granted_at: null },
+    });
     const { getByText } = render(<PrivacyScreen />);
     await waitFor(() => expect(getByText('Grant consent')).toBeTruthy());
 

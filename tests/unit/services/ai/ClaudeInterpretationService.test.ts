@@ -146,7 +146,9 @@ describe('ClaudeInterpretationService (real class, mocked supabase)', () => {
   });
 
   it('getInterpretation returns null when the query errors', async () => {
-    const maybeSingle = jest.fn().mockResolvedValue({ data: null, error: { message: 'not found' } });
+    const maybeSingle = jest
+      .fn()
+      .mockResolvedValue({ data: null, error: { message: 'not found' } });
     const limit = jest.fn(() => ({ maybeSingle }));
     const order = jest.fn(() => ({ limit }));
     const eq = jest.fn(() => ({ order }));
@@ -183,7 +185,11 @@ describe('InterpretationService contract (via mock)', () => {
 
   it('success mode returns InterpretationResult with all fields', async () => {
     service.configure('success');
-    const result = await service.interpret({ dreamId: 'test-id', description: 'A long dream description here.', style: 'symbolic' });
+    const result = await service.interpret({
+      dreamId: 'test-id',
+      description: 'A long dream description here.',
+      style: 'symbolic',
+    });
     expect(result.overallReading).toBeTruthy();
     expect(Array.isArray(result.keywords)).toBe(true);
     expect(Array.isArray(result.emotions)).toBe(true);
@@ -194,7 +200,11 @@ describe('InterpretationService contract (via mock)', () => {
 
   it('degraded mode returns result with isDegraded=true', async () => {
     service.configure('degraded');
-    const result = await service.interpret({ dreamId: 'test-id', description: 'Short dream.', style: 'symbolic' });
+    const result = await service.interpret({
+      dreamId: 'test-id',
+      description: 'Short dream.',
+      style: 'symbolic',
+    });
     expect(result.isDegraded).toBe(true);
     expect(result.confidence).toBe('low');
   });

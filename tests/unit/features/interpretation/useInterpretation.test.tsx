@@ -30,7 +30,11 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <ServicesProvider services={mockRegistry}>{children}</ServicesProvider>
 );
 
-const testRequest = { dreamId: 'test-dream', description: 'I was flying over a mountain lake at dusk.', style: 'symbolic' as const };
+const testRequest = {
+  dreamId: 'test-dream',
+  description: 'I was flying over a mountain lake at dusk.',
+  style: 'symbolic' as const,
+};
 
 describe('useInterpretation', () => {
   beforeEach(() => {

@@ -28,7 +28,12 @@ describe('LumaVideoGenerationService', () => {
   describe('submitVideoJob', () => {
     it('returns VideoJob on success', async () => {
       mockInvoke.mockResolvedValueOnce({
-        data: { jobId: 'job-001', mediaId: 'media-001', status: 'queued', estimatedDurationSeconds: 120 },
+        data: {
+          jobId: 'job-001',
+          mediaId: 'media-001',
+          status: 'queued',
+          estimatedDurationSeconds: 120,
+        },
         error: null,
       });
 
@@ -67,7 +72,12 @@ describe('LumaVideoGenerationService', () => {
       const mockSelect = jest.fn().mockReturnThis();
       const mockEq = jest.fn().mockReturnThis();
       const mockSingle = jest.fn().mockResolvedValue({
-        data: { id: 'job-001', status: 'processing', media_id: 'media-001', estimated_duration_seconds: 120 },
+        data: {
+          id: 'job-001',
+          status: 'processing',
+          media_id: 'media-001',
+          estimated_duration_seconds: 120,
+        },
         error: null,
       });
 
@@ -83,7 +93,9 @@ describe('LumaVideoGenerationService', () => {
     it('throws when job not found', async () => {
       const mockSelect = jest.fn().mockReturnThis();
       const mockEq = jest.fn().mockReturnThis();
-      const mockSingle = jest.fn().mockResolvedValue({ data: null, error: { message: 'not found' } });
+      const mockSingle = jest
+        .fn()
+        .mockResolvedValue({ data: null, error: { message: 'not found' } });
 
       mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq, single: mockSingle });
       mockSelect.mockReturnValue({ eq: mockEq });
@@ -113,7 +125,13 @@ describe('LumaVideoGenerationService', () => {
         error: null,
       });
 
-      mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq, order: mockOrder, limit: mockLimit, maybeSingle: mockMaybeSingle });
+      mockFrom.mockReturnValue({
+        select: mockSelect,
+        eq: mockEq,
+        order: mockOrder,
+        limit: mockLimit,
+        maybeSingle: mockMaybeSingle,
+      });
       mockSelect.mockReturnValue({ eq: mockEq });
       mockEq.mockReturnValue({ eq: mockEq, order: mockOrder });
       mockOrder.mockReturnValue({ limit: mockLimit });
@@ -121,7 +139,12 @@ describe('LumaVideoGenerationService', () => {
 
       const result = await service.getVideo('dream-001');
       expect(result).toEqual(
-        expect.objectContaining({ id: 'media-001', dreamId: 'dream-001', mediaType: 'video', generationStatus: 'complete' })
+        expect.objectContaining({
+          id: 'media-001',
+          dreamId: 'dream-001',
+          mediaType: 'video',
+          generationStatus: 'complete',
+        })
       );
     });
 
@@ -130,9 +153,17 @@ describe('LumaVideoGenerationService', () => {
       const mockEq = jest.fn().mockReturnThis();
       const mockOrder = jest.fn().mockReturnThis();
       const mockLimit = jest.fn().mockReturnThis();
-      const mockMaybeSingle = jest.fn().mockResolvedValue({ data: null, error: { message: 'not found' } });
+      const mockMaybeSingle = jest
+        .fn()
+        .mockResolvedValue({ data: null, error: { message: 'not found' } });
 
-      mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq, order: mockOrder, limit: mockLimit, maybeSingle: mockMaybeSingle });
+      mockFrom.mockReturnValue({
+        select: mockSelect,
+        eq: mockEq,
+        order: mockOrder,
+        limit: mockLimit,
+        maybeSingle: mockMaybeSingle,
+      });
       mockSelect.mockReturnValue({ eq: mockEq });
       mockEq.mockReturnValue({ eq: mockEq, order: mockOrder });
       mockOrder.mockReturnValue({ limit: mockLimit });
@@ -151,7 +182,13 @@ describe('LumaVideoGenerationService', () => {
       // which would surface a PGRST116 error — this is the regression this test guards.
       const mockMaybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
 
-      mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq, order: mockOrder, limit: mockLimit, maybeSingle: mockMaybeSingle });
+      mockFrom.mockReturnValue({
+        select: mockSelect,
+        eq: mockEq,
+        order: mockOrder,
+        limit: mockLimit,
+        maybeSingle: mockMaybeSingle,
+      });
       mockSelect.mockReturnValue({ eq: mockEq });
       mockEq.mockReturnValue({ eq: mockEq, order: mockOrder });
       mockOrder.mockReturnValue({ limit: mockLimit });

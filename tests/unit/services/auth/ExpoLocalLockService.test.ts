@@ -45,10 +45,7 @@ describe('ExpoLocalLockService', () => {
     it('stores a hashed PIN and records authentication', async () => {
       mockSetItem.mockResolvedValue(undefined);
       await service.setupPin('123456');
-      expect(mockSetItem).toHaveBeenCalledWith(
-        'morpheo_pin_hash',
-        expect.any(String)
-      );
+      expect(mockSetItem).toHaveBeenCalledWith('morpheo_pin_hash', expect.any(String));
       expect(service.isLockRequired()).toBe(false);
     });
   });

@@ -29,15 +29,17 @@ jest.mock('@features/readings/readingsRepository', () => ({
 
 import ReadingsScreen from '@app/(main)/readings/index';
 
-function reading(overrides: Partial<{
-  dreamId: string;
-  title: string;
-  occurredAt: string;
-  status: 'ready' | 'short' | 'pending';
-  excerpt: string | null;
-  keywords: string[];
-  confidence: 'high' | 'medium' | 'low' | null;
-}>) {
+function reading(
+  overrides: Partial<{
+    dreamId: string;
+    title: string;
+    occurredAt: string;
+    status: 'ready' | 'short' | 'pending';
+    excerpt: string | null;
+    keywords: string[];
+    confidence: 'high' | 'medium' | 'low' | null;
+  }>
+) {
   return {
     dreamId: 'dream-1',
     title: 'A flight over the ocean',
@@ -114,7 +116,9 @@ describe('ReadingsScreen', () => {
 
     const { getByLabelText } = render(<ReadingsScreen />);
 
-    await waitFor(() => expect(getByLabelText('Open reading: A flight over the ocean')).toBeTruthy());
+    await waitFor(() =>
+      expect(getByLabelText('Open reading: A flight over the ocean')).toBeTruthy()
+    );
     fireEvent.press(getByLabelText('Open reading: A flight over the ocean'));
 
     expect(mockPush).toHaveBeenCalledWith('/(main)/journal/dream-42/detail');
@@ -123,7 +127,15 @@ describe('ReadingsScreen', () => {
   it('refetches with the selected keyword filter', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
     mockGetTopRecurrences.mockResolvedValue([
-      { id: 'k1', userId: 'user-1', term: 'ocean', patternType: 'keyword', occurrenceCount: 3, dreamIds: [], lastSeenAt: '2026-08-01' },
+      {
+        id: 'k1',
+        userId: 'user-1',
+        term: 'ocean',
+        patternType: 'keyword',
+        occurrenceCount: 3,
+        dreamIds: [],
+        lastSeenAt: '2026-08-01',
+      },
     ]);
     mockGetReadings.mockResolvedValue([reading({})]);
 

@@ -62,7 +62,10 @@ describe('locale files', () => {
       const frValue = String(valueAt(fr as Tree, key));
       if (enValue !== frValue) return false;
       // Format-only strings ("{{term}} · {{count}}") are correctly identical.
-      const words = enValue.replace(/\{\{\w+\}\}/g, '').replace(/[^\p{L}]+/gu, ' ').trim();
+      const words = enValue
+        .replace(/\{\{\w+\}\}/g, '')
+        .replace(/[^\p{L}]+/gu, ' ')
+        .trim();
       return words.split(/\s+/).filter(Boolean).length > 2;
     });
     expect(suspicious).toEqual([]);

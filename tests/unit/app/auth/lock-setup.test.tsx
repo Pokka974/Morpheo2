@@ -109,7 +109,10 @@ describe('OnboardingLockSetupScreen', () => {
     fireEvent.changeText(getByPlaceholderText('Confirm PIN'), '4321');
     fireEvent.press(getByText('Set Up Protection'));
 
-    expect(alertSpy).toHaveBeenCalledWith('PINs Do Not Match', 'Please make sure both PINs are the same.');
+    expect(alertSpy).toHaveBeenCalledWith(
+      'PINs Do Not Match',
+      'Please make sure both PINs are the same.'
+    );
     expect(mockSetupPin).not.toHaveBeenCalled();
   });
 
@@ -131,6 +134,8 @@ describe('OnboardingLockSetupScreen', () => {
     mockGetLockMethod.mockResolvedValue('pin');
     const { getByRole } = renderScreen();
     await waitFor(() => expect(mockGetLockMethod).toHaveBeenCalled());
-    expect(getByRole('button', { name: 'Set Up Protection' }).props.accessibilityState?.disabled).toBe(true);
+    expect(
+      getByRole('button', { name: 'Set Up Protection' }).props.accessibilityState?.disabled
+    ).toBe(true);
   });
 });

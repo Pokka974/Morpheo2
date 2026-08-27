@@ -60,7 +60,9 @@ describe('NotificationsScreen', () => {
       </ServicesProvider>
     );
 
-    await waitFor(() => expect(getByLabelText('Enable daily dream reminder').props.value).toBe(true));
+    await waitFor(() =>
+      expect(getByLabelText('Enable daily dream reminder').props.value).toBe(true)
+    );
     expect(getByText(/\d{1,2}:\d{2}/)).toBeTruthy();
   });
 
@@ -85,7 +87,9 @@ describe('NotificationsScreen', () => {
       </ServicesProvider>
     );
 
-    await waitFor(() => expect(getByLabelText('Enable daily dream reminder').props.value).toBe(true));
+    await waitFor(() =>
+      expect(getByLabelText('Enable daily dream reminder').props.value).toBe(true)
+    );
     expect(getByText('Reminder time')).toBeTruthy();
   });
 
@@ -109,7 +113,9 @@ describe('NotificationsScreen', () => {
   });
 
   it('toggling on with permission denied reverts the switch and shows an alert', async () => {
-    const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+    const alertSpy = jest
+      .spyOn(require('react-native').Alert, 'alert')
+      .mockImplementation(() => {});
     const notifications = new MockNotificationService().setPermissionGranted(false);
     const scheduleSpy = jest.spyOn(notifications, 'scheduleReminder');
     const { getByLabelText } = render(
@@ -123,10 +129,9 @@ describe('NotificationsScreen', () => {
       fireEvent(getByLabelText('Enable daily dream reminder'), 'valueChange', true);
     });
 
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith(
-      'Permission required',
-      expect.any(String)
-    ));
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith('Permission required', expect.any(String))
+    );
     expect(scheduleSpy).not.toHaveBeenCalled();
     expect(getByLabelText('Enable daily dream reminder').props.value).toBe(false);
     alertSpy.mockRestore();
@@ -141,7 +146,9 @@ describe('NotificationsScreen', () => {
         <NotificationsScreen />
       </ServicesProvider>
     );
-    await waitFor(() => expect(getByLabelText('Enable daily dream reminder').props.value).toBe(true));
+    await waitFor(() =>
+      expect(getByLabelText('Enable daily dream reminder').props.value).toBe(true)
+    );
 
     mockUpdateEq.mockClear();
     await act(async () => {
@@ -226,7 +233,9 @@ describe('NotificationsScreen', () => {
         <NotificationsScreen />
       </ServicesProvider>
     );
-    await waitFor(() => expect(getByLabelText('Enable daily dream reminder').props.value).toBe(true));
+    await waitFor(() =>
+      expect(getByLabelText('Enable daily dream reminder').props.value).toBe(true)
+    );
 
     // Open the picker while enabled, then flip the switch off — showPicker is independent state,
     // so the picker stays mounted while `enabled` becomes false underneath it.

@@ -9,8 +9,15 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@services/../supabase/client', () => ({
   supabase: {
-    auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'test-id', email: 'test@test.com' } } }) },
-    from: jest.fn().mockReturnValue({ update: jest.fn().mockReturnValue({ eq: jest.fn().mockResolvedValue({}) }), insert: jest.fn().mockResolvedValue({}) }),
+    auth: {
+      getUser: jest
+        .fn()
+        .mockResolvedValue({ data: { user: { id: 'test-id', email: 'test@test.com' } } }),
+    },
+    from: jest.fn().mockReturnValue({
+      update: jest.fn().mockReturnValue({ eq: jest.fn().mockResolvedValue({}) }),
+      insert: jest.fn().mockResolvedValue({}),
+    }),
   },
 }));
 
@@ -36,7 +43,9 @@ describe('Onboarding Flow', () => {
   });
 
   it('consent screen blocks with modal on No Thanks', async () => {
-    const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+    const alertSpy = jest
+      .spyOn(require('react-native').Alert, 'alert')
+      .mockImplementation(() => {});
     const { getByText } = render(<OnboardingConsentScreen />);
     const noThanksBtn = getByText('No Thanks');
     fireEvent.press(noThanksBtn);

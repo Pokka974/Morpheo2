@@ -42,7 +42,10 @@ describe('StyleScreen', () => {
   });
 
   it('reflects the loaded interpretation_style as selected', async () => {
-    mockMaybeSingle.mockResolvedValue({ data: { interpretation_style: 'mythological' }, error: null });
+    mockMaybeSingle.mockResolvedValue({
+      data: { interpretation_style: 'mythological' },
+      error: null,
+    });
     const { getByText } = render(<StyleScreen />);
 
     await waitFor(() => expectSelected(getByText('Mythological / Cultural')));
@@ -84,7 +87,11 @@ describe('StyleScreen', () => {
 
   it('shows a "Saving…" row while the update is in flight', async () => {
     let resolveEq: (v: unknown) => void = () => {};
-    mockUpdateEq.mockReturnValue(new Promise(resolve => { resolveEq = resolve; }));
+    mockUpdateEq.mockReturnValue(
+      new Promise(resolve => {
+        resolveEq = resolve;
+      })
+    );
 
     const { getByText, queryByText } = render(<StyleScreen />);
     await waitFor(() => expect(mockGetUser).toHaveBeenCalled());

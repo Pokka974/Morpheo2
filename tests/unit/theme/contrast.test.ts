@@ -16,9 +16,13 @@ const AA_NORMAL = 4.5;
 
 function channels(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
-  const full = h.length === 3
-    ? h.split('').map(c => c + c).join('')
-    : h;
+  const full =
+    h.length === 3
+      ? h
+          .split('')
+          .map(c => c + c)
+          .join('')
+      : h;
   return [0, 2, 4].map(i => parseInt(full.slice(i, i + 2), 16)) as [number, number, number];
 }
 

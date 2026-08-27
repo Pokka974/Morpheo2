@@ -4,7 +4,9 @@ import { render, fireEvent } from '@testing-library/react-native';
 import { RatingScale } from '@shared/components/RatingScale';
 
 function flatten(style: unknown): Record<string, unknown> {
-  return Array.isArray(style) ? Object.assign({}, ...style.filter(Boolean)) : ((style ?? {}) as Record<string, unknown>);
+  return Array.isArray(style)
+    ? Object.assign({}, ...style.filter(Boolean))
+    : ((style ?? {}) as Record<string, unknown>);
 }
 
 describe('<RatingScale />', () => {

@@ -7,14 +7,20 @@ function readFile(relPath: string): string {
 }
 
 function fileExists(relPath: string): boolean {
-  try { fs.accessSync(path.resolve(__dirname, '../../', relPath)); return true; } catch { return false; }
+  try {
+    fs.accessSync(path.resolve(__dirname, '../../', relPath));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 describe('Morpheo Constitution Verification (T133)', () => {
-
   describe('Principle I — User Data Privacy', () => {
     it('AI calls go through server-side Edge Functions (never direct from client)', () => {
-      const interpService = readFile('src/services/ai/interpretation/ClaudeInterpretationService.ts');
+      const interpService = readFile(
+        'src/services/ai/interpretation/ClaudeInterpretationService.ts'
+      );
       expect(interpService).toContain('functions.invoke');
       expect(interpService).not.toContain('anthropic.messages.create');
     });
@@ -90,7 +96,9 @@ describe('Morpheo Constitution Verification (T133)', () => {
     it('usage counters are not writable by the client', () => {
       const rpc = readFile('supabase/migrations/012_entitlement_credit_rpc.sql');
       expect(rpc).toContain('REVOKE ALL ON FUNCTION consume_interpretation_credit');
-      expect(rpc).toContain('GRANT EXECUTE ON FUNCTION consume_interpretation_credit(UUID) TO service_role');
+      expect(rpc).toContain(
+        'GRANT EXECUTE ON FUNCTION consume_interpretation_credit(UUID) TO service_role'
+      );
     });
 
     it('generate-image Edge Function checks entitlement server-side', () => {

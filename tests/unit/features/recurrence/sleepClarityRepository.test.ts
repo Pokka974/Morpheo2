@@ -39,10 +39,10 @@ describe('getSleepClarityPoints', () => {
     mockGetAllAsync.mockResolvedValue([]);
 
     await getSleepClarityPoints('user-1', 30);
-    expect((mockGetAllAsync.mock.calls[0]![0] as string)).toContain('-30 days');
+    expect(mockGetAllAsync.mock.calls[0]![0] as string).toContain('-30 days');
 
     mockGetAllAsync.mockClear();
     await getSleepClarityPoints('user-1');
-    expect((mockGetAllAsync.mock.calls[0]![0] as string)).not.toContain('days');
+    expect(mockGetAllAsync.mock.calls[0]![0] as string).not.toContain('days');
   });
 });

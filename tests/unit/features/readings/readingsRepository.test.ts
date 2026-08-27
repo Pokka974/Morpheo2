@@ -6,14 +6,16 @@ jest.mock('@db/client', () => ({
 
 import { getReadings } from '@features/readings/readingsRepository';
 
-function row(overrides: Partial<{
-  id: string;
-  description: string;
-  occurred_at: string;
-  overall_reading: string | null;
-  keywords: string | null;
-  confidence: string | null;
-}>) {
+function row(
+  overrides: Partial<{
+    id: string;
+    description: string;
+    occurred_at: string;
+    overall_reading: string | null;
+    keywords: string | null;
+    confidence: string | null;
+  }>
+) {
   return {
     id: 'dream-1',
     description: 'A dream long enough to be interpreted, with plenty of detail.',

@@ -90,7 +90,9 @@ describe('InterpretationScreen', () => {
   /** Makes the owner lookup succeed, leaving the dream-count call answered as usual. */
   function withDreamOwner(userId: string | null) {
     (db.getFirstAsync as jest.Mock).mockImplementation((sql: string) =>
-      Promise.resolve(sql.includes('COUNT(*)') ? { count: 12 } : userId ? { user_id: userId } : null)
+      Promise.resolve(
+        sql.includes('COUNT(*)') ? { count: 12 } : userId ? { user_id: userId } : null
+      )
     );
   }
 
@@ -282,7 +284,9 @@ describe('InterpretationScreen', () => {
     // tests in this file assert on (e.g. "does not double-fire").
     const interpretSpy = jest
       .spyOn(interpretationService, 'interpret')
-      .mockResolvedValueOnce(legacyShape as unknown as Awaited<ReturnType<typeof interpretationService.interpret>>);
+      .mockResolvedValueOnce(
+        legacyShape as unknown as Awaited<ReturnType<typeof interpretationService.interpret>>
+      );
 
     render(
       <ServicesProvider services={buildRegistry()}>

@@ -60,9 +60,13 @@ describe('SignUpScreen', () => {
 
   it('disables Create Account while any field is empty', () => {
     const { getByRole, getByPlaceholderText } = renderScreen();
-    expect(getByRole('button', { name: 'Create Account' }).props.accessibilityState?.disabled).toBe(true);
+    expect(getByRole('button', { name: 'Create Account' }).props.accessibilityState?.disabled).toBe(
+      true
+    );
     fillForm(getByPlaceholderText, 'me@example.com', 'password123', 'password123');
-    expect(getByRole('button', { name: 'Create Account' }).props.accessibilityState?.disabled).toBe(false);
+    expect(getByRole('button', { name: 'Create Account' }).props.accessibilityState?.disabled).toBe(
+      false
+    );
   });
 
   it('shows a mismatch error and does not call signUp when passwords differ', async () => {

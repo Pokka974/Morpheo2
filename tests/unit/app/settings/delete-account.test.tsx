@@ -75,9 +75,15 @@ describe('DeleteAccountScreen', () => {
 
   it('step 2: shows a spinner while deleting is in flight', async () => {
     let resolveInvoke: (v: unknown) => void = () => {};
-    mockInvoke.mockReturnValueOnce(new Promise(resolve => { resolveInvoke = resolve; }));
+    mockInvoke.mockReturnValueOnce(
+      new Promise(resolve => {
+        resolveInvoke = resolve;
+      })
+    );
 
-    const { getByText, getByLabelText, queryByText, UNSAFE_getByType } = render(<DeleteAccountScreen />);
+    const { getByText, getByLabelText, queryByText, UNSAFE_getByType } = render(
+      <DeleteAccountScreen />
+    );
     fireEvent.press(getByText('I understand — proceed'));
     fireEvent.changeText(getByLabelText('Type DELETE MY ACCOUNT to confirm'), 'DELETE MY ACCOUNT');
     fireEvent.press(getByText('Confirm delete'));

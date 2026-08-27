@@ -39,8 +39,17 @@ const FORMAT_INTERPRETATION_TOOL: StrictTool = {
           'close on what the dream appears to be surfacing for the dreamer. This is the product — ' +
           'a short or generic reading is a failed one.',
       },
-      keywords: { type: 'array', items: { type: 'string' }, description: 'Concrete nouns and images actually present in the dream (6-8 items; give 8 unless the dream truly holds fewer).' },
-      emotions: { type: 'array', items: { type: 'string' }, description: 'Emotions carried by the dream itself (3-5 items).' },
+      keywords: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Concrete nouns and images actually present in the dream (6-8 items; give 8 unless the dream truly holds fewer).',
+      },
+      emotions: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Emotions carried by the dream itself (3-5 items).',
+      },
       cultural_references: {
         type: 'array',
         items: {
@@ -62,16 +71,19 @@ const FORMAT_INTERPRETATION_TOOL: StrictTool = {
       confidence: {
         type: 'string',
         enum: ['high', 'medium', 'low'],
-        description: 'Confidence in interpretation quality. Low if description is vague or very short.',
+        description:
+          'Confidence in interpretation quality. Low if description is vague or very short.',
       },
       archetype: {
         type: 'string',
-        description: 'A short phrase (2-5 words) naming the dominant Jungian or narrative archetype in this dream, e.g. "The Seeker", "The Shadow Self".',
+        description:
+          'A short phrase (2-5 words) naming the dominant Jungian or narrative archetype in this dream, e.g. "The Seeker", "The Shadow Self".',
       },
       themes: {
         type: 'array',
         items: { type: 'string' },
-        description: 'The 3-4 dominant recurring themes/motifs of this dream, as short tags (e.g. "flying", "family conflict"), distinct from `keywords` which lists concrete symbols.',
+        description:
+          'The 3-4 dominant recurring themes/motifs of this dream, as short tags (e.g. "flying", "family conflict"), distinct from `keywords` which lists concrete symbols.',
       },
       symbolic_density: {
         type: 'integer',
@@ -80,7 +92,8 @@ const FORMAT_INTERPRETATION_TOOL: StrictTool = {
         // `symbolic_density BETWEEN 1 AND 4` CHECK in 016_interpretation_archetype.sql needs,
         // and does it as a hard guarantee rather than a hint.
         enum: [1, 2, 3, 4],
-        description: 'How symbolically dense/layered this dream is, 1 (literal, few symbols) to 4 (highly symbolic, many layered meanings).',
+        description:
+          'How symbolically dense/layered this dream is, 1 (literal, few symbols) to 4 (highly symbolic, many layered meanings).',
       },
       image_prompt: {
         type: 'string',
@@ -118,8 +131,18 @@ interface RequestMetadata {
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 /**
@@ -207,9 +230,10 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
     }
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
     }
@@ -223,7 +247,10 @@ serve(async (req: Request) => {
 
     if (profileError) {
       console.error('Profile query failed:', profileError);
-      return new Response(JSON.stringify({ error: 'Profile fetch failed', detail: profileError.message }), { status: 500 });
+      return new Response(
+        JSON.stringify({ error: 'Profile fetch failed', detail: profileError.message }),
+        { status: 500 }
+      );
     }
 
     if (!profile?.ai_consent_granted) {
@@ -255,7 +282,7 @@ serve(async (req: Request) => {
 
     creditConsumedFor = user.id;
 
-    const body = await req.json() as {
+    const body = (await req.json()) as {
       dreamId: string;
       description: string;
       style?: string;
@@ -276,10 +303,14 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: 'No active system prompt' }), { status: 500 });
     }
 
-    const style = (body.style ?? profile.interpretation_style ?? 'symbolic') as 'symbolic' | 'mythological' | 'psychological';
-    const stylePrompt = style === 'mythological' ? promptRow.mythological_style
-      : style === 'psychological' ? promptRow.psychological_style
-      : promptRow.symbolic_style;
+    const style = (body.style ?? profile.interpretation_style ?? 'symbolic') as
+      'symbolic' | 'mythological' | 'psychological';
+    const stylePrompt =
+      style === 'mythological'
+        ? promptRow.mythological_style
+        : style === 'psychological'
+          ? promptRow.psychological_style
+          : promptRow.symbolic_style;
 
     const systemPrompt = `${promptRow.base_prompt}\n\nStyle focus: ${stylePrompt}`;
 
@@ -351,7 +382,9 @@ serve(async (req: Request) => {
     if (insertError || !interpretation) {
       console.error('Interpretation insert failed:', insertError);
       await refundCredit('interpretation insert failure');
-      return new Response(JSON.stringify({ error: 'Failed to save interpretation' }), { status: 500 });
+      return new Response(JSON.stringify({ error: 'Failed to save interpretation' }), {
+        status: 500,
+      });
     }
 
     return new Response(
