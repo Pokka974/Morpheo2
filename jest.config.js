@@ -17,6 +17,19 @@ module.exports = {
   ],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.i18n.js'],
 
+  // A spy restored at the end of a test body leaks whenever that test throws, and the
+  // next test's fresh spy on the same method then reports the *previous* test's call as
+  // calls[0]. That turned one slow test in interpretation-flow into two failures, the
+  // second of which pointed at innocent code (`languageHint` read undefined because
+  // calls[0] belonged to the test before it). Restoring between tests makes a failure
+  // stay where it happened.
+  restoreMocks: true,
+
+  // Screens render through ServicesProvider and i18next, and CI runs with coverage
+  // instrumentation on a shared runner: the interpretation suite takes ~1.8s locally and
+  // ~14s there. The 5s default left no headroom and failed on timing alone.
+  testTimeout: 20000,
+
   moduleNameMapper: {
     // Custom NativeModules mock adds .default so jest-expo's setup.js doesn't throw
     // when calling Object.defineProperty on the mock result (RN 0.76 CJS compat fix)
