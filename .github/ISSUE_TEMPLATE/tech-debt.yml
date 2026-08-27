@@ -1,0 +1,92 @@
+name: Tech debt
+description: Maintainability, tooling, or infrastructure work
+title: '<what is wrong with the current state, in one line>'
+labels: ['type/tech-debt']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The dropdowns below name the labels to apply. GitHub cannot apply them from a
+        form, so set `priority/*`, `points/*` and `area/*` by hand after opening —
+        the triage board reads the labels, not this body.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: >-
+        The current state and what it costs — slower reviews, a gap CI cannot catch, a
+        constraint that is only documented rather than enforced. Cite files as `path:line`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The shape of the fix, and anything deliberately left out of scope.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Apply the matching `priority/*` label.
+      options:
+        - priority/P0 — blocks revenue, compliance, or a working build
+        - priority/P1 — required to ship v1
+        - priority/P2 — should ship with v1 if capacity allows
+        - priority/P3 — hygiene; can follow v1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: points
+    attributes:
+      label: Points
+      description: Fibonacci estimate. Apply the matching `points/*` label.
+      options:
+        - points/1
+        - points/2
+        - points/3
+        - points/5
+        - points/8
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Apply the matching `area/*` label(s).
+      multiple: true
+      options:
+        - area/mobile — React Native app, screens, local persistence
+        - area/backend — Supabase schema, migrations, Edge Functions
+        - area/ci — CI pipeline, tooling, repo hygiene
+        - area/release — store submission and production configuration
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checkboxes a reviewer can tick off.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: blockers
+    attributes:
+      label: Blockers
+      description: >-
+        Tick either of these and apply the matching label — they mark work an agent
+        cannot finish on its own.
+      options:
+        - label: needs/human — needs a console, a device run, an account, or content you must own
+        - label: blocked/store-account — needs a paid Apple Developer and/or Google Play account

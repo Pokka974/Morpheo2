@@ -1,0 +1,104 @@
+name: Bug
+description: Something shipped that does not work as specified
+title: '<what is broken, in one line>'
+labels: ['type/bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The dropdowns below name the labels to apply. GitHub cannot apply them from a
+        form, so set `priority/*`, `points/*` and `area/*` by hand after opening —
+        the triage board reads the labels, not this body.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What happens, and what should happen instead. Cite files as `path:line`.
+      placeholder: |
+        `src/features/…` returns X when the entitlement is spent; the gate expects Y.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: The shortest path to the failure — steps, or the failing test.
+      placeholder: |
+        1. Sign in on a free-tier account with 0 image credits
+        2. Open a dream and tap Regenerate
+        3. …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Apply the matching `priority/*` label.
+      options:
+        - priority/P0 — blocks revenue, compliance, or a working build
+        - priority/P1 — required to ship v1
+        - priority/P2 — should ship with v1 if capacity allows
+        - priority/P3 — hygiene; can follow v1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: points
+    attributes:
+      label: Points
+      description: Fibonacci estimate. Apply the matching `points/*` label.
+      options:
+        - points/1
+        - points/2
+        - points/3
+        - points/5
+        - points/8
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Apply the matching `area/*` label(s).
+      multiple: true
+      options:
+        - area/mobile — React Native app, screens, local persistence
+        - area/backend — Supabase schema, migrations, Edge Functions
+        - area/ci — CI pipeline, tooling, repo hygiene
+        - area/release — store submission and production configuration
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: >-
+        Checkboxes a reviewer can tick off. Include the regression test — a fix without
+        one does not meet the Definition of Done.
+      value: |
+        - [ ]
+        - [ ] A test in `tests/unit/` (or `tests/integration/`) fails before the fix and passes after
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraint check
+      description: >-
+        The Critical Constraints table in `CLAUDE.md` (C1-C3, H1-H4). Tick any this bug
+        touches so the fix does not reintroduce a remediated defect.
+      options:
+        - label: C1 — account deletion phrase `DELETE MY ACCOUNT`
+        - label: C2 — idle timeout key `lock_idle_timeout_minutes`
+        - label: C3 — voice dictation via `@react-native-voice/voice`
+        - label: H1 — Luma `do_not_train` opt-out
+        - label: H2 — SQLite emotion filter via `json_each()`
+        - label: H3 — `generation_jobs` owner SELECT policy
+        - label: H4 — `getCacheSize()` rather than `evictToLimit(0)`
+        - label: None of them
