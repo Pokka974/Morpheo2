@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:ci": "jest --ci --coverage",
-    "supabase": "supabase"
+    "supabase": "supabase",
+    "db:cron-check": "psql \"postgresql://postgres:postgres@127.0.0.1:54322/postgres\" -v ON_ERROR_STOP=1 -f supabase/ci/run_cron_jobs.sql",
+    "db:verify": "supabase db reset && npm run db:cron-check"
   },
   "dependencies": {
     "@expo-google-fonts/fraunces": "^0.4.1",
