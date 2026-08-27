@@ -3,22 +3,51 @@ import { useJournalFilters } from '@features/journal/useJournalFilters';
 
 const mockPrepareSync = jest.fn();
 const mockExecuteSync = jest.fn();
+const mockFinalizeSync = jest.fn();
 
 jest.mock('@db/client', () => ({
   sqlite: {
     prepareSync: (...args: unknown[]) => {
       mockPrepareSync(...args);
-      return { executeSync: mockExecuteSync };
+      return { executeSync: mockExecuteSync, finalizeSync: mockFinalizeSync };
     },
   },
 }));
 
+/** The row shape `journalEntryQuery` selects — the same one the journal list reads, so
+ * a filtered dream's card is identical to its card in the unfiltered list. */
 const emotionRows = [
-  { id: 'd1', description: 'Dark ocean dream', occurredAt: '2026-08-10', syncStatus: 'synced' },
+  {
+    id: 'd1',
+    description: 'Dark ocean dream',
+    occurred_at: '2026-08-10',
+    sync_status: 'synced',
+    thumbnail_uri: '/local/cache/media-1.png',
+    dream_emotions: '["fear"]',
+    interpretation_emotions: '["dread"]',
+    interpretation_id: 'i1',
+    is_lucid: 0,
+    tone: 'negative',
+    clarity: 3,
+    dream_type: '["nightmare"]',
+  },
 ];
 
 const dateRows = [
-  { id: 'd2', description: 'Mountain dream', occurredAt: '2026-08-08', syncStatus: 'synced' },
+  {
+    id: 'd2',
+    description: 'Mountain dream',
+    occurred_at: '2026-08-08',
+    sync_status: 'synced',
+    thumbnail_uri: null,
+    dream_emotions: '[]',
+    interpretation_emotions: null,
+    interpretation_id: null,
+    is_lucid: 0,
+    tone: null,
+    clarity: null,
+    dream_type: null,
+  },
 ];
 
 describe('useJournalFilters', () => {
@@ -55,8 +84,9 @@ describe('useJournalFilters', () => {
 
     const query = mockPrepareSync.mock.calls[0][0] as string;
     // A dream the dreamer tagged as frightening must surface even before it has an
-    // interpretation, so both lists are searched.
-    expect(query).toContain('json_each(i.emotions)');
+    // interpretation, so both lists are searched. `fi` is the match-any-interpretation
+    // join, distinct from the card's `i`, which is pinned to the newest one.
+    expect(query).toContain('json_each(fi.emotions)');
     expect(query).toContain('json_each(d.emotions)');
     // Both subqueries are bound, in order.
     expect(mockExecuteSync).toHaveBeenCalledWith(['fear', 'fear']);
@@ -104,6 +134,39 @@ describe('useJournalFilters', () => {
     expect(query).toContain('json_each');
     expect(query).toContain('occurred_at >= ?');
     expect(query).toContain('occurred_at <= ?');
+  });
+
+  /** Filtering used to select four columns and drop the thumbnail, so applying any
+   * filter blanked the image on every card it returned. */
+  it('carries the thumbnail and the card markers through', async () => {
+    mockExecuteSync.mockReturnValue(emotionRows);
+    const { result } = renderHook(() => useJournalFilters());
+
+    await act(async () => {
+      result.current.applyFilters({ emotion: 'fear' });
+    });
+
+    expect(result.current.results?.[0]).toMatchObject({
+      id: 'd1',
+      occurredAt: '2026-08-10',
+      thumbnailUri: '/local/cache/media-1.png',
+      emotions: ['fear'],
+      hasInterpretation: true,
+      tone: 'negative',
+      clarity: 3,
+      dreamType: ['nightmare'],
+    });
+  });
+
+  it('finalizes the prepared statement', async () => {
+    mockExecuteSync.mockReturnValue(emotionRows);
+    const { result } = renderHook(() => useJournalFilters());
+
+    await act(async () => {
+      result.current.applyFilters({ emotion: 'fear' });
+    });
+
+    expect(mockFinalizeSync).toHaveBeenCalledTimes(1);
   });
 
   it('clearFilters resets to empty state', async () => {

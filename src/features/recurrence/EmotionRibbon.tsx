@@ -187,8 +187,11 @@ export function EmotionRibbon({ points, testID }: EmotionRibbonProps) {
           <G>
             {sorted.map((point, i) =>
               point.label ? (
+                // Keyed by position, not by the label text: two buckets a few hours
+                // apart format to the same day, and a duplicate key makes React drop
+                // one of the two axis labels.
                 <SvgText
-                  key={point.label}
+                  key={`axis-${i}`}
                   x={project(point).x}
                   y={AXIS_Y}
                   textAnchor={i === 0 ? 'start' : i === sorted.length - 1 ? 'end' : 'middle'}

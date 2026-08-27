@@ -4,6 +4,7 @@ import { supabase } from '../../supabase/client';
 import { db, sqlite } from '@db/client';
 import { dreams, media } from '@db/schema';
 import { purgeDreamLocally } from '@features/dream-log/dreamRepository';
+import { recordRecurrence } from '@features/recurrence/recurrenceRepository';
 import type { MediaCacheDeps } from './mediaCache';
 
 const PAGE_SIZE = 200;
@@ -20,6 +21,8 @@ const CURSOR_KEYS = {
   dreams: 'sync_dreams_last_pulled_at',
   interpretations: 'sync_interpretations_last_pulled_at',
   media: 'sync_media_last_pulled_at',
+  /** Not a pull cursor: how far the local recurrence rebuild has folded. */
+  recurrence: 'sync_recurrence_folded_through',
 } as const;
 
 interface RemoteDream {
@@ -91,6 +94,8 @@ export async function pullRemoteChanges(
   await tryPull('dreams', () => pullDreams(userId, mediaCache));
   await tryPull('dream deletions', () => reconcileDreamDeletions(userId, mediaCache));
   await tryPull('interpretations', () => pullInterpretations(userId));
+  // Immediately after, and only ever from interpretations already on this device.
+  await tryPull('recurrence patterns', () => foldInterpretationsIntoRecurrence(userId));
   await tryPull('media', () => pullMedia(userId, mediaCache));
   // Last, and only once the rows it works from are actually present.
   if (mediaCache) await tryPull('media cache', () => hydrateMediaCache(mediaCache));
@@ -384,10 +389,52 @@ async function reconcileDreamDeletions(userId: string, deps?: MediaCacheDeps): P
   }
 }
 
+/**
+ * Both `interpretations.dream_id` and `media.dream_id` are `NOT NULL REFERENCES
+ * dreams(id)` in local SQLite, with `PRAGMA foreign_keys = ON` — so inserting a child
+ * whose dream isn't on this device doesn't skip the row, it throws "FOREIGN KEY
+ * constraint failed" out of the whole pull.
+ *
+ * That happens for real: a dream soft-deleted remotely is purged locally by
+ * `applyRemoteDream` rather than mirrored, and a dream hard-deleted directly in the
+ * database leaves its children behind if the delete didn't cascade — either way the
+ * child rows are still selectable and still arrive here. Since the throw escapes
+ * before the cursor is written, the very same page is refetched and fails again on
+ * every subsequent cycle: that table's sync is stuck for good, which is why the
+ * journal list stayed imageless no matter how many times it was pulled to refresh.
+ */
+async function dreamExistsLocally(dreamId: string): Promise<boolean> {
+  const row = await sqlite.getFirstAsync<{ id: string }>(
+    `SELECT id FROM dreams WHERE id = ? LIMIT 1`,
+    dreamId
+  );
+  return row != null;
+}
+
+/**
+ * The cursor may only advance over rows that were actually applied. An orphan is
+ * usually permanent (its dream is deleted), but it is indistinguishable here from a
+ * dream that simply hasn't arrived yet — the dreams pull failing earlier in this same
+ * cycle produces exactly the same state. Clamping at the first skipped row costs one
+ * re-read of one page per cycle; advancing past it would drop that interpretation or
+ * image on this device permanently.
+ */
+function reportSkipped(label: string, skipped: string[]): void {
+  if (skipped.length === 0) return;
+  console.warn(
+    `Skipped ${skipped.length} ${label} whose dream is not on this device ` +
+      `(deleted remotely, or its dream has yet to sync): ${skipped.join(', ')}`
+  );
+}
+
 /** Interpretations are never edited after creation, so this only ever fills in
  * rows this device hasn't seen yet — no LWW comparison needed. */
 async function pullInterpretations(userId: string): Promise<void> {
-  let cursor = await getCursor(CURSOR_KEYS.interpretations);
+  const startCursor = await getCursor(CURSOR_KEYS.interpretations);
+  let cursor = startCursor;
+  let appliedCursor = startCursor;
+  let clamped = false;
+  const skipped: string[] = [];
 
   for (;;) {
     const { data, error } = await supabase
@@ -403,11 +450,21 @@ async function pullInterpretations(userId: string): Promise<void> {
     if (error) {
       assertSessionUsable('Pull interpretations', error);
       console.error('Pull interpretations failed:', error);
+      reportSkipped('interpretations', skipped);
       return;
     }
-    if (!data || data.length === 0) return;
+    if (!data || data.length === 0) {
+      reportSkipped('interpretations', skipped);
+      return;
+    }
 
     for (const row of data as RemoteInterpretation[]) {
+      if (!(await dreamExistsLocally(row.dream_id))) {
+        skipped.push(row.id);
+        clamped = true;
+        continue;
+      }
+
       await sqlite.runAsync(
         `INSERT OR IGNORE INTO interpretations
           (id, dream_id, overall_reading, keywords, emotions, cultural_references, confidence, is_degraded, prompt_version, model_used, created_at, archetype, themes, symbolic_density, image_prompt)
@@ -430,17 +487,99 @@ async function pullInterpretations(userId: string): Promise<void> {
           row.image_prompt,
         ]
       );
+
+      if (!clamped) appliedCursor = row.created_at;
     }
 
     cursor = data[data.length - 1]!['created_at'] as string;
-    await AsyncStorage.setItem(CURSOR_KEYS.interpretations, cursor);
+    if (appliedCursor !== startCursor) {
+      await AsyncStorage.setItem(CURSOR_KEYS.interpretations, appliedCursor);
+    }
 
-    if (data.length < PAGE_SIZE) return;
+    if (data.length < PAGE_SIZE) {
+      reportSkipped('interpretations', skipped);
+      return;
+    }
+  }
+}
+
+/**
+ * `recurrence_patterns` is the constellation's entire data source, and until now the
+ * only thing that ever wrote it was `interpretation.tsx`, on the one device that ran
+ * the interpretation. Nothing pulls it: a fresh install (or a second device) can sync
+ * every dream and every interpretation it owns and still be told it has "not enough
+ * dreams yet", however many are sitting in the journal.
+ *
+ * Rebuilding locally is preferred over pulling the remote table, which cannot serve
+ * this screen: remote `recurrence_patterns` has no `dream_ids` column, so the
+ * constellation would draw stars with no edges between them, and its `pattern_type`
+ * CHECK predates `'theme'` entirely. The local interpretations rows carry keywords,
+ * emotions, themes and the dream id — everything the chart needs.
+ *
+ * `recordRecurrence` is idempotent per (term, dream), so the device that already
+ * recorded a dream re-folds it as a no-op touch, and a cursor that slips back merely
+ * repeats work. `created_at` is passed as `seenAt` rather than "now" on purpose:
+ * `getTopRecurrences` filters on `last_seen_at`, so stamping a backfill with the
+ * current time would make every old symbol look like it recurred today.
+ */
+async function foldInterpretationsIntoRecurrence(userId: string): Promise<void> {
+  const cursor = await getCursor(CURSOR_KEYS.recurrence);
+
+  const rows = await sqlite.getAllAsync<{
+    dream_id: string;
+    keywords: string;
+    emotions: string;
+    themes: string;
+    created_at: string;
+  }>(
+    `SELECT i.dream_id, i.keywords, i.emotions, i.themes, i.created_at
+       FROM interpretations i
+       JOIN dreams d ON d.id = i.dream_id
+      WHERE i.created_at > ?
+        AND d.user_id = ?
+        AND d.is_deleted = 0
+      ORDER BY i.created_at ASC`,
+    [cursor, userId]
+  );
+
+  for (const row of rows) {
+    await recordRecurrence(
+      userId,
+      row.dream_id,
+      'keyword',
+      parseTerms(row.keywords),
+      row.created_at
+    );
+    await recordRecurrence(
+      userId,
+      row.dream_id,
+      'emotion',
+      parseTerms(row.emotions),
+      row.created_at
+    );
+    await recordRecurrence(userId, row.dream_id, 'theme', parseTerms(row.themes), row.created_at);
+    await AsyncStorage.setItem(CURSOR_KEYS.recurrence, row.created_at);
+  }
+}
+
+/** The three term columns are JSON arrays written by the interpretation Edge Function;
+ * a malformed one costs that dream its stars, never the whole rebuild. */
+function parseTerms(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
   }
 }
 
 async function pullMedia(userId: string, deps?: MediaCacheDeps): Promise<void> {
-  let cursor = await getCursor(CURSOR_KEYS.media);
+  const startCursor = await getCursor(CURSOR_KEYS.media);
+  let cursor = startCursor;
+  let appliedCursor = startCursor;
+  let clamped = false;
+  const skipped: string[] = [];
 
   for (;;) {
     const { data, error } = await supabase
@@ -456,18 +595,34 @@ async function pullMedia(userId: string, deps?: MediaCacheDeps): Promise<void> {
     if (error) {
       assertSessionUsable('Pull media', error);
       console.error('Pull media failed:', error);
+      reportSkipped('media rows', skipped);
       return;
     }
-    if (!data || data.length === 0) return;
+    if (!data || data.length === 0) {
+      reportSkipped('media rows', skipped);
+      return;
+    }
 
     for (const row of data as RemoteMedia[]) {
+      if (!(await dreamExistsLocally(row.dream_id))) {
+        skipped.push(row.id);
+        clamped = true;
+        continue;
+      }
+
       await applyRemoteMedia(row, deps);
+      if (!clamped) appliedCursor = row.updated_at;
     }
 
     cursor = data[data.length - 1]!['updated_at'] as string;
-    await AsyncStorage.setItem(CURSOR_KEYS.media, cursor);
+    if (appliedCursor !== startCursor) {
+      await AsyncStorage.setItem(CURSOR_KEYS.media, appliedCursor);
+    }
 
-    if (data.length < PAGE_SIZE) return;
+    if (data.length < PAGE_SIZE) {
+      reportSkipped('media rows', skipped);
+      return;
+    }
   }
 }
 

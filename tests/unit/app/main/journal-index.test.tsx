@@ -229,7 +229,7 @@ describe('JournalListScreen', () => {
         sync_status: 'synced',
         thumbnail_uri: null,
         dream_emotions: '[]',
-        emotions: '["anxiety"]',
+        interpretation_emotions: '["anxiety"]',
         interpretation_id: 'interp-1',
       },
     ]);

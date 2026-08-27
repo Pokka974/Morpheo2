@@ -11,6 +11,13 @@ import { LoadingState } from '@shared/components/LoadingState';
 import { EmptyState } from '@shared/components/EmptyState';
 import { DreamCard, type JournalEntry } from '@features/journal/DreamCard';
 import {
+  JOURNAL_ENTRY_COLUMNS,
+  JOURNAL_ENTRY_JOINS,
+  JOURNAL_ENTRY_ORDER,
+  mapJournalEntryRow,
+  type JournalEntryRow,
+} from '@features/journal/journalEntryQuery';
+import {
   JournalFilterSheet,
   PERIOD_KEYS,
   type FilterPeriod,
@@ -57,69 +64,19 @@ export default function JournalListScreen() {
 
   const loadEntries = useCallback(async () => {
     try {
-      const rows = await db.getAllAsync<{
-        id: string;
-        description: string;
-        occurred_at: string;
-        sync_status: string;
-        thumbnail_uri: string | null;
-        dream_emotions: string | null;
-        emotions: string | null;
-        interpretation_id: string | null;
-        is_lucid: number;
-        tone: string | null;
-        clarity: number | null;
-        dream_type: string | null;
-      }>(
+      const rows = await db.getAllAsync<JournalEntryRow>(
         `
-        SELECT d.id, d.description, d.occurred_at, d.sync_status,
-               m.local_cache_path as thumbnail_uri,
-               d.emotions as dream_emotions,
-               i.emotions as emotions,
-               i.id as interpretation_id,
-               d.is_lucid, d.tone, d.clarity, d.dream_type
+        SELECT ${JOURNAL_ENTRY_COLUMNS}
         FROM dreams d
-        LEFT JOIN media m ON m.id = (
-          SELECT id FROM media
-          WHERE dream_id = d.id AND media_type = 'image' AND generation_status = 'complete'
-          ORDER BY created_at DESC
-          LIMIT 1
-        )
-        LEFT JOIN interpretations i ON i.id = (
-          SELECT id FROM interpretations
-          WHERE dream_id = d.id
-          ORDER BY created_at DESC
-          LIMIT 1
-        )
+        ${JOURNAL_ENTRY_JOINS}
         WHERE d.is_deleted = 0
-        -- occurred_at is date-only ('2026-08-26'), so every dream logged on the same
-        -- night sorts equal and SQLite is free to return them in any order. logged_at
-        -- is a full timestamp and breaks the tie, which is what makes "most recent
-        -- first" actually true within a day.
-        ORDER BY d.occurred_at DESC, d.logged_at DESC
+        ${JOURNAL_ENTRY_ORDER}
         LIMIT ?
       `,
         PAGE_SIZE
       );
 
-      setEntries(
-        rows.map(r => ({
-          id: r.id,
-          description: r.description,
-          occurredAt: r.occurred_at,
-          syncStatus: r.sync_status as JournalEntry['syncStatus'],
-          thumbnailUri: r.thumbnail_uri,
-          // What the dreamer said they felt outranks what the AI read: they were
-          // there. The interpretation's emotions stand in only until the dream has
-          // its own — which is every dream logged before the log screen collected them.
-          emotions: pickEmotions(r.dream_emotions, r.emotions),
-          hasInterpretation: Boolean(r.interpretation_id),
-          isLucid: Boolean(r.is_lucid),
-          tone: r.tone as JournalEntry['tone'],
-          clarity: r.clarity,
-          dreamType: parseStringArray(r.dream_type),
-        }))
-      );
+      setEntries(rows.map(mapJournalEntryRow));
     } catch (err) {
       console.error('Failed to load journal entries:', err);
     } finally {
@@ -177,17 +134,9 @@ export default function JournalListScreen() {
     }
   }, [auth, services, loadEntries]);
 
-  const displayEntries: JournalEntry[] = (searchResults ?? filterResults ?? entries).map(r =>
-    'occurredAt' in r
-      ? (r as JournalEntry)
-      : {
-          id: (r as { id: string }).id,
-          description: (r as { description: string }).description,
-          occurredAt: (r as { occurredAt: string }).occurredAt,
-          syncStatus: (r as { syncStatus: string }).syncStatus as JournalEntry['syncStatus'],
-          thumbnailUri: null,
-        }
-  );
+  // All three sources select the same card shape (see `journalEntryQuery`), so a
+  // searched or filtered dream keeps its image, chips and markers.
+  const displayEntries: JournalEntry[] = searchResults ?? filterResults ?? entries;
 
   const hasFilters = Boolean(filters.emotion || filters.startDate);
 
@@ -356,37 +305,6 @@ function WeeklyInsight() {
       <Text style={styles.insightBody}>{t('insights.starHint')}</Text>
     </LinearGradient>
   );
-}
-
-function parseEmotions(raw: string | null): string[] {
-  if (!raw) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((e): e is string => typeof e === 'string') : [];
-  } catch {
-    // Emotions are written by the interpretation Edge Function and by the log screen;
-    // a malformed row should degrade to "no chips", never crash the journal.
-    return [];
-  }
-}
-
-/** The dreamer's own emotions where there are any, the AI's reading otherwise. */
-function pickEmotions(
-  dreamEmotions: string | null,
-  interpretationEmotions: string | null
-): string[] {
-  const own = parseEmotions(dreamEmotions);
-  return own.length > 0 ? own : parseEmotions(interpretationEmotions);
-}
-
-function parseStringArray(raw: string | null): string[] {
-  if (!raw) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
-  } catch {
-    return [];
-  }
 }
 
 const styles = StyleSheet.create({

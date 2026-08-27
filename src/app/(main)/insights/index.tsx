@@ -382,18 +382,28 @@ export function buildRibbon(points: EmotionTonePoint[], locale: string): RibbonP
   if (filled.length < 2) return [];
 
   const dayMonth: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  /**
+   * Over a short span the six bucket midpoints fall hours apart, so two of the three
+   * labelled ones format to the very same day. Printing "25 août" twice on one axis
+   * says nothing, and it used to collide as a React key besides, which silently
+   * dropped one of the two labels. The first bucket to claim a date keeps it.
+   */
+  const usedLabels = new Set<string>();
 
   return filled.map((bucket, i) => {
     const total = bucket.dreams.length;
     const midpoint = new Date(first + ((bucket.index + 0.5) / TONE_BUCKETS) * span);
     // Label the two ends and the middle only; six dates across 320 units collide.
     const isLabelled = i === 0 || i === filled.length - 1 || i === Math.floor(filled.length / 2);
+    const label = isLabelled ? midpoint.toLocaleDateString(locale, dayMonth) : undefined;
+    const isDistinct = label !== undefined && !usedLabels.has(label);
+    if (isDistinct) usedLabels.add(label);
 
     return {
       t: i / (filled.length - 1),
       positive: bucket.dreams.filter(d => hasAny(d.emotions, POSITIVE)).length / total,
       tension: bucket.dreams.filter(d => hasAny(d.emotions, TENSION)).length / total,
-      ...(isLabelled ? { label: midpoint.toLocaleDateString(locale, dayMonth) } : {}),
+      ...(isDistinct ? { label } : {}),
     };
   });
 }

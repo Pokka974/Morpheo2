@@ -1,5 +1,13 @@
 import { useState, useCallback } from 'react';
 import { sqlite } from '@db/client';
+import type { JournalEntry } from './DreamCard';
+import {
+  JOURNAL_ENTRY_COLUMNS,
+  JOURNAL_ENTRY_JOINS,
+  JOURNAL_ENTRY_ORDER,
+  mapJournalEntryRow,
+  type JournalEntryRow,
+} from './journalEntryQuery';
 
 export interface JournalFilters {
   emotion?: string;
@@ -7,16 +15,9 @@ export interface JournalFilters {
   endDate?: string;
 }
 
-export interface FilterResult {
-  id: string;
-  description: string;
-  occurredAt: string;
-  syncStatus: string;
-}
-
 export function useJournalFilters() {
   const [filters, setFilters] = useState<JournalFilters>({});
-  const [results, setResults] = useState<FilterResult[] | null>(null);
+  const [results, setResults] = useState<JournalEntry[] | null>(null);
   const [isFiltering, setIsFiltering] = useState(false);
 
   const applyFilters = useCallback((newFilters: JournalFilters) => {
@@ -40,7 +41,7 @@ export function useJournalFilters() {
         // AI's reading — filtering on "fear" must not skip a dream the dreamer
         // themselves tagged as frightening just because it has no interpretation yet.
         conditions.push(`(
-          EXISTS (SELECT 1 FROM json_each(i.emotions) je WHERE je.value = ?)
+          EXISTS (SELECT 1 FROM json_each(fi.emotions) je WHERE je.value = ?)
           OR EXISTS (SELECT 1 FROM json_each(d.emotions) de WHERE de.value = ?)
         )`);
         bindings.push(newFilters.emotion, newFilters.emotion);
@@ -57,21 +58,31 @@ export function useJournalFilters() {
       }
 
       const whereClause = conditions.join(' AND ');
+      // Emotion matching joins `interpretations` a second time, as `fi`: the card's
+      // own `i` join is pinned to the *newest* interpretation, which would silently
+      // narrow what an emotion filter can match on a dream that has more than one.
       const query = `
-        SELECT DISTINCT d.id, d.description, d.occurred_at as occurredAt, d.sync_status as syncStatus
+        SELECT DISTINCT ${JOURNAL_ENTRY_COLUMNS}
         FROM dreams d
-        LEFT JOIN interpretations i ON i.dream_id = d.id
+        ${JOURNAL_ENTRY_JOINS}
+        LEFT JOIN interpretations fi ON fi.dream_id = d.id
         WHERE ${whereClause}
-        -- Tie-break on logged_at: occurred_at is date-only, so same-night dreams
-        -- would otherwise come back in arbitrary order.
-        ORDER BY d.occurred_at DESC, d.logged_at DESC
+        ${JOURNAL_ENTRY_ORDER}
         LIMIT 100
       `;
 
       const stmt = sqlite.prepareSync(query);
-      const rows = Array.from(stmt.executeSync(bindings)) as unknown as FilterResult[];
-      setResults(rows);
-    } catch {
+      // Finalized explicitly — an unfinalized prepared statement holds its SQLite
+      // resources for the life of the process.
+      let rows: JournalEntryRow[];
+      try {
+        rows = Array.from(stmt.executeSync(bindings)) as unknown as JournalEntryRow[];
+      } finally {
+        stmt.finalizeSync();
+      }
+      setResults(rows.map(mapJournalEntryRow));
+    } catch (err) {
+      console.error('Journal filter failed:', err);
       setResults([]);
     } finally {
       setIsFiltering(false);
