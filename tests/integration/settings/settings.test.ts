@@ -10,7 +10,7 @@ describe('Settings integration', () => {
         path.resolve(__dirname, '../../../supabase/functions/account-delete/index.ts'),
         'utf8'
       );
-      expect(source).toContain("confirmation !== REQUIRED_CONFIRMATION");
+      expect(source).toContain('confirmation !== REQUIRED_CONFIRMATION');
       expect(source).toContain("'DELETE MY ACCOUNT'");
     });
 

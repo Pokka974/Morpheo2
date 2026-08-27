@@ -17,16 +17,31 @@ jest.mock('@db/client', () => ({
 }));
 
 const waterPattern = {
-  id: 'rp-1', user_id: 'user-001', term: 'water', pattern_type: 'keyword',
-  occurrence_count: 4, dream_ids: JSON.stringify(['d1', 'd2', 'd3', 'd4']), last_seen_at: '2026-08-14',
+  id: 'rp-1',
+  user_id: 'user-001',
+  term: 'water',
+  pattern_type: 'keyword',
+  occurrence_count: 4,
+  dream_ids: JSON.stringify(['d1', 'd2', 'd3', 'd4']),
+  last_seen_at: '2026-08-14',
 };
 const firePattern = {
-  id: 'rp-2', user_id: 'user-001', term: 'fire', pattern_type: 'keyword',
-  occurrence_count: 2, dream_ids: JSON.stringify(['d1', 'd5']), last_seen_at: '2026-08-12',
+  id: 'rp-2',
+  user_id: 'user-001',
+  term: 'fire',
+  pattern_type: 'keyword',
+  occurrence_count: 2,
+  dream_ids: JSON.stringify(['d1', 'd5']),
+  last_seen_at: '2026-08-12',
 };
 const fearEmotion = {
-  id: 'rp-3', user_id: 'user-001', term: 'fear', pattern_type: 'emotion',
-  occurrence_count: 3, dream_ids: JSON.stringify(['d1', 'd3', 'd4']), last_seen_at: '2026-08-14',
+  id: 'rp-3',
+  user_id: 'user-001',
+  term: 'fear',
+  pattern_type: 'emotion',
+  occurrence_count: 3,
+  dream_ids: JSON.stringify(['d1', 'd3', 'd4']),
+  last_seen_at: '2026-08-14',
 };
 
 describe('recurrenceRepository', () => {
@@ -107,7 +122,9 @@ describe('recurrenceRepository', () => {
     it('inserts a new row for a term that has not been seen before', async () => {
       await recordRecurrence('user-1', 'dream-1', 'keyword', ['water'], '2026-08-20T00:00:00.000Z');
 
-      const insertCall = mockExecuteSync.mock.calls.find(([sql]) => (sql as string).includes('INSERT'));
+      const insertCall = mockExecuteSync.mock.calls.find(([sql]) =>
+        (sql as string).includes('INSERT')
+      );
       expect(insertCall).toBeTruthy();
       const params = insertCall![1] as unknown[];
       expect(params).toEqual(
@@ -124,7 +141,9 @@ describe('recurrenceRepository', () => {
     it('normalizes term casing and surrounding whitespace before storing', async () => {
       await recordRecurrence('user-1', 'dream-1', 'keyword', ['  Water  ']);
 
-      const insertCall = mockExecuteSync.mock.calls.find(([sql]) => (sql as string).includes('INSERT'));
+      const insertCall = mockExecuteSync.mock.calls.find(([sql]) =>
+        (sql as string).includes('INSERT')
+      );
       expect(insertCall![1]).toContain('water');
     });
 
@@ -140,9 +159,15 @@ describe('recurrenceRepository', () => {
       await recordRecurrence('user-1', 'dream-1', 'keyword', ['water'], '2026-08-20T00:00:00.000Z');
 
       const updateCall = mockExecuteSync.mock.calls.find(
-        ([sql]) => (sql as string).includes('UPDATE') && (sql as string).includes('occurrence_count = ?')
+        ([sql]) =>
+          (sql as string).includes('UPDATE') && (sql as string).includes('occurrence_count = ?')
       );
-      expect(updateCall![1]).toEqual([3, JSON.stringify(['dream-0', 'dream-1']), '2026-08-20T00:00:00.000Z', 'rp-1']);
+      expect(updateCall![1]).toEqual([
+        3,
+        JSON.stringify(['dream-0', 'dream-1']),
+        '2026-08-20T00:00:00.000Z',
+        'rp-1',
+      ]);
     });
 
     it('does not double-count when the dream was already recorded for this term (idempotent re-interpretation)', async () => {
@@ -150,21 +175,29 @@ describe('recurrenceRepository', () => {
 
       await recordRecurrence('user-1', 'dream-1', 'keyword', ['water']);
 
-      const insertCall = mockExecuteSync.mock.calls.find(([sql]) => (sql as string).includes('INSERT'));
+      const insertCall = mockExecuteSync.mock.calls.find(([sql]) =>
+        (sql as string).includes('INSERT')
+      );
       expect(insertCall).toBeUndefined();
-      const countingUpdate = mockExecuteSync.mock.calls.find(
-        ([sql]) => (sql as string).includes('occurrence_count = ?')
+      const countingUpdate = mockExecuteSync.mock.calls.find(([sql]) =>
+        (sql as string).includes('occurrence_count = ?')
       );
       expect(countingUpdate).toBeUndefined();
     });
 
     it('accepts pattern type "theme", recording AI-identified themes alongside keywords/emotions', async () => {
-      await recordRecurrence('user-1', 'dream-1', 'theme', ['transformation'], '2026-08-20T00:00:00.000Z');
-
-      const insertCall = mockExecuteSync.mock.calls.find(([sql]) => (sql as string).includes('INSERT'));
-      expect(insertCall![1]).toEqual(
-        expect.arrayContaining(['user-1', 'transformation', 'theme'])
+      await recordRecurrence(
+        'user-1',
+        'dream-1',
+        'theme',
+        ['transformation'],
+        '2026-08-20T00:00:00.000Z'
       );
+
+      const insertCall = mockExecuteSync.mock.calls.find(([sql]) =>
+        (sql as string).includes('INSERT')
+      );
+      expect(insertCall![1]).toEqual(expect.arrayContaining(['user-1', 'transformation', 'theme']));
     });
   });
 
@@ -203,8 +236,16 @@ describe('recurrenceRepository', () => {
       mockExecuteSync.mockReturnValue([flyingTheme]);
       mockGetAllAsync.mockResolvedValue([
         { id: 'd1', description: 'Flying over the city.', occurred_at: '2026-08-25T06:40:00.000Z' },
-        { id: 'd2', description: 'Above the empty stadium.', occurred_at: '2026-08-17T00:00:00.000Z' },
-        { id: 'd3', description: 'The leap from the cliff.', occurred_at: '2026-08-09T00:00:00.000Z' },
+        {
+          id: 'd2',
+          description: 'Above the empty stadium.',
+          occurred_at: '2026-08-17T00:00:00.000Z',
+        },
+        {
+          id: 'd3',
+          description: 'The leap from the cliff.',
+          occurred_at: '2026-08-09T00:00:00.000Z',
+        },
       ]);
 
       const result = await getMonthlyThemeForDream('d1', '2026-08-25T06:40:00.000Z');
@@ -224,7 +265,11 @@ describe('recurrenceRepository', () => {
       mockExecuteSync.mockReturnValue([flyingTheme]);
       mockGetAllAsync.mockResolvedValue([
         { id: 'd1', description: 'Flying over the city.', occurred_at: '2026-08-25T06:40:00.000Z' },
-        { id: 'd2', description: 'Above the empty stadium.', occurred_at: '2026-08-17T00:00:00.000Z' },
+        {
+          id: 'd2',
+          description: 'Above the empty stadium.',
+          occurred_at: '2026-08-17T00:00:00.000Z',
+        },
         { id: 'd4', description: 'An earlier flight.', occurred_at: '2026-07-30T00:00:00.000Z' }, // previous month — excluded
       ]);
 

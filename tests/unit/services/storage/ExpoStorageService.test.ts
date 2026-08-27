@@ -1,7 +1,10 @@
 import { ExpoStorageService } from '@services/storage/ExpoStorageService';
 
 // Variables must be prefixed with `mock` (case-insensitive) to be allowed in jest.mock() factory
-const mockFiles: Record<string, { exists: boolean; size?: number; modificationTime?: number; isDirectory?: boolean }> = {};
+const mockFiles: Record<
+  string,
+  { exists: boolean; size?: number; modificationTime?: number; isDirectory?: boolean }
+> = {};
 let mockDirExists = false;
 const mockCreatedDirs: string[] = [];
 const mockDeletedPaths: string[] = [];
@@ -105,8 +108,16 @@ describe('ExpoStorageService', () => {
   describe('evictToLimit', () => {
     it('evicts oldest files until under limit', async () => {
       mockDirContents = ['old-file', 'new-file'];
-      mockFiles['file://cache/morpheo/media/old-file'] = { exists: true, size: 60 * 1024 * 1024, modificationTime: 1000 };
-      mockFiles['file://cache/morpheo/media/new-file'] = { exists: true, size: 60 * 1024 * 1024, modificationTime: 2000 };
+      mockFiles['file://cache/morpheo/media/old-file'] = {
+        exists: true,
+        size: 60 * 1024 * 1024,
+        modificationTime: 1000,
+      };
+      mockFiles['file://cache/morpheo/media/new-file'] = {
+        exists: true,
+        size: 60 * 1024 * 1024,
+        modificationTime: 2000,
+      };
 
       await service.evictToLimit(80 * 1024 * 1024);
       expect(mockDeletedPaths.length).toBeGreaterThan(0);
@@ -115,7 +126,11 @@ describe('ExpoStorageService', () => {
 
     it('does nothing when already under limit', async () => {
       mockDirContents = ['small-file'];
-      mockFiles['file://cache/morpheo/media/small-file'] = { exists: true, size: 1024, modificationTime: 1000 };
+      mockFiles['file://cache/morpheo/media/small-file'] = {
+        exists: true,
+        size: 1024,
+        modificationTime: 1000,
+      };
 
       await service.evictToLimit(200 * 1024 * 1024);
       expect(mockDeletedPaths).toHaveLength(0);
@@ -123,9 +138,18 @@ describe('ExpoStorageService', () => {
 
     it('skips directory entries and vanished entries when computing eviction candidates', async () => {
       mockDirContents = ['a-subdir', 'gone-file', 'real-file'];
-      mockFiles['file://cache/morpheo/media/a-subdir'] = { exists: true, isDirectory: true, size: 999999, modificationTime: 500 };
+      mockFiles['file://cache/morpheo/media/a-subdir'] = {
+        exists: true,
+        isDirectory: true,
+        size: 999999,
+        modificationTime: 500,
+      };
       // 'gone-file' has no entry in mockFiles, so getInfoAsync resolves { exists: false }.
-      mockFiles['file://cache/morpheo/media/real-file'] = { exists: true, size: 1024, modificationTime: 1000 };
+      mockFiles['file://cache/morpheo/media/real-file'] = {
+        exists: true,
+        size: 1024,
+        modificationTime: 1000,
+      };
 
       await service.evictToLimit(0);
 
@@ -145,8 +169,16 @@ describe('ExpoStorageService', () => {
   describe('getCacheSize', () => {
     it('returns sum of file sizes', async () => {
       mockDirContents = ['file-a', 'file-b'];
-      mockFiles['file://cache/morpheo/media/file-a'] = { exists: true, size: 500, modificationTime: 1000 };
-      mockFiles['file://cache/morpheo/media/file-b'] = { exists: true, size: 300, modificationTime: 1000 };
+      mockFiles['file://cache/morpheo/media/file-a'] = {
+        exists: true,
+        size: 500,
+        modificationTime: 1000,
+      };
+      mockFiles['file://cache/morpheo/media/file-b'] = {
+        exists: true,
+        size: 300,
+        modificationTime: 1000,
+      };
 
       const size = await service.getCacheSize();
       expect(size).toBe(800);
@@ -160,7 +192,11 @@ describe('ExpoStorageService', () => {
 
     it('excludes directory entries and vanished entries from the total', async () => {
       mockDirContents = ['a-subdir', 'gone-file', 'real-file'];
-      mockFiles['file://cache/morpheo/media/a-subdir'] = { exists: true, isDirectory: true, size: 999999 };
+      mockFiles['file://cache/morpheo/media/a-subdir'] = {
+        exists: true,
+        isDirectory: true,
+        size: 999999,
+      };
       mockFiles['file://cache/morpheo/media/real-file'] = { exists: true, size: 500 };
 
       const size = await service.getCacheSize();

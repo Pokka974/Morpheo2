@@ -25,13 +25,7 @@ describe('buildRibbon', () => {
   it('reports the share of dreams that felt good and the share that felt tense', () => {
     // Two buckets: the first month-half all positive, the second all tense.
     const result = buildRibbon(
-      [
-        day(1, 'joy'),
-        day(2, 'calm'),
-        day(29, 'fear'),
-        day(30, 'anxiety'),
-        day(31, 'anger'),
-      ],
+      [day(1, 'joy'), day(2, 'calm'), day(29, 'fear'), day(30, 'anxiety'), day(31, 'anger')],
       'en'
     );
 

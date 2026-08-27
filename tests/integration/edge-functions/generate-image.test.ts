@@ -122,7 +122,7 @@ describe('generate-image Edge Function regeneration limits', () => {
     expect(source).toContain('(existingMedia?.regeneration_count ?? 0) + 1');
   });
 
-  it('carries an existing entry\'s max_regenerations forward on regeneration rather than re-deriving it from the current tier', () => {
+  it("carries an existing entry's max_regenerations forward on regeneration rather than re-deriving it from the current tier", () => {
     expect(source).toContain('existingMedia?.max_regenerations ??');
   });
 });

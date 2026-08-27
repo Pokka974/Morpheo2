@@ -489,7 +489,9 @@ describe('pullRemoteChanges', () => {
       if (table !== 'interpretations') return chainable(EMPTY);
       calls += 1;
       // No `message`, exercising the 'no detail' fallback in the thrown error.
-      return calls === 1 ? chainable({ data: null, error: { code: 'PGRST301' } }) : chainable(EMPTY);
+      return calls === 1
+        ? chainable({ data: null, error: { code: 'PGRST301' } })
+        : chainable(EMPTY);
     });
 
     await pullRemoteChanges('user-1');

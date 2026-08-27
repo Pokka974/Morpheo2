@@ -93,7 +93,10 @@ describe('ForgotPinScreen', () => {
     fireEvent.press(getByText('Verify'));
 
     expect(await findByText('Set new PIN')).toBeTruthy();
-    expect(mockSignInWithPassword).toHaveBeenCalledWith({ email: 'me@example.com', password: 'hunter2' });
+    expect(mockSignInWithPassword).toHaveBeenCalledWith({
+      email: 'me@example.com',
+      password: 'hunter2',
+    });
   });
 
   it('shows a verification-failed alert when there is no user email', async () => {
@@ -104,7 +107,10 @@ describe('ForgotPinScreen', () => {
     fireEvent.press(getByText('Verify'));
 
     await waitFor(() =>
-      expect(alertSpy).toHaveBeenCalledWith('Verification Failed', 'Incorrect password. Please try again.')
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Verification Failed',
+        'Incorrect password. Please try again.'
+      )
     );
   });
 
@@ -117,7 +123,10 @@ describe('ForgotPinScreen', () => {
     fireEvent.press(getByText('Verify'));
 
     await waitFor(() =>
-      expect(alertSpy).toHaveBeenCalledWith('Verification Failed', 'Incorrect password. Please try again.')
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Verification Failed',
+        'Incorrect password. Please try again.'
+      )
     );
   });
 
@@ -134,7 +143,10 @@ describe('ForgotPinScreen', () => {
     fireEvent.changeText(getByPlaceholderText('Confirm new PIN'), '4321');
     fireEvent.press(getByText('Reset PIN'));
 
-    expect(alertSpy).toHaveBeenCalledWith('PINs Do Not Match', 'Please make sure both PINs are the same.');
+    expect(alertSpy).toHaveBeenCalledWith(
+      'PINs Do Not Match',
+      'Please make sure both PINs are the same.'
+    );
     expect(mockSetupPin).not.toHaveBeenCalled();
   });
 
@@ -172,6 +184,8 @@ describe('ForgotPinScreen', () => {
     fireEvent.press(getByText('Verify'));
     await findByText('Set new PIN');
 
-    expect(getByRole('button', { name: 'Reset PIN' }).props.accessibilityState?.disabled).toBe(true);
+    expect(getByRole('button', { name: 'Reset PIN' }).props.accessibilityState?.disabled).toBe(
+      true
+    );
   });
 });

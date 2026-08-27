@@ -40,7 +40,7 @@ const json = (body: unknown, status: number) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Flux reports moderation through the polling status rather than an HTTP error, and uses two
@@ -64,7 +64,10 @@ serve(async (req: Request) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await userClient.auth.getUser();
     if (authError || !user) return json({ error: 'unauthorized' }, 401);
 
     const { dreamId, description, keywords, isRegeneration } = await req.json();
@@ -83,7 +86,11 @@ serve(async (req: Request) => {
       console.error('Entitlement query failed:', entError);
     }
 
-    if (entitlement && entitlement.monthly_image_limit !== null && entitlement.images_used_this_month >= entitlement.monthly_image_limit) {
+    if (
+      entitlement &&
+      entitlement.monthly_image_limit !== null &&
+      entitlement.images_used_this_month >= entitlement.monthly_image_limit
+    ) {
       const nextMonth = new Date();
       nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
       return json({ error: 'limit_reached', resetDate: nextMonth.toISOString() }, 429);
@@ -135,10 +142,14 @@ serve(async (req: Request) => {
       .maybeSingle();
 
     const authoredPrompt: string | null = interpretationRow?.image_prompt ?? null;
-    const scenePrompt = authoredPrompt ?? (() => {
-      const keywordStr = keywords?.length ? ` Key symbols: ${keywords.slice(0, 5).join(', ')}.` : '';
-      return `A dream scene: ${description.slice(0, 300)}${keywordStr}`;
-    })();
+    const scenePrompt =
+      authoredPrompt ??
+      (() => {
+        const keywordStr = keywords?.length
+          ? ` Key symbols: ${keywords.slice(0, 5).join(', ')}.`
+          : '';
+        return `A dream scene: ${description.slice(0, 300)}${keywordStr}`;
+      })();
     const styleDirective = promptRow?.image_prompt_directive ?? FALLBACK_STYLE_DIRECTIVE;
     const prompt = `${scenePrompt}\n\n${styleDirective}`;
 
@@ -166,7 +177,7 @@ serve(async (req: Request) => {
         method: 'POST',
         headers: {
           'x-key': FLUX_API_KEY,
-          'accept': 'application/json',
+          accept: 'application/json',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(submitBody),
@@ -222,7 +233,7 @@ serve(async (req: Request) => {
       try {
         pollResponse = await fetch(pollingUrl, {
           method: 'GET',
-          headers: { 'x-key': FLUX_API_KEY, 'accept': 'application/json' },
+          headers: { 'x-key': FLUX_API_KEY, accept: 'application/json' },
           signal: AbortSignal.timeout(15_000),
         });
       } catch (err) {
@@ -254,7 +265,10 @@ serve(async (req: Request) => {
     }
 
     if (!sampleUrl) {
-      console.error(`Flux generation did not become Ready within ${POLL_TIMEOUT_MS}ms for dream`, dreamId);
+      console.error(
+        `Flux generation did not become Ready within ${POLL_TIMEOUT_MS}ms for dream`,
+        dreamId
+      );
       return json({ error: 'generation_failed' }, 503);
     }
 
@@ -328,19 +342,22 @@ serve(async (req: Request) => {
       console.error('Failed to increment images_used_this_month:', usageError);
     }
 
-    return json({
-      id: media.id,
-      dreamId: media.dream_id,
-      mediaType: 'image',
-      generationStatus: 'complete',
-      signedUrl: signedData?.signedUrl ?? null,
-      localCachePath: null,
-      regenerationCount: media.regeneration_count,
-      maxRegenerations: media.max_regenerations,
-      errorMessage: null,
-      createdAt: media.created_at,
-      updatedAt: media.updated_at,
-    }, 200);
+    return json(
+      {
+        id: media.id,
+        dreamId: media.dream_id,
+        mediaType: 'image',
+        generationStatus: 'complete',
+        signedUrl: signedData?.signedUrl ?? null,
+        localCachePath: null,
+        regenerationCount: media.regeneration_count,
+        maxRegenerations: media.max_regenerations,
+        errorMessage: null,
+        createdAt: media.created_at,
+        updatedAt: media.updated_at,
+      },
+      200
+    );
   } catch (err) {
     console.error('generate-image edge function error:', err);
     return json({ error: 'generation_failed' }, 503);

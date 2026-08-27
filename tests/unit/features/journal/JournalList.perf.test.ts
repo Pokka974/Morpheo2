@@ -12,13 +12,23 @@ jest.mock('@shopify/flash-list', () => {
   const { View } = require('react-native');
   const R = require('react');
   return {
-    FlashList: ({ data, renderItem, estimatedItemSize }: { data: unknown[]; renderItem: (args: { item: unknown }) => unknown; estimatedItemSize: number }) => {
+    FlashList: ({
+      data,
+      renderItem,
+      estimatedItemSize,
+    }: {
+      data: unknown[];
+      renderItem: (args: { item: unknown }) => unknown;
+      estimatedItemSize: number;
+    }) => {
       // FlashList renders only visible items (~viewport / estimatedItemSize)
       const VIEWPORT_HEIGHT = 844; // iPhone 14 viewport
       const visibleCount = Math.ceil(VIEWPORT_HEIGHT / estimatedItemSize) + 2; // +2 buffer
       const renderedItems = data.slice(0, Math.min(visibleCount, data.length));
       mockFlashListRenderCount.count = renderedItems.length;
-      return R.createElement(View, null,
+      return R.createElement(
+        View,
+        null,
         ...renderedItems.map((item: unknown, i: number) =>
           R.createElement(View, { key: i }, renderItem({ item }))
         )
@@ -45,18 +55,29 @@ jest.mock('@services/useServices', () => ({
 }));
 
 jest.mock('@features/journal/useJournalSearch', () => ({
-  useJournalSearch: () => ({ results: null, isSearching: false, search: jest.fn(), clearSearch: jest.fn() }),
+  useJournalSearch: () => ({
+    results: null,
+    isSearching: false,
+    search: jest.fn(),
+    clearSearch: jest.fn(),
+  }),
 }));
 
 jest.mock('@features/journal/useJournalFilters', () => ({
-  useJournalFilters: () => ({ filters: {}, results: null, isFiltering: false, applyFilters: jest.fn(), clearFilters: jest.fn() }),
+  useJournalFilters: () => ({
+    filters: {},
+    results: null,
+    isFiltering: false,
+    applyFilters: jest.fn(),
+    clearFilters: jest.fn(),
+  }),
 }));
 
 function generate500Entries() {
   return Array.from({ length: 500 }, (_, i) => ({
     id: `dream-${i}`,
     description: `This is dream number ${i} with some content about mysterious symbols.`,
-    occurredAt: `2026-08-${String(i % 28 + 1).padStart(2, '0')}`,
+    occurredAt: `2026-08-${String((i % 28) + 1).padStart(2, '0')}`,
     syncStatus: 'synced' as const,
     thumbnailUri: null,
   }));
@@ -73,9 +94,16 @@ describe('JournalList performance', () => {
 
     const start = Date.now();
     render(
-      React.createElement(require('react-native').View, null,
-        ...entries.slice(0, 15).map((entry) =>
-          React.createElement(DreamCard, { key: entry.id, entry, variant: 'compact', onPress: () => {} })
+      React.createElement(
+        require('react-native').View,
+        null,
+        ...entries.slice(0, 15).map(entry =>
+          React.createElement(DreamCard, {
+            key: entry.id,
+            entry,
+            variant: 'compact',
+            onPress: () => {},
+          })
         )
       )
     );

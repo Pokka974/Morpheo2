@@ -45,7 +45,7 @@ describe('useJournalFilters', () => {
     expect(result.current.results).toHaveLength(1);
   });
 
-  it('matches the dreamer\'s own emotions as well as the AI\'s reading', async () => {
+  it("matches the dreamer's own emotions as well as the AI's reading", async () => {
     mockExecuteSync.mockReturnValue(emotionRows);
     const { result } = renderHook(() => useJournalFilters());
 
@@ -93,7 +93,11 @@ describe('useJournalFilters', () => {
     const { result } = renderHook(() => useJournalFilters());
 
     await act(async () => {
-      result.current.applyFilters({ emotion: 'fear', startDate: '2026-08-01', endDate: '2026-08-14' });
+      result.current.applyFilters({
+        emotion: 'fear',
+        startDate: '2026-08-01',
+        endDate: '2026-08-14',
+      });
     });
 
     const query = mockPrepareSync.mock.calls[0][0] as string;

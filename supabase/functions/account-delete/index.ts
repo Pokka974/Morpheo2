@@ -16,21 +16,35 @@ serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders });
+  if (!authHeader)
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401,
+      headers: corsHeaders,
+    });
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const userClient = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
     global: { headers: { Authorization: authHeader } },
   });
 
-  const { data: { user }, error: authError } = await userClient.auth.getUser();
-  if (authError || !user) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders });
+  const {
+    data: { user },
+    error: authError,
+  } = await userClient.auth.getUser();
+  if (authError || !user)
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401,
+      headers: corsHeaders,
+    });
 
   const { confirmation } = await req.json();
 
   // Exact string match — no trim, no case-insensitive (C1 fix)
   if (confirmation !== REQUIRED_CONFIRMATION) {
-    return new Response(JSON.stringify({ error: 'invalid_confirmation' }), { status: 400, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'invalid_confirmation' }), {
+      status: 400,
+      headers: corsHeaders,
+    });
   }
 
   // Schedule deletion — hard delete after 30 days via pg_cron (T135).
@@ -65,8 +79,11 @@ serve(async (req: Request) => {
     });
   }
 
-  return new Response(JSON.stringify({ scheduled: true, deletionDate: scheduledAt.toISOString() }), {
-    status: 200,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+  return new Response(
+    JSON.stringify({ scheduled: true, deletionDate: scheduledAt.toISOString() }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    }
+  );
 });

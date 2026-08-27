@@ -449,8 +449,18 @@ describe('DreamDetailScreen', () => {
   it('renders the related-dreams chain and navigates to the linked dream on press', async () => {
     (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
     (db.getAllAsync as jest.Mock).mockResolvedValueOnce([
-      { id: 'dream-1', description: DREAM_ROW.description, occurred_at: DREAM_ROW.occurred_at, linked_dream_id: 'dream-0' },
-      { id: 'dream-0', description: 'An earlier dream about the same forest.', occurred_at: '2026-01-01T00:00:00.000Z', linked_dream_id: null },
+      {
+        id: 'dream-1',
+        description: DREAM_ROW.description,
+        occurred_at: DREAM_ROW.occurred_at,
+        linked_dream_id: 'dream-0',
+      },
+      {
+        id: 'dream-0',
+        description: 'An earlier dream about the same forest.',
+        occurred_at: '2026-01-01T00:00:00.000Z',
+        linked_dream_id: null,
+      },
     ]);
     const { getByText, findByText } = renderScreen();
 
@@ -461,7 +471,9 @@ describe('DreamDetailScreen', () => {
   });
 
   it('does not render the AI-metadata or cultural-references blocks for a legacy interpretation without them', async () => {
-    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(INTERP_ROW);
+    (db.getFirstAsync as jest.Mock)
+      .mockResolvedValueOnce(DREAM_ROW)
+      .mockResolvedValueOnce(INTERP_ROW);
     const { getByText, queryByText } = renderScreen();
 
     await waitFor(() => expect(getByText('Interpretation')).toBeTruthy());

@@ -106,7 +106,7 @@ describe('SettingsScreen', () => {
     expect(getByText('0 / 5')).toBeTruthy();
   });
 
-  it('names the groups from the user\'s side, not the system\'s', async () => {
+  it("names the groups from the user's side, not the system's", async () => {
     const registry = buildRegistry();
     const { getByText } = render(
       <ServicesProvider services={registry}>
@@ -119,7 +119,7 @@ describe('SettingsScreen', () => {
     expect(getByText('Account')).toBeTruthy();
   });
 
-  it('reports each preference\'s current value on its row, so the screen can be scanned', async () => {
+  it("reports each preference's current value on its row, so the screen can be scanned", async () => {
     const registry = buildRegistry();
     const { getByText } = render(
       <ServicesProvider services={registry}>
@@ -175,7 +175,10 @@ describe('SettingsScreen', () => {
   it('shows Free subscription label and KB-formatted cache size for a small cache', async () => {
     const storage = new MockStorageService();
     // MockStorageService reports cache.size * 1MB, so with an empty cache it starts at 0 bytes (0.0 KB).
-    const registry = buildRegistry({ storage, entitlement: new MockEntitlementService().configure('free') });
+    const registry = buildRegistry({
+      storage,
+      entitlement: new MockEntitlementService().configure('free'),
+    });
 
     const { getByText } = render(
       <ServicesProvider services={registry}>
@@ -188,7 +191,9 @@ describe('SettingsScreen', () => {
   });
 
   it('shows Premium subscription label when entitlement is premium', async () => {
-    const registry = buildRegistry({ entitlement: new MockEntitlementService().configure('premium') });
+    const registry = buildRegistry({
+      entitlement: new MockEntitlementService().configure('premium'),
+    });
 
     const { getByText } = render(
       <ServicesProvider services={registry}>

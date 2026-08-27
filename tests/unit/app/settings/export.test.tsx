@@ -50,7 +50,11 @@ describe('ExportScreen', () => {
 
   it('shows a spinner and marks the button busy/disabled while exporting is in flight', async () => {
     let resolveInvoke: (v: unknown) => void = () => {};
-    mockInvoke.mockReturnValue(new Promise(resolve => { resolveInvoke = resolve; }));
+    mockInvoke.mockReturnValue(
+      new Promise(resolve => {
+        resolveInvoke = resolve;
+      })
+    );
 
     const { getByRole, UNSAFE_getByType } = render(<ExportScreen />);
     const button = getByRole('button', { name: 'Export my data' });

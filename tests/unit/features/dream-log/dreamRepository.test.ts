@@ -79,7 +79,8 @@ describe('dreamRepository', () => {
     });
 
     it('passes for long, rich descriptions', () => {
-      const description = 'I was walking through a forest and suddenly saw a large bridge over water.';
+      const description =
+        'I was walking through a forest and suddenly saw a large bridge over water.';
       expect(() => validateForInterpretation(description)).not.toThrow();
     });
   });
@@ -115,7 +116,12 @@ describe('dreamRepository', () => {
       mockSelectWhere.mockResolvedValue([]);
 
       await expect(
-        saveDream({ id: 'dream-1', userId: 'user-1', description: baseDream.description, occurredAt: baseDream.occurredAt })
+        saveDream({
+          id: 'dream-1',
+          userId: 'user-1',
+          description: baseDream.description,
+          occurredAt: baseDream.occurredAt,
+        })
       ).rejects.toThrow('Failed to save dream');
     });
   });
@@ -130,7 +136,10 @@ describe('dreamRepository', () => {
       await updateDream('dream-1', { description: 'A brand new dream description here.' });
 
       expect(mockUpdateWhere).toHaveBeenCalled();
-      const setArg = mockSet.mock.calls[mockSet.mock.calls.length - 1]![0] as Record<string, unknown>;
+      const setArg = mockSet.mock.calls[mockSet.mock.calls.length - 1]![0] as Record<
+        string,
+        unknown
+      >;
       expect(setArg['editedSinceInterpretation']).toBe(true);
       expect(setArg['syncStatus']).toBe('local');
     });
@@ -138,7 +147,10 @@ describe('dreamRepository', () => {
     it('does not set editedSinceInterpretation when only occurredAt changes', async () => {
       await updateDream('dream-1', { occurredAt: '2026-08-02T00:00:00.000Z' });
 
-      const setArg = mockSet.mock.calls[mockSet.mock.calls.length - 1]![0] as Record<string, unknown>;
+      const setArg = mockSet.mock.calls[mockSet.mock.calls.length - 1]![0] as Record<
+        string,
+        unknown
+      >;
       expect(setArg['editedSinceInterpretation']).toBeUndefined();
     });
   });
@@ -149,7 +161,10 @@ describe('dreamRepository', () => {
       mockSet.mockClear();
       await deleteDream('dream-1');
 
-      const setArg = mockSet.mock.calls[mockSet.mock.calls.length - 1]![0] as Record<string, unknown>;
+      const setArg = mockSet.mock.calls[mockSet.mock.calls.length - 1]![0] as Record<
+        string,
+        unknown
+      >;
       expect(setArg['isDeleted']).toBe(true);
       expect(setArg['syncStatus']).toBe('local');
       expect(typeof setArg['lastModifiedAt']).toBe('string');

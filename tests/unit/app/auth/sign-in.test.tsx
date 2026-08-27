@@ -109,7 +109,15 @@ describe('SignInScreen', () => {
     const authService = new MockAuthService();
     let resolveSignIn: () => void = () => {};
     jest.spyOn(authService, 'signInWithEmail').mockImplementation(
-      () => new Promise(resolve => { resolveSignIn = () => resolve({ user: { id: 'x', email: 'x', provider: 'email' }, accessToken: 't', expiresAt: 0 }); })
+      () =>
+        new Promise(resolve => {
+          resolveSignIn = () =>
+            resolve({
+              user: { id: 'x', email: 'x', provider: 'email' },
+              accessToken: 't',
+              expiresAt: 0,
+            });
+        })
     );
     const { getByText, getByPlaceholderText } = renderScreen(authService);
 

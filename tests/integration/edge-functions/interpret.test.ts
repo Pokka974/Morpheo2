@@ -18,9 +18,7 @@ const source = readFile('supabase/functions/interpret/index.ts');
  * only — otherwise a comment explaining *why* a thing is absent trips the very check that
  * enforces its absence.
  */
-const code = source
-  .replace(/\/\*[\s\S]*?\*\//g, '')
-  .replace(/(^|[^:])\/\/.*$/gm, '$1');
+const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 describe('interpret Edge Function model pinning', () => {
   it('declares the model id exactly once, as a constant', () => {

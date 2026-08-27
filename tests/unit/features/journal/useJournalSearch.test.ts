@@ -14,7 +14,12 @@ jest.mock('drizzle-orm', () => ({
 }));
 
 const mockRows = [
-  { id: 'd1', description: 'Flying over water at dusk', occurredAt: '2026-08-10', syncStatus: 'synced' },
+  {
+    id: 'd1',
+    description: 'Flying over water at dusk',
+    occurredAt: '2026-08-10',
+    syncStatus: 'synced',
+  },
   { id: 'd2', description: 'Standing in a forest', occurredAt: '2026-08-09', syncStatus: 'local' },
 ];
 
@@ -40,7 +45,9 @@ describe('useJournalSearch', () => {
     act(() => result.current.search('water'));
     expect(mockAll).not.toHaveBeenCalled();
 
-    await act(async () => { jest.advanceTimersByTime(300); });
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
     expect(mockAll).toHaveBeenCalledTimes(1);
   });
 
@@ -48,7 +55,9 @@ describe('useJournalSearch', () => {
     const { result } = renderHook(() => useJournalSearch());
 
     act(() => result.current.search('water'));
-    await act(async () => { jest.advanceTimersByTime(300); });
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
 
     expect(result.current.results).toHaveLength(2);
   });
@@ -63,7 +72,9 @@ describe('useJournalSearch', () => {
     const { result } = renderHook(() => useJournalSearch());
 
     act(() => result.current.search('water'));
-    await act(async () => { jest.advanceTimersByTime(300); });
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
     expect(result.current.results).not.toBeNull();
 
     act(() => result.current.clearSearch());

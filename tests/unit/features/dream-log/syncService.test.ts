@@ -142,7 +142,9 @@ describe('syncPendingDreams', () => {
   it('syncs a dream with an unreadable emotions payload as empty, rather than stalling the queue', async () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      mockGetPendingDreams.mockResolvedValue([makeDream({ id: 'dream-bad', emotions: 'not json' })]);
+      mockGetPendingDreams.mockResolvedValue([
+        makeDream({ id: 'dream-bad', emotions: 'not json' }),
+      ]);
       mockUpsert.mockResolvedValue({ error: null });
 
       await syncPendingDreams();
@@ -250,7 +252,11 @@ describe('syncPendingDreams', () => {
       { dreamId: 'dream-x', error: expect.objectContaining({ message: 'constraint violation' }) },
     ]);
     expect(mockMarkSynced).not.toHaveBeenCalled();
-    expect(consoleErrorSpy).toHaveBeenCalledWith('Dream sync failed for', 'dream-x', expect.anything());
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Dream sync failed for',
+      'dream-x',
+      expect.anything()
+    );
   });
 
   it('reports which dreams did reach the server', async () => {

@@ -14,15 +14,26 @@ serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders });
+  if (!authHeader)
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401,
+      headers: corsHeaders,
+    });
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const userClient = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
     global: { headers: { Authorization: authHeader } },
   });
 
-  const { data: { user }, error: authError } = await userClient.auth.getUser();
-  if (authError || !user) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders });
+  const {
+    data: { user },
+    error: authError,
+  } = await userClient.auth.getUser();
+  if (authError || !user)
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401,
+      headers: corsHeaders,
+    });
 
   // Server-side entitlement check — video is premium-only
   const { data: entitlement } = await supabase
@@ -32,12 +43,18 @@ serve(async (req: Request) => {
     .single();
 
   if (!entitlement || entitlement.subscription_tier !== 'premium') {
-    return new Response(JSON.stringify({ error: 'premium_required' }), { status: 403, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'premium_required' }), {
+      status: 403,
+      headers: corsHeaders,
+    });
   }
 
   const { dreamId, description, keywords } = await req.json();
   if (!dreamId || !description) {
-    return new Response(JSON.stringify({ error: 'missing_fields' }), { status: 400, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'missing_fields' }), {
+      status: 400,
+      headers: corsHeaders,
+    });
   }
 
   const keywordStr = keywords?.length ? ` Symbols: ${keywords.slice(0, 4).join(', ')}.` : '';
@@ -58,14 +75,17 @@ serve(async (req: Request) => {
     .single();
 
   if (insertError || !media) {
-    return new Response(JSON.stringify({ error: 'record_failed' }), { status: 503, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'record_failed' }), {
+      status: 503,
+      headers: corsHeaders,
+    });
   }
 
   // Submit to Luma Dream Machine — MUST include do_not_train per constitution Principle III
   const lumaResponse = await fetch('https://api.lumalabs.ai/dream-machine/v2/generations', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${LUMA_API_KEY}`,
+      Authorization: `Bearer ${LUMA_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -77,8 +97,14 @@ serve(async (req: Request) => {
   });
 
   if (!lumaResponse.ok) {
-    await supabase.from('media').update({ generation_status: 'failed', error_message: 'Luma API error' }).eq('id', media.id);
-    return new Response(JSON.stringify({ error: 'generation_failed' }), { status: 503, headers: corsHeaders });
+    await supabase
+      .from('media')
+      .update({ generation_status: 'failed', error_message: 'Luma API error' })
+      .eq('id', media.id);
+    return new Response(JSON.stringify({ error: 'generation_failed' }), {
+      status: 503,
+      headers: corsHeaders,
+    });
   }
 
   const lumaData = await lumaResponse.json();
@@ -99,13 +125,19 @@ serve(async (req: Request) => {
     .single();
 
   if (jobError || !job) {
-    return new Response(JSON.stringify({ error: 'job_record_failed' }), { status: 503, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'job_record_failed' }), {
+      status: 503,
+      headers: corsHeaders,
+    });
   }
 
-  return new Response(JSON.stringify({
-    jobId: job.id,
-    mediaId: media.id,
-    status: 'queued',
-    estimatedDurationSeconds: 120,
-  }), { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  return new Response(
+    JSON.stringify({
+      jobId: job.id,
+      mediaId: media.id,
+      status: 'queued',
+      estimatedDurationSeconds: 120,
+    }),
+    { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
 });

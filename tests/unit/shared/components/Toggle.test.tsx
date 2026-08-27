@@ -42,7 +42,7 @@ describe('Toggle', () => {
     );
   });
 
-  it('tints with amber when highlighted — the lucid marker is one of amber\'s two uses', () => {
+  it("tints with amber when highlighted — the lucid marker is one of amber's two uses", () => {
     const { getByLabelText } = render(
       <Toggle label="Lucid dream" value onValueChange={jest.fn()} highlight />
     );

@@ -65,9 +65,7 @@ describe('layoutNodes', () => {
   });
 
   it('keeps every star inside the viewBox', () => {
-    const many = Array.from({ length: 12 }, (_, i) =>
-      node(`n${i}`, `t${i}`, 12 - i, [`d${i}`])
-    );
+    const many = Array.from({ length: 12 }, (_, i) => node(`n${i}`, `t${i}`, 12 - i, [`d${i}`]));
     for (const placed of layoutNodes(many)) {
       expect(placed.x).toBeGreaterThanOrEqual(0);
       expect(placed.x).toBeLessThanOrEqual(340);
@@ -99,10 +97,7 @@ describe('deriveEdges', () => {
   });
 
   it('weights an edge by the number of shared dreams', () => {
-    const pair = [
-      node('a', 'one', 3, ['d1', 'd2', 'd3']),
-      node('b', 'two', 3, ['d1', 'd2']),
-    ];
+    const pair = [node('a', 'one', 3, ['d1', 'd2', 'd3']), node('b', 'two', 3, ['d1', 'd2'])];
     expect(deriveEdges(pair)).toEqual([{ from: 'a', to: 'b', weight: 2 }]);
   });
 
@@ -184,9 +179,7 @@ describe('<ConstellationChart />', () => {
   });
 
   it('keeps only one selection at a time', () => {
-    const { getByLabelText, getByText, queryByText } = render(
-      <ConstellationChart nodes={THREE} />
-    );
+    const { getByLabelText, getByText, queryByText } = render(<ConstellationChart nodes={THREE} />);
 
     fireEvent.press(getByLabelText('flying — 12 dreams'));
     fireEvent.press(getByLabelText('water — 9 dreams'));

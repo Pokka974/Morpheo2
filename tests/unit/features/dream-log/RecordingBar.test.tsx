@@ -5,9 +5,7 @@ import { RecordingBar } from '@features/dream-log/RecordingBar';
 
 describe('RecordingBar', () => {
   it('formats the elapsed time as minutes and padded seconds', () => {
-    const { getByText, rerender } = render(
-      <RecordingBar elapsedSeconds={42} onStop={jest.fn()} />
-    );
+    const { getByText, rerender } = render(<RecordingBar elapsedSeconds={42} onStop={jest.fn()} />);
     expect(getByText('0:42')).toBeTruthy();
 
     rerender(<RecordingBar elapsedSeconds={65} onStop={jest.fn()} />);

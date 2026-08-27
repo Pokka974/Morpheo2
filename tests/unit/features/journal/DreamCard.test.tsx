@@ -105,10 +105,7 @@ describe('<DreamCard /> compact', () => {
   });
 
   it('shows a single leading emotion chip', () => {
-    const { getByText, queryByText } = renderCard(
-      { emotions: ['calm', 'wonder'] },
-      'compact'
-    );
+    const { getByText, queryByText } = renderCard({ emotions: ['calm', 'wonder'] }, 'compact');
     expect(getByText('calm')).toBeTruthy();
     expect(queryByText('wonder')).toBeNull();
   });
@@ -120,12 +117,8 @@ describe('<DreamCard /> compact', () => {
   });
 
   it('badges a nightmare but not an ordinary type tag', () => {
-    expect(
-      renderCard({ dreamType: ['nightmare'] }, 'compact').getByText('Nightmare')
-    ).toBeTruthy();
-    expect(
-      renderCard({ dreamType: ['flying'] }, 'compact').queryByText('Nightmare')
-    ).toBeNull();
+    expect(renderCard({ dreamType: ['nightmare'] }, 'compact').getByText('Nightmare')).toBeTruthy();
+    expect(renderCard({ dreamType: ['flying'] }, 'compact').queryByText('Nightmare')).toBeNull();
   });
 
   it('shows clarity dots on the compact row when clarity is set', () => {
