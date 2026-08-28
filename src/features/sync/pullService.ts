@@ -112,30 +112,47 @@ export async function pullRemoteChanges(
  * is deliberately not persisted — it expires within the hour, whereas the cached file
  * keeps working offline and is managed by the same 200MB eviction cap as any other
  * cached media.
+ *
+ * A recorded path is *not* taken as proof that the bytes are still there, which is why
+ * this no longer filters on `local_cache_path IS NULL`. The cache lives under the OS
+ * cache directory, and that file disappears behind the row's back in two ordinary
+ * situations: iOS purges `Library/Caches` under storage pressure whenever it likes,
+ * and the absolute path embeds an app-container id that is regenerated when the app
+ * is reinstalled. Either way the row keeps a non-null path pointing at nothing, and
+ * filtering on null meant hydration skipped exactly the rows that needed repair — the
+ * image stayed blank permanently, with no sync cycle able to recover it. Checking the
+ * filesystem costs one stat per row and makes the pass self-healing.
  */
 async function hydrateMediaCache(deps: MediaCacheDeps): Promise<void> {
+  // Every candidate, not the newest N. The limit now bounds *downloads* rather than
+  // rows considered: since a row needing repair is no longer identifiable in SQL —
+  // only the filesystem knows — a `LIMIT` here would keep re-examining the same
+  // newest images and never reach an older one whose file went missing.
   const rows = await sqlite.getAllAsync<{ id: string }>(
     `SELECT id FROM media
       WHERE media_type = 'image'
         AND generation_status = 'complete'
         AND storage_key IS NOT NULL
-        AND local_cache_path IS NULL
-      ORDER BY created_at DESC
-      LIMIT ?`,
-    HYDRATION_LIMIT
+      ORDER BY created_at DESC`
   );
 
+  let downloaded = 0;
   for (const row of rows) {
+    if (downloaded >= HYDRATION_LIMIT) break;
     try {
+      // Cheap and local — and it is what separates "already cached" from "recorded
+      // as cached but gone". Only the latter needs the network round-trip below.
+      if (await deps.isCached(row.id)) continue;
       const signedUrl = await deps.getSignedUrl(row.id);
       const localPath = await deps.cacheMedia(row.id, signedUrl);
+      downloaded += 1;
       await sqlite.runAsync(`UPDATE media SET local_cache_path = ? WHERE id = ?`, [
         localPath,
         row.id,
       ]);
     } catch (err) {
       // One unreachable object must not strand the rest of the batch. The row keeps
-      // its null cache path, so the next sync cycle simply tries it again.
+      // its existing cache path, so the next sync cycle simply tries it again.
       console.error(`Failed to cache media ${row.id}:`, err);
     }
   }

@@ -136,6 +136,68 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** What the pinch/pan callbacks need from the component to move the window. */
+export interface ViewportGestureDeps {
+  /** The live viewport — read at gesture start, never captured at build time. */
+  getView: () => Viewport;
+  /** Rendered width of the frame in screen pixels, for the pan conversion. */
+  getFrameWidth: () => number;
+  setView: (next: Viewport) => void;
+  /**
+   * Panning is only enabled once zoomed in. At 1x the whole sky is already
+   * visible, so claiming the drag would only steal the vertical scroll from the
+   * Insights list underneath.
+   */
+  panEnabled: boolean;
+}
+
+/**
+ * Builds the pinch + pan gestures that move the window.
+ *
+ * `.runOnJS(true)` is load-bearing, not a stylistic choice. The Reanimated Babel
+ * plugin auto-workletises any callback chained off a `Gesture.*` object, so
+ * without it these run on the UI thread — where calling a React setState or
+ * mutating a JS ref throws and takes the app down on the first pinch. Every
+ * callback here drives React state (the viewBox string is re-rendered, nothing is
+ * animated on the UI thread), so the JS thread is where they belong; saying so
+ * explicitly also silences RNGH's mixed-worklet error.
+ */
+export function createViewportGestures(deps: ViewportGestureDeps) {
+  // Captured once per gesture so a stream of updates composes against the
+  // viewport the finger started from, not the one the last frame produced.
+  let start: Viewport = deps.getView();
+
+  const pinch = Gesture.Pinch()
+    .runOnJS(true)
+    .onBegin(() => {
+      start = deps.getView();
+    })
+    .onUpdate(e => {
+      deps.setView(zoomAbout(start, start.zoom * e.scale));
+    });
+
+  const pan = Gesture.Pan()
+    .runOnJS(true)
+    .enabled(deps.panEnabled)
+    // Let a tap on a star through — the stars are what the chart is for.
+    .minDistance(8)
+    .onBegin(() => {
+      start = deps.getView();
+    })
+    .onUpdate(e => {
+      const unitsPerPx = VIEWBOX_WIDTH / start.zoom / Math.max(deps.getFrameWidth(), 1);
+      deps.setView(
+        clampViewport({
+          ...start,
+          minX: start.minX - e.translationX * unitsPerPx,
+          minY: start.minY - e.translationY * unitsPerPx,
+        })
+      );
+    });
+
+  return Gesture.Simultaneous(pinch, pan);
+}
+
 /** Two themes are linked when they appeared in at least one dream together. */
 export function deriveEdges(
   nodes: ConstellationNode[]
@@ -161,59 +223,36 @@ export function ConstellationChart({
   const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<Viewport>(INITIAL_VIEWPORT);
-  // Rendered width of the frame, so a pan in screen pixels can be converted into
-  // the viewBox units the window actually moves by.
-  const [framePx, setFramePx] = useState(VIEWBOX_WIDTH);
 
-  const gestureStart = useRef(INITIAL_VIEWPORT);
+  // Read by the gesture callbacks, which are built once and must never close over
+  // a stale render: rebuilding them on every frame of a pinch would re-attach the
+  // handlers mid-gesture.
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  // Rendered width of the frame, so a pan in screen pixels can be converted into
+  // the viewBox units the window actually moves by. A ref, not state — only the
+  // gesture reads it, and a layout pass should not re-render the sky.
+  const framePx = useRef(VIEWBOX_WIDTH);
 
   const placed = useMemo(() => layoutNodes(nodes), [nodes]);
   const edges = useMemo(() => deriveEdges(nodes), [nodes]);
   const byId = useMemo(() => new Map(placed.map(n => [n.id, n])), [placed]);
   const maxWeight = useMemo(() => Math.max(1, ...edges.map(e => e.weight)), [edges]);
 
-  const pinch = useMemo(
-    () =>
-      Gesture.Pinch()
-        .onBegin(() => {
-          gestureStart.current = view;
-        })
-        .onUpdate(e => {
-          setView(zoomAbout(gestureStart.current, gestureStart.current.zoom * e.scale));
-        }),
-    [view]
-  );
-
-  /**
-   * Panning is only enabled once zoomed in. At 1× the whole sky is already
-   * visible, so claiming the drag would only steal the vertical scroll from the
-   * Insights list underneath.
-   */
-  const pan = useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(view.zoom > MIN_ZOOM)
-        // Let a tap on a star through — the stars are what the chart is for.
-        .minDistance(8)
-        .onBegin(() => {
-          gestureStart.current = view;
-        })
-        .onUpdate(e => {
-          const unitsPerPx = VIEWBOX_WIDTH / view.zoom / Math.max(framePx, 1);
-          setView(
-            clampViewport({
-              ...gestureStart.current,
-              minX: gestureStart.current.minX - e.translationX * unitsPerPx,
-              minY: gestureStart.current.minY - e.translationY * unitsPerPx,
-            })
-          );
-        }),
-    [view, framePx]
-  );
-
-  const gesture = useMemo(() => Gesture.Simultaneous(pinch, pan), [pinch, pan]);
-
   const isZoomed = view.zoom > MIN_ZOOM;
+
+  // Rebuilt only when panning is switched on or off, never on every frame of a
+  // gesture: the callbacks reach the current viewport through the ref instead.
+  const gesture = useMemo(
+    () =>
+      createViewportGestures({
+        getView: () => viewRef.current,
+        getFrameWidth: () => framePx.current,
+        setView,
+        panEnabled: isZoomed,
+      }),
+    [isZoomed]
+  );
   const windowWidth = VIEWBOX_WIDTH / view.zoom;
   const windowHeight = VIEWBOX_HEIGHT / view.zoom;
 
@@ -236,7 +275,9 @@ export function ConstellationChart({
       <GestureDetector gesture={gesture}>
         <View
           style={styles.svgFrame}
-          onLayout={e => setFramePx(e.nativeEvent.layout.width)}
+          onLayout={e => {
+            framePx.current = e.nativeEvent.layout.width;
+          }}
           collapsable={false}
         >
           <Svg

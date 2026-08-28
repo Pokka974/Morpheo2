@@ -192,13 +192,14 @@ describe('dreamRepository', () => {
   });
 
   describe('purgeDreamLocally', () => {
-    // Only `removeCachedMedia` is read here; the other two members exist to satisfy
+    // Only `removeCachedMedia` is read here; the other members exist to satisfy
     // MediaCacheDeps and would only couple this test to the hydration path.
     const removeCachedMedia = jest.fn<Promise<void>, [string]>();
     const deps: MediaCacheDeps = {
       getSignedUrl: async () => '',
       cacheMedia: async () => '',
       removeCachedMedia,
+      isCached: async () => false,
     };
 
     beforeEach(() => {

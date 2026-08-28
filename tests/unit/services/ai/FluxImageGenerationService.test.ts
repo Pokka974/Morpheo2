@@ -29,8 +29,12 @@ const testRequest = {
 describe('FluxImageGenerationService', () => {
   let service: FluxImageGenerationService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     service = new FluxImageGenerationService(mockStorage);
+    // The mock keeps a real cache map, and it now decides whether a recorded
+    // `local_cache_path` is honoured — so leaking it between tests would let one
+    // case's download satisfy another's "is this file present?" check.
+    await mockStorage.clearCache();
     jest.clearAllMocks();
     (sqlite.runAsync as jest.Mock)
       .mockReset()
@@ -322,6 +326,8 @@ describe('FluxImageGenerationService', () => {
     });
 
     it('does not sign a row that already has a cached file, so an offline read stays offline', async () => {
+      // The file has to actually be there — a recorded path alone is no longer enough.
+      await mockStorage.cacheMedia('media-001', 'https://example.com/signed.png');
       (sqlite.getFirstAsync as jest.Mock).mockResolvedValue({
         id: 'media-001',
         dream_id: 'dream-001',
@@ -338,6 +344,40 @@ describe('FluxImageGenerationService', () => {
       await service.getImage('dream-001');
 
       expect(mockInvoke).not.toHaveBeenCalled();
+    });
+
+    // iOS may purge the cache directory whenever it likes, and its absolute path
+    // embeds an app-container id that changes on reinstall — so the row can name a
+    // file that is simply not there. Consumers read `localCachePath ?? signedUrl`,
+    // so the dead path has to be cleared or it would mask the fallback and leave
+    // the image permanently blank.
+    it('signs and clears the recorded path when the cached file is gone', async () => {
+      (sqlite.getFirstAsync as jest.Mock).mockResolvedValue({
+        id: 'media-001',
+        dream_id: 'dream-001',
+        media_type: 'image',
+        generation_status: 'complete',
+        local_cache_path: '/stale/container/img.jpg',
+        regeneration_count: 0,
+        max_regenerations: 3,
+        error_message: null,
+        created_at: '2026-08-14T00:00:00Z',
+        updated_at: '2026-08-14T00:00:00Z',
+      });
+      mockInvoke.mockResolvedValueOnce({
+        data: { signedUrl: 'https://example.com/signed.png' },
+        error: null,
+      });
+
+      const result = await service.getImage('dream-001');
+
+      expect(mockInvoke).toHaveBeenCalledWith('media-url', { body: { mediaId: 'media-001' } });
+      expect(result).toEqual(
+        expect.objectContaining({
+          localCachePath: null,
+          signedUrl: 'https://example.com/signed.png',
+        })
+      );
     });
 
     it('does not sign a row that has no object behind it yet', async () => {

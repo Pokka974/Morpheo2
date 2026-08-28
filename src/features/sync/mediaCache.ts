@@ -15,6 +15,11 @@ export interface MediaCacheDeps {
   /** Used when a cached file is superseded (regeneration) or the dream it belongs
    * to is purged — see `StorageService.removeCachedMedia`. */
   removeCachedMedia(mediaId: string): Promise<void>;
+  /** Whether the bytes are actually on this device *right now*. A recorded
+   * `local_cache_path` is not proof of that: the cache lives under the OS cache
+   * directory, which iOS may purge whenever it wants and whose absolute path
+   * contains an app-container id that changes when the app is reinstalled. */
+  isCached(mediaId: string): Promise<boolean>;
 }
 
 export function makeMediaCache(services: ServiceRegistry): MediaCacheDeps {
@@ -22,5 +27,6 @@ export function makeMediaCache(services: ServiceRegistry): MediaCacheDeps {
     getSignedUrl: mediaId => services.imageGeneration.getSignedUrl(mediaId),
     cacheMedia: (mediaId, signedUrl) => services.storage.cacheMedia(mediaId, signedUrl),
     removeCachedMedia: mediaId => services.storage.removeCachedMedia(mediaId),
+    isCached: mediaId => services.storage.isCached(mediaId),
   };
 }

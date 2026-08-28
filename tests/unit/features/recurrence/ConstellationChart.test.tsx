@@ -4,11 +4,14 @@ import { render, fireEvent } from '@testing-library/react-native';
 import {
   ConstellationChart,
   clampViewport,
+  createViewportGestures,
   deriveEdges,
+  INITIAL_VIEWPORT as INITIAL,
   layoutNodes,
   scaleRadius,
   zoomAbout,
   type ConstellationNode,
+  type Viewport,
 } from '@features/recurrence/ConstellationChart';
 
 function node(
@@ -137,6 +140,77 @@ describe('viewport', () => {
     // Centred on the top-left corner, then zoomed out: the window cannot follow.
     const view = zoomAbout({ minX: 0, minY: 0, zoom: 4 }, 1);
     expect(view).toEqual({ minX: 0, minY: 0, zoom: 1 });
+  });
+});
+
+describe('viewport gestures', () => {
+  /** The gesture callbacks, reached the way GestureDetector reaches them. */
+  function build(view: Viewport, panEnabled = view.zoom > 1) {
+    const setView = jest.fn();
+    let current = view;
+    const gesture = createViewportGestures({
+      getView: () => current,
+      getFrameWidth: () => 340,
+      setView: next => {
+        current = next;
+        setView(next);
+      },
+      panEnabled,
+    });
+    const [pinch, pan] = gesture.toGestureArray() as unknown as Array<{
+      config: { runOnJS?: boolean; enabled?: boolean };
+      handlers: {
+        onBegin?: (e: unknown) => void;
+        onUpdate?: (e: unknown) => void;
+      };
+    }>;
+    return { pinch: pinch!, pan: pan!, setView };
+  }
+
+  it('runs every callback on the JS thread', () => {
+    // The Reanimated Babel plugin workletises anything chained off `Gesture.*`,
+    // and a worklet calling setState on the UI thread crashes the app the moment
+    // two fingers touch the sky. `.runOnJS(true)` is what keeps them on JS.
+    const { pinch, pan } = build(INITIAL);
+    expect(pinch.config.runOnJS).toBe(true);
+    expect(pan.config.runOnJS).toBe(true);
+  });
+
+  it('zooms about the centre as the pinch scales', () => {
+    const { pinch, setView } = build(INITIAL);
+
+    pinch.handlers.onBegin?.({});
+    pinch.handlers.onUpdate?.({ scale: 2 });
+
+    expect(setView).toHaveBeenLastCalledWith(zoomAbout(INITIAL, 2));
+  });
+
+  it('composes each update against the viewport the pinch started from', () => {
+    // Not against the previous frame: scale is cumulative, so folding it in twice
+    // would run away to the cap after a couple of frames.
+    const { pinch, setView } = build(INITIAL);
+
+    pinch.handlers.onBegin?.({});
+    pinch.handlers.onUpdate?.({ scale: 2 });
+    pinch.handlers.onUpdate?.({ scale: 2 });
+
+    expect(setView).toHaveBeenLastCalledWith(zoomAbout(INITIAL, 2));
+  });
+
+  it('leaves panning off at 1x, so the Insights list keeps its scroll', () => {
+    expect(build(INITIAL).pan.config.enabled).toBe(false);
+    expect(build({ minX: 0, minY: 0, zoom: 2 }).pan.config.enabled).toBe(true);
+  });
+
+  it('converts a drag in screen pixels into viewBox units', () => {
+    const start: Viewport = { minX: 85, minY: 67, zoom: 2 };
+    const { pan, setView } = build(start);
+
+    pan.handlers.onBegin?.({});
+    // The frame is 340px wide and the window 170 units, so a 34px drag moves 17.
+    pan.handlers.onUpdate?.({ translationX: 34, translationY: 0 });
+
+    expect(setView).toHaveBeenLastCalledWith(clampViewport({ ...start, minX: start.minX - 17 }));
   });
 });
 

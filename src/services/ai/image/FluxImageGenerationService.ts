@@ -172,13 +172,23 @@ export class FluxImageGenerationService implements ImageGenerationService {
    * back to a short-lived signed URL displays it right away; the sync layer's
    * hydration pass caches the bytes properly in the background.
    *
+   * A recorded path is checked against the filesystem rather than trusted, because the
+   * two are allowed to disagree: the cache sits under the OS cache directory, which
+   * iOS purges under storage pressure, and whose absolute path embeds an app-container
+   * id that changes when the app is reinstalled. The consumers read
+   * `localCachePath ?? signedUrl`, so leaving a stale path in place would keep handing
+   * them a `file://` URI pointing at nothing *and* suppress the signed-URL fallback —
+   * a permanently blank image. Clearing it here restores that fallback; the sync
+   * layer's hydration pass repairs the row itself.
+   *
    * Signing is best-effort — a failure leaves both URLs null and the caller shows its
    * placeholder, rather than failing the whole read for a missing thumbnail.
    */
   private async withDisplayUrl(media: MediaResult): Promise<MediaResult> {
-    if (media.localCachePath || media.generationStatus !== 'complete') return media;
+    if (media.generationStatus !== 'complete') return media;
+    if (media.localCachePath && (await this.storage.isCached(media.id))) return media;
     try {
-      return { ...media, signedUrl: await this.getSignedUrl(media.id) };
+      return { ...media, localCachePath: null, signedUrl: await this.getSignedUrl(media.id) };
     } catch (err) {
       console.error(`Failed to sign media ${media.id} for display:`, err);
       return media;
