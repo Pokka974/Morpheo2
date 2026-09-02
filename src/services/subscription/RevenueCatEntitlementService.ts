@@ -61,7 +61,7 @@ export class RevenueCatEntitlementService implements EntitlementService {
       return false;
     }
 
-    if (!PUBLIC_SDK_KEY_PREFIXES.some((prefix) => apiKey.startsWith(prefix))) {
+    if (!PUBLIC_SDK_KEY_PREFIXES.some(prefix => apiKey.startsWith(prefix))) {
       // Warn rather than refuse: RevenueCat can mint a prefix this list has not caught
       // up with, and the SDK is the real authority on what it accepts.
       console.warn(
