@@ -98,8 +98,6 @@ jest.mock('@services/notifications/ExpoNotificationService', () => ({
 import RootLayout from '@app/_layout';
 
 describe('RootLayout / AppNavigator', () => {
-  const originalRcKey = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'];
-
   beforeEach(() => {
     jest.clearAllMocks();
     mockSegments.mockReturnValue(['(main)']);
@@ -114,12 +112,6 @@ describe('RootLayout / AppNavigator', () => {
     // for the existing lock/navigation/cache-eviction tests below; the dedicated
     // foreground-sync test overrides this.
     mockAuthServiceGetSession.mockResolvedValue(null);
-    delete process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'];
-  });
-
-  afterAll(() => {
-    if (originalRcKey === undefined) delete process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'];
-    else process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'] = originalRcKey;
   });
 
   it('navigates to onboarding when onboarding_complete is not set', async () => {
@@ -188,17 +180,12 @@ describe('RootLayout / AppNavigator', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('configures RevenueCat when the API key env var is set', async () => {
-    process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'] = 'test-rc-key';
+  // Which env var holds the key, and whether it is a usable one, is RevenueCat's own
+  // concern and is asserted in RevenueCatEntitlementService.test.ts. The layout's only
+  // responsibility is to ask, once, on mount.
+  it('configures RevenueCat on mount', async () => {
     render(<RootLayout />);
-    await waitFor(() => expect(mockConfigureRC).toHaveBeenCalledWith('test-rc-key'));
-  });
-
-  it('does not configure RevenueCat when the API key env var is absent', async () => {
-    delete process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'];
-    render(<RootLayout />);
-    await waitFor(() => expect(mockReplace).toHaveBeenCalled());
-    expect(mockConfigureRC).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockConfigureRC).toHaveBeenCalledTimes(1));
   });
 
   it('pushes pending dreams then pulls remote changes when the app foregrounds with an active session', async () => {

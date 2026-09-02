@@ -1,11 +1,78 @@
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
+import { Platform } from 'react-native';
 import { supabase } from '../../supabase/client';
 import type { EntitlementService, Entitlement } from '../entitlement/EntitlementService';
 
+/**
+ * RevenueCat issues a public SDK key per *app*, not per project — the App Store app
+ * yields an `appl_` key and the Play Store app a `goog_` one — so one shared variable
+ * could only ever be correct on one of the two platforms.
+ */
+const PLATFORM_KEY_VARS = {
+  ios: 'EXPO_PUBLIC_REVENUECAT_IOS_KEY',
+  android: 'EXPO_PUBLIC_REVENUECAT_ANDROID_KEY',
+} as const;
+
+/**
+ * The public keys `Purchases.configure()` accepts: one per store, plus `test_` — the
+ * project-wide Test Store key RevenueCat issues before any store app is configured.
+ * The Test Store key is the same on both platforms, so until real app configurations
+ * exist, both platform variables below hold it.
+ */
+const PUBLIC_SDK_KEY_PREFIXES = ['appl_', 'goog_', 'amzn_', 'mkpl_', 'rcb_', 'test_'];
+
+/**
+ * A RevenueCat *secret* key. `EXPO_PUBLIC_*` values are inlined into the JS bundle at
+ * build time, so one of these reaching configure() means it has also been compiled
+ * into an extractable form in the binary — refuse it rather than ship it.
+ */
+const SECRET_KEY_PREFIX = 'sk_';
+
 export class RevenueCatEntitlementService implements EntitlementService {
-  static configure(apiKey: string) {
+  /**
+   * Hands this platform's public SDK key to the SDK. Returns whether it was configured,
+   * so a caller can tell "no key on this build" from "configured and ready".
+   *
+   * The key is read here rather than passed in: which variable holds it, and what a
+   * valid one looks like, are RevenueCat's concerns and belong behind its adapter.
+   */
+  static configure(): boolean {
+    const envVar = Platform.select(PLATFORM_KEY_VARS);
+    const apiKey: string | undefined = envVar
+      ? (process.env[envVar] as string | undefined)
+      : undefined;
+
+    if (!apiKey) {
+      // Not fatal — entitlement *reads* come from Supabase and stay correct. Only the
+      // paywall is dead, and silence is what let that go unnoticed for a release cycle.
+      console.warn(
+        `RevenueCat is not configured: ${envVar ?? `no key variable for platform ${Platform.OS}`} is unset. ` +
+          'Purchases and the premium price will be unavailable.'
+      );
+      return false;
+    }
+
+    if (apiKey.startsWith(SECRET_KEY_PREFIX)) {
+      console.error(
+        `${envVar} holds a RevenueCat SECRET key ("${SECRET_KEY_PREFIX}…"), which the SDK rejects ` +
+          'and which is compiled into the app bundle. Rotate it, then set the app-specific ' +
+          'public SDK key from Project Settings → Apps → [app] → App-specific key.'
+      );
+      return false;
+    }
+
+    if (!PUBLIC_SDK_KEY_PREFIXES.some(prefix => apiKey.startsWith(prefix))) {
+      // Warn rather than refuse: RevenueCat can mint a prefix this list has not caught
+      // up with, and the SDK is the real authority on what it accepts.
+      console.warn(
+        `${envVar} does not look like an app-specific public SDK key ` +
+          `(expected one of ${PUBLIC_SDK_KEY_PREFIXES.join(', ')}). Configuring anyway.`
+      );
+    }
+
     void Purchases.setLogLevel(LOG_LEVEL.ERROR);
     Purchases.configure({ apiKey });
+    return true;
   }
 
   async fetchEntitlement(): Promise<Entitlement> {

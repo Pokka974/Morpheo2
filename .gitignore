@@ -54,6 +54,12 @@ coverage/
 # Expo EAS
 .easignore
 
+# Local working aids — ranking and tooling, not project record.
+# BACKLOG.md ranks the open GitHub issues; the issues themselves stay the source
+# of truth. The hook re-ranks it whenever a PR is opened or merged.
+BACKLOG.md
+.claude/hooks/
+
 # Supabase local
 supabase/.branches/
 supabase/.temp/
