@@ -117,8 +117,7 @@ function AppNavigator({ onContentReady }: NavigatorProps) {
   useAuthSync(services.auth, services.notifications, mediaCache);
 
   useEffect(() => {
-    const rcKey = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'] as string | undefined;
-    if (rcKey) RevenueCatEntitlementService.configure(rcKey);
+    RevenueCatEntitlementService.configure();
     void initApp();
   }, []);
 

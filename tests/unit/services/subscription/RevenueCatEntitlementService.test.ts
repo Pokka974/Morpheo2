@@ -18,6 +18,20 @@ jest.mock('react-native-purchases', () => ({
   LOG_LEVEL: { ERROR: 'ERROR' },
 }));
 
+// `Platform.select` is hardcoded per platform file (Platform.ios.js always returns
+// `spec.ios`), so flipping `Platform.OS` is not enough to exercise the Android branch —
+// the module itself has to be swapped.
+let mockPlatformOS: 'ios' | 'android' = 'ios';
+jest.mock('react-native/Libraries/Utilities/Platform', () => ({
+  __esModule: true,
+  default: {
+    get OS() {
+      return mockPlatformOS;
+    },
+    select: (spec: Record<string, unknown>) => spec[mockPlatformOS],
+  },
+}));
+
 const mockSingle = jest.fn();
 const mockEq = jest.fn().mockReturnThis();
 
@@ -62,6 +76,81 @@ describe('RevenueCatEntitlementService', () => {
     service = new RevenueCatEntitlementService();
     jest.clearAllMocks();
     mockSingle.mockResolvedValue({ data: FREE_ENTITLEMENT, error: null });
+  });
+
+  describe('configure', () => {
+    const IOS_VAR = 'EXPO_PUBLIC_REVENUECAT_IOS_KEY';
+    const ANDROID_VAR = 'EXPO_PUBLIC_REVENUECAT_ANDROID_KEY';
+    const originalEnv = { ...process.env };
+
+    beforeEach(() => {
+      mockPlatformOS = 'ios';
+      delete process.env[IOS_VAR];
+      delete process.env[ANDROID_VAR];
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterAll(() => {
+      process.env = originalEnv;
+    });
+
+    it('configures the SDK with the iOS app-specific key on iOS', () => {
+      process.env[IOS_VAR] = 'appl_abc123';
+      process.env[ANDROID_VAR] = 'goog_xyz789';
+
+      expect(RevenueCatEntitlementService.configure()).toBe(true);
+      expect(mockConfigure).toHaveBeenCalledWith({ apiKey: 'appl_abc123' });
+    });
+
+    it('configures the SDK with the Android app-specific key on Android', () => {
+      mockPlatformOS = 'android';
+      process.env[IOS_VAR] = 'appl_abc123';
+      process.env[ANDROID_VAR] = 'goog_xyz789';
+
+      expect(RevenueCatEntitlementService.configure()).toBe(true);
+      expect(mockConfigure).toHaveBeenCalledWith({ apiKey: 'goog_xyz789' });
+    });
+
+    // The Test Store key is project-wide and is what a project with no store app
+    // configured has to offer — it must be accepted as cleanly as an `appl_` one.
+    it('accepts the project-wide Test Store key without warning', () => {
+      process.env[IOS_VAR] = 'test_vgWhzDzPRRGxdLLeaITcmBmqflA';
+
+      expect(RevenueCatEntitlementService.configure()).toBe(true);
+      expect(mockConfigure).toHaveBeenCalledWith({
+        apiKey: 'test_vgWhzDzPRRGxdLLeaITcmBmqflA',
+      });
+      expect(console.warn).not.toHaveBeenCalled();
+    });
+
+    // Issue #55: an `sk_` key here is both rejected by the SDK and compiled into the
+    // bundle, so it must never reach configure() — and must not fail quietly.
+    it('refuses a secret key and says so', () => {
+      process.env[IOS_VAR] = 'sk_SomeSecretValue';
+
+      expect(RevenueCatEntitlementService.configure()).toBe(false);
+      expect(mockConfigure).not.toHaveBeenCalled();
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('SECRET key'));
+    });
+
+    it('warns and does not configure when no key is set for the platform', () => {
+      expect(RevenueCatEntitlementService.configure()).toBe(false);
+      expect(mockConfigure).not.toHaveBeenCalled();
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(IOS_VAR));
+    });
+
+    // The SDK, not this list of prefixes, is the authority on what it accepts: an
+    // unrecognised prefix is worth flagging but not worth killing the paywall over.
+    it('warns but still configures when the prefix is unrecognised', () => {
+      process.env[IOS_VAR] = 'wat_unknownprefix';
+
+      expect(RevenueCatEntitlementService.configure()).toBe(true);
+      expect(mockConfigure).toHaveBeenCalledWith({ apiKey: 'wat_unknownprefix' });
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining('does not look like an app-specific public SDK key')
+      );
+    });
   });
 
   describe('fetchEntitlement', () => {

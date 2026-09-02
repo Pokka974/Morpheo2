@@ -65,7 +65,7 @@ morpheo/
 # Setup
 npm install
 cp .env.example .env.local      # fill EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY,
-                                  # EXPO_PUBLIC_REVENUECAT_API_KEY
+                                  # EXPO_PUBLIC_REVENUECAT_IOS_KEY / _ANDROID_KEY
 supabase secrets set ANTHROPIC_API_KEY=... FLUX_API_KEY=... \
   REVENUECAT_WEBHOOK_AUTH_HEADER=...   # Edge Function secrets, never in .env.local
 
