@@ -16,6 +16,14 @@ describe('InterpretationWaitingView', () => {
     expect(getByText('Crossing with your recurring themes')).toBeTruthy();
   });
 
+  it('puts Nox at the centre of the wait — her one appearance inside the app', () => {
+    const { getByTestId } = render(<InterpretationWaitingView />);
+
+    // Decorative, so she is hidden from assistive technology — which is also what RTL
+    // filters out by default; the wait screen announces itself as a progressbar instead.
+    expect(getByTestId('interpretation-nox', { includeHiddenElements: true })).toBeTruthy();
+  });
+
   it('says how many previous dreams the reading is crossed with', () => {
     const { getByText } = render(<InterpretationWaitingView previousDreamCount={84} />);
 

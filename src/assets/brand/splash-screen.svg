@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1179 2556" width="1179" height="2556">
+  <title>Morpheo — écran de lancement</title>
+  <defs>
+    <linearGradient id="splashG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c9a7f0"></stop><stop offset="1" stop-color="#7c5cbf"></stop></linearGradient>
+    <radialGradient id="splashBg" cx="0.5" cy="0.36" r="0.85">
+      <stop offset="0" stop-color="#231d4d"></stop>
+      <stop offset="0.55" stop-color="#13122b"></stop>
+      <stop offset="1" stop-color="#0d0d1a"></stop>
+    </radialGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#7c5cbf" stop-opacity="0.5"></stop>
+      <stop offset="1" stop-color="#7c5cbf" stop-opacity="0"></stop>
+    </radialGradient>
+  </defs>
+  <rect width="1179" height="2556" fill="url(#splashBg)"></rect>
+  <g fill="#f0eeff">
+    <circle cx="212" cy="486" r="2.4" opacity="0.5"></circle>
+    <circle cx="936" cy="612" r="3" opacity="0.42"></circle>
+    <circle cx="318" cy="1806" r="2.6" opacity="0.34"></circle>
+    <circle cx="864" cy="1932" r="2.2" opacity="0.46"></circle>
+    <circle cx="590" cy="342" r="2" opacity="0.3"></circle>
+  </g>
+  <circle cx="589.5" cy="1120" r="430" fill="url(#halo)"></circle>
+  <g transform="translate(421.5 952) scale(3.5)">
+    <circle cx="82" cy="18" r="3" fill="#e0a85c"></circle>
+    <circle cx="48" cy="48" r="36" fill="url(#splashG)"></circle>
+    <path d="M64.5 16 A36 36 0 0 1 64.5 80 A48 48 0 0 0 64.5 16 Z" fill="#0d0d1a" opacity="0.16"></path>
+    <path d="M18 44 q6 5.5 12 0" fill="none" stroke="#0d0d1a" stroke-width="3.2" stroke-linecap="round"></path>
+    <circle cx="22" cy="58" r="3" fill="#e0a85c" opacity="0.75"></circle>
+  </g>
+  <text x="589.5" y="1436" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-size="88" font-weight="500" fill="#f0eeff" letter-spacing="2">Morpheo</text>
+  <text x="589.5" y="1502" text-anchor="middle" font-family="Manrope, sans-serif" font-size="34" font-weight="400" fill="#8c8aa1" letter-spacing="6">JOURNAL DE RÊVES</text>
+</svg>

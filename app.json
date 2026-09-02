@@ -12,6 +12,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.morpheo.app",
+      "appleTeamId": "A46XFAFC78",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Morpheo uses Face ID to protect your dream journal."
       }
@@ -19,6 +20,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundImage": "./src/assets/adaptive-icon-background.png",
         "backgroundColor": "#0d0d1a"
       },
       "package": "com.morpheo.app",
@@ -37,6 +39,7 @@
       "favicon": "./src/assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withFreeTeamEntitlements",
       "expo-router",
       "expo-secure-store",
       [
@@ -71,7 +74,8 @@
       [
         "expo-splash-screen",
         {
-          "image": "./src/assets/splash.png",
+          "image": "./src/assets/splash-icon.png",
+          "imageWidth": 288,
           "resizeMode": "contain",
           "backgroundColor": "#0d0d1a"
         }

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Morpheo — icône de lancement</title>
+  <desc>
+    Nox seule, sur fond transparent. Le lettrage n'est pas ici : Android 12+ masque
+    l'icône de lancement en cercle, et le mot « Morpheo » n'y survivrait pas. Il est
+    rendu à l'exécution par BrandSplash.
+
+    Zone sûre : Android n'affiche que les deux tiers centraux, soit un rayon de 341 sur
+    ce canevas de 1024. Le point le plus éloigné du centre est l'étoile, à 48,35 unités
+    de la grille de 96 — d'où l'échelle 6,9, qui la pose à 334 et garde une marge
+    d'anticrénelage, et le décalage qui recentre la grille. Toucher à l'une sans
+    l'autre rogne l'étoile.
+  </desc>
+  <defs>
+    <linearGradient id="splashG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c9a7f0"></stop><stop offset="1" stop-color="#7c5cbf"></stop></linearGradient>
+  </defs>
+  <g transform="translate(180.8 180.8) scale(6.9)">
+    <circle cx="82" cy="18" r="3" fill="#e0a85c"></circle>
+    <circle cx="48" cy="48" r="36" fill="url(#splashG)"></circle>
+    <path d="M64.5 16 A36 36 0 0 1 64.5 80 A48 48 0 0 0 64.5 16 Z" fill="#0d0d1a" opacity="0.16"></path>
+    <path d="M18 44 q6 5.5 12 0" fill="none" stroke="#0d0d1a" stroke-width="3.2" stroke-linecap="round"></path>
+    <circle cx="22" cy="58" r="3" fill="#e0a85c" opacity="0.75"></circle>
+  </g>
+</svg>
