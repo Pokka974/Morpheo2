@@ -1065,7 +1065,9 @@ describe('pullRemoteChanges', () => {
 
     it('stops after the download budget so one sync cannot pull an entire library', async () => {
       mockFrom.mockImplementation(() => chainable(EMPTY));
-      mockGetAllAsync.mockResolvedValue(Array.from({ length: 40 }, (_, i) => ({ id: `media-${i}` })));
+      mockGetAllAsync.mockResolvedValue(
+        Array.from({ length: 40 }, (_, i) => ({ id: `media-${i}` }))
+      );
       mediaCache.isCached.mockResolvedValue(false);
 
       await pullRemoteChanges('user-1', mediaCache);
