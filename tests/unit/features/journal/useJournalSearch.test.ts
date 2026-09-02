@@ -59,12 +59,12 @@ describe('useJournalSearch', () => {
   });
 
   it('starts with null results', () => {
-    const { result } = renderHook(() => useJournalSearch());
+    const { result } = renderHook(() => useJournalSearch('user-1'));
     expect(result.current.results).toBeNull();
   });
 
   it('debounces search by 300ms', async () => {
-    const { result } = renderHook(() => useJournalSearch());
+    const { result } = renderHook(() => useJournalSearch('user-1'));
 
     act(() => result.current.search('water'));
     expect(mockExecuteSync).not.toHaveBeenCalled();
@@ -75,8 +75,34 @@ describe('useJournalSearch', () => {
     expect(mockExecuteSync).toHaveBeenCalledTimes(1);
   });
 
+  it('scopes the query to the signed-in account', async () => {
+    const { result } = renderHook(() => useJournalSearch('user-1'));
+
+    act(() => result.current.search('water'));
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+
+    // Local SQLite holds every account that has signed in on this device; without this
+    // a search matched the previous account's dreams too.
+    expect(mockPrepareSync).toHaveBeenCalledWith(expect.stringContaining('d.user_id = ?'));
+    expect(mockExecuteSync).toHaveBeenCalledWith(['user-1', '%water%', '%water%']);
+  });
+
+  it('runs no query at all until the session has resolved', async () => {
+    const { result } = renderHook(() => useJournalSearch(null));
+
+    act(() => result.current.search('water'));
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+
+    expect(mockExecuteSync).not.toHaveBeenCalled();
+    expect(result.current.results).toBeNull();
+  });
+
   it('returns search results after debounce', async () => {
-    const { result } = renderHook(() => useJournalSearch());
+    const { result } = renderHook(() => useJournalSearch('user-1'));
 
     act(() => result.current.search('water'));
     await act(async () => {
@@ -93,7 +119,7 @@ describe('useJournalSearch', () => {
    * it was searched for.
    */
   it('carries the thumbnail and the card markers through', async () => {
-    const { result } = renderHook(() => useJournalSearch());
+    const { result } = renderHook(() => useJournalSearch('user-1'));
 
     act(() => result.current.search('water'));
     await act(async () => {
@@ -113,7 +139,7 @@ describe('useJournalSearch', () => {
   });
 
   it('joins media and interpretations so the thumbnail is actually selectable', async () => {
-    const { result } = renderHook(() => useJournalSearch());
+    const { result } = renderHook(() => useJournalSearch('user-1'));
 
     act(() => result.current.search('water'));
     await act(async () => {
@@ -126,7 +152,7 @@ describe('useJournalSearch', () => {
   });
 
   it('finalizes the prepared statement, which runs once per debounced keystroke', async () => {
-    const { result } = renderHook(() => useJournalSearch());
+    const { result } = renderHook(() => useJournalSearch('user-1'));
 
     act(() => result.current.search('water'));
     await act(async () => {
@@ -137,13 +163,13 @@ describe('useJournalSearch', () => {
   });
 
   it('clears results when query is empty', () => {
-    const { result } = renderHook(() => useJournalSearch());
+    const { result } = renderHook(() => useJournalSearch('user-1'));
     act(() => result.current.search(''));
     expect(result.current.results).toBeNull();
   });
 
   it('clearSearch resets results to null', async () => {
-    const { result } = renderHook(() => useJournalSearch());
+    const { result } = renderHook(() => useJournalSearch('user-1'));
 
     act(() => result.current.search('water'));
     await act(async () => {

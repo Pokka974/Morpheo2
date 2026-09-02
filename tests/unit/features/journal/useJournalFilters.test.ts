@@ -56,14 +56,14 @@ describe('useJournalFilters', () => {
   });
 
   it('starts with no filters and null results', () => {
-    const { result } = renderHook(() => useJournalFilters());
+    const { result } = renderHook(() => useJournalFilters('user-1'));
     expect(result.current.filters).toEqual({});
     expect(result.current.results).toBeNull();
   });
 
   it('filters by emotion using json_each subquery', async () => {
     mockExecuteSync.mockReturnValue(emotionRows);
-    const { result } = renderHook(() => useJournalFilters());
+    const { result } = renderHook(() => useJournalFilters('user-1'));
 
     await act(async () => {
       result.current.applyFilters({ emotion: 'fear' });
@@ -76,7 +76,7 @@ describe('useJournalFilters', () => {
 
   it("matches the dreamer's own emotions as well as the AI's reading", async () => {
     mockExecuteSync.mockReturnValue(emotionRows);
-    const { result } = renderHook(() => useJournalFilters());
+    const { result } = renderHook(() => useJournalFilters('user-1'));
 
     await act(async () => {
       result.current.applyFilters({ emotion: 'fear' });
@@ -88,13 +88,39 @@ describe('useJournalFilters', () => {
     // join, distinct from the card's `i`, which is pinned to the newest one.
     expect(query).toContain('json_each(fi.emotions)');
     expect(query).toContain('json_each(d.emotions)');
-    // Both subqueries are bound, in order.
-    expect(mockExecuteSync).toHaveBeenCalledWith(['fear', 'fear']);
+    // The account scope is bound first, then both emotion subqueries, in order.
+    expect(mockExecuteSync).toHaveBeenCalledWith(['user-1', 'fear', 'fear']);
+  });
+
+  it('scopes the query to the signed-in account', async () => {
+    mockExecuteSync.mockReturnValue([]);
+    const { result } = renderHook(() => useJournalFilters('user-1'));
+
+    await act(async () => {
+      result.current.applyFilters({ startDate: '2026-08-01' });
+    });
+
+    // Local SQLite holds every account that has signed in on this device; without this
+    // the filter matched the previous account's dreams too.
+    expect(mockPrepareSync).toHaveBeenCalledWith(expect.stringContaining('d.user_id = ?'));
+    expect(mockExecuteSync).toHaveBeenCalledWith(['user-1', '2026-08-01']);
+  });
+
+  it('runs no query at all until the session has resolved', async () => {
+    mockExecuteSync.mockReturnValue([]);
+    const { result } = renderHook(() => useJournalFilters(null));
+
+    await act(async () => {
+      result.current.applyFilters({ emotion: 'fear' });
+    });
+
+    expect(mockPrepareSync).not.toHaveBeenCalled();
+    expect(result.current.results).toBeNull();
   });
 
   it('filters by date range', async () => {
     mockExecuteSync.mockReturnValue(dateRows);
-    const { result } = renderHook(() => useJournalFilters());
+    const { result } = renderHook(() => useJournalFilters('user-1'));
 
     await act(async () => {
       result.current.applyFilters({ startDate: '2026-08-01', endDate: '2026-08-14' });
@@ -107,7 +133,7 @@ describe('useJournalFilters', () => {
 
   it('does NOT use PostgreSQL array syntax', async () => {
     mockExecuteSync.mockReturnValue([]);
-    const { result } = renderHook(() => useJournalFilters());
+    const { result } = renderHook(() => useJournalFilters('user-1'));
 
     await act(async () => {
       result.current.applyFilters({ emotion: 'joy' });
@@ -120,7 +146,7 @@ describe('useJournalFilters', () => {
 
   it('combined emotion + date range filter builds correct WHERE clause', async () => {
     mockExecuteSync.mockReturnValue(emotionRows);
-    const { result } = renderHook(() => useJournalFilters());
+    const { result } = renderHook(() => useJournalFilters('user-1'));
 
     await act(async () => {
       result.current.applyFilters({
@@ -140,7 +166,7 @@ describe('useJournalFilters', () => {
    * filter blanked the image on every card it returned. */
   it('carries the thumbnail and the card markers through', async () => {
     mockExecuteSync.mockReturnValue(emotionRows);
-    const { result } = renderHook(() => useJournalFilters());
+    const { result } = renderHook(() => useJournalFilters('user-1'));
 
     await act(async () => {
       result.current.applyFilters({ emotion: 'fear' });
@@ -160,7 +186,7 @@ describe('useJournalFilters', () => {
 
   it('finalizes the prepared statement', async () => {
     mockExecuteSync.mockReturnValue(emotionRows);
-    const { result } = renderHook(() => useJournalFilters());
+    const { result } = renderHook(() => useJournalFilters('user-1'));
 
     await act(async () => {
       result.current.applyFilters({ emotion: 'fear' });
@@ -171,7 +197,7 @@ describe('useJournalFilters', () => {
 
   it('clearFilters resets to empty state', async () => {
     mockExecuteSync.mockReturnValue(emotionRows);
-    const { result } = renderHook(() => useJournalFilters());
+    const { result } = renderHook(() => useJournalFilters('user-1'));
 
     await act(async () => {
       result.current.applyFilters({ emotion: 'fear' });

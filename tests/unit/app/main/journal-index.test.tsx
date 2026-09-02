@@ -76,8 +76,19 @@ jest.mock('@features/dream-log/syncService', () => ({
 }));
 
 const mockPullRemoteChanges = jest.fn();
+/** Captures what the screen subscribes, so a test can fire the activity signal the way a
+ * background pull writing to SQLite under a mounted list would. `mockIsPullInFlight`
+ * stands in for the reference count the real module keeps. */
+const mockPullListeners: Array<() => void> = [];
+const mockUnsubscribePull = jest.fn();
+const mockIsPullInFlight = jest.fn(() => false);
 jest.mock('@features/sync/pullService', () => ({
   pullRemoteChanges: (...args: unknown[]) => mockPullRemoteChanges(...args),
+  isPullInFlight: () => mockIsPullInFlight(),
+  subscribeToPullActivity: (listener: () => void) => {
+    mockPullListeners.push(listener);
+    return mockUnsubscribePull;
+  },
 }));
 
 // FlashList requires real on-screen layout measurement to render items, which
@@ -159,6 +170,116 @@ describe('JournalListScreen', () => {
     capturedFlashListProps = {};
     mockScrollToOffset.mockClear();
     mockTabPressListeners.length = 0;
+    mockPullListeners.length = 0;
+    mockUnsubscribePull.mockClear();
+    mockIsPullInFlight.mockReset().mockReturnValue(false);
+  });
+
+  describe('account scoping', () => {
+    /**
+     * Local SQLite is shared by every account that has signed in on this device and is
+     * deliberately not wiped on sign-out, so a list query filtered only on
+     * `is_deleted = 0` showed a freshly created account the previous account's journal.
+     */
+    it('reads only the signed-in account’s dreams', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue([]);
+      renderScreen();
+
+      await waitFor(() => expect(db.getAllAsync).toHaveBeenCalled());
+      const [sql, bindings] = (db.getAllAsync as jest.Mock).mock.calls[0] as [
+        sql: string,
+        bindings: unknown[],
+      ];
+      expect(sql).toContain('d.user_id = ?');
+      // MockAuthService's default session carries this fixed user id.
+      expect(bindings).toEqual(['mock-user-id', 20]);
+    });
+
+    it('shows an empty list rather than another account’s dreams when there is no session', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue([]);
+      const auth = new MockAuthService().configure('failure');
+      const { getByText } = renderScreen(auth);
+
+      await waitFor(() => expect(getByText('Your dream journal is empty')).toBeTruthy());
+      expect(db.getAllAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * The sign-in pull is fire-and-forget, and lands after this list has already read an
+   * empty table. Nothing re-read it, which is what "the dreams are there but the list
+   * won't load them" actually was.
+   */
+  describe('a backfill running under a mounted list', () => {
+    const PULLED_DREAM = [
+      {
+        id: 'dream-1',
+        description: 'A dream the background pull just brought down.',
+        occurred_at: '2026-01-01T00:00:00.000Z',
+        sync_status: 'synced',
+        thumbnail_uri: null,
+      },
+    ];
+
+    it('re-reads the list when the pull reports it has written something', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue([]);
+      const { getByText } = renderScreen();
+      await waitFor(() => expect(getByText('Your dream journal is empty')).toBeTruthy());
+
+      (db.getAllAsync as jest.Mock).mockResolvedValue(PULLED_DREAM);
+      await act(async () => {
+        mockPullListeners.forEach(listener => listener());
+      });
+
+      expect(getByText('A dream the background pull just brought down.')).toBeTruthy();
+    });
+
+    /**
+     * A cycle ends with up to 24 image downloads. Waiting for the whole cycle is what
+     * made the list sit blank — and made a pull-to-refresh look like it did nothing —
+     * while the dreams were already in SQLite.
+     */
+    it('fills the list mid-cycle, without waiting for the pull to settle', async () => {
+      mockIsPullInFlight.mockReturnValue(true);
+      (db.getAllAsync as jest.Mock).mockResolvedValue([]);
+      const { getByText } = renderScreen();
+      await waitFor(() => expect(getByText('Loading your dreams…')).toBeTruthy());
+
+      (db.getAllAsync as jest.Mock).mockResolvedValue(PULLED_DREAM);
+      await act(async () => {
+        mockPullListeners.forEach(listener => listener());
+      });
+
+      expect(getByText('A dream the background pull just brought down.')).toBeTruthy();
+    });
+
+    /**
+     * An empty table during a backfill is not an empty journal. Offering "log your first
+     * dream" there tells a returning user on a fresh install that everything they have
+     * written is gone.
+     */
+    it('keeps loading rather than declaring the journal empty while the pull runs', async () => {
+      mockIsPullInFlight.mockReturnValue(true);
+      (db.getAllAsync as jest.Mock).mockResolvedValue([]);
+      const { getByText, queryByText } = renderScreen();
+
+      await waitFor(() => expect(getByText('Loading your dreams…')).toBeTruthy());
+      expect(queryByText('Your dream journal is empty')).toBeNull();
+    });
+
+    it('shows the empty state once the pull has settled and found nothing', async () => {
+      mockIsPullInFlight.mockReturnValue(true);
+      (db.getAllAsync as jest.Mock).mockResolvedValue([]);
+      const { getByText } = renderScreen();
+      await waitFor(() => expect(getByText('Loading your dreams…')).toBeTruthy());
+
+      mockIsPullInFlight.mockReturnValue(false);
+      await act(async () => {
+        mockPullListeners.forEach(listener => listener());
+      });
+
+      expect(getByText('Your dream journal is empty')).toBeTruthy();
+    });
   });
 
   it('shows a loading state before entries resolve', () => {
@@ -356,27 +477,20 @@ describe('JournalListScreen', () => {
       });
     });
 
-    it('does not push or pull when there is no active session, but still reloads the local list', async () => {
-      // A non-empty row keeps the screen on its FlashList branch — an empty result
-      // renders the EmptyState instead, which has no pull-to-refresh handle.
-      (db.getAllAsync as jest.Mock).mockResolvedValue([
-        {
-          id: 'dream-1',
-          description: 'I was flying over a forest.',
-          occurred_at: '2026-01-01T00:00:00.000Z',
-          sync_status: 'synced',
-          thumbnail_uri: null,
-        },
-      ]);
+    it('neither pushes, pulls, nor reads SQLite when there is no active session', async () => {
+      // A signed-out device still holds the last account's rows, so "reload the local
+      // list anyway" is exactly how they used to surface. There is nothing to show and
+      // nothing to reconcile with — the refresh is a no-op all the way down.
+      (db.getAllAsync as jest.Mock).mockResolvedValue([]);
       const auth = new MockAuthService().configure('failure');
-      renderScreen(auth);
-      await waitFor(() => expect(db.getAllAsync).toHaveBeenCalledTimes(1));
+      const { getByText } = renderScreen(auth);
+      await waitFor(() => expect(getByText('Your dream journal is empty')).toBeTruthy());
 
       await act(async () => {
         capturedFlashListProps.onRefresh?.();
-        await waitFor(() => expect(db.getAllAsync).toHaveBeenCalledTimes(2));
       });
 
+      expect(db.getAllAsync).not.toHaveBeenCalled();
       expect(mockSyncPendingDreams).not.toHaveBeenCalled();
       expect(mockPullRemoteChanges).not.toHaveBeenCalled();
     });

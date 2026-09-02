@@ -14,6 +14,7 @@ import {
   JOURNAL_ENTRY_COLUMNS,
   JOURNAL_ENTRY_JOINS,
   JOURNAL_ENTRY_ORDER,
+  JOURNAL_ENTRY_SCOPE,
   mapJournalEntryRow,
   type JournalEntryRow,
 } from '@features/journal/journalEntryQuery';
@@ -27,7 +28,11 @@ import { useJournalSearch } from '@features/journal/useJournalSearch';
 import { useJournalFilters } from '@features/journal/useJournalFilters';
 import { FilterIcon, SearchIcon } from '@shared/components/icons';
 import { syncPendingDreams } from '@features/dream-log/syncService';
-import { pullRemoteChanges } from '@features/sync/pullService';
+import {
+  isPullInFlight,
+  pullRemoteChanges,
+  subscribeToPullActivity,
+} from '@features/sync/pullService';
 import { makeMediaCache } from '@features/sync/mediaCache';
 import { useServices } from '@services/useServices';
 import {
@@ -54,9 +59,15 @@ export default function JournalListScreen() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // A backfill may already be running before this screen mounts — the sign-in pull is
+  // started from the root layout, whose effects run after its children's.
+  const [isSyncing, setIsSyncing] = useState(isPullInFlight);
   const [searchQuery, setSearchQuery] = useState('');
-  const { results: searchResults, isSearching, search, clearSearch } = useJournalSearch();
-  const { filters, results: filterResults, applyFilters, clearFilters } = useJournalFilters();
+  // Resolved by `loadEntries` on focus, and handed to search and filters so all three
+  // sources stay scoped to the same account.
+  const [userId, setUserId] = useState<string | null>(null);
+  const { results: searchResults, isSearching, search, clearSearch } = useJournalSearch(userId);
+  const { filters, results: filterResults, applyFilters, clearFilters } = useJournalFilters(userId);
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   // The window that produced `filters.startDate`, kept alongside it so the chip and the
   // sheet keep naming it correctly even after the date it was derived from has passed.
@@ -64,16 +75,27 @@ export default function JournalListScreen() {
 
   const loadEntries = useCallback(async () => {
     try {
+      // The session is read here rather than in an effect of its own so that a focus
+      // after an account switch re-reads it: the list and the account it belongs to
+      // are resolved in the same pass, and can never disagree.
+      const session = await auth.getSession();
+      if (!session) {
+        setUserId(null);
+        setEntries([]);
+        return;
+      }
+      setUserId(session.user.id);
+
       const rows = await db.getAllAsync<JournalEntryRow>(
         `
         SELECT ${JOURNAL_ENTRY_COLUMNS}
         FROM dreams d
         ${JOURNAL_ENTRY_JOINS}
-        WHERE d.is_deleted = 0
+        WHERE ${JOURNAL_ENTRY_SCOPE}
         ${JOURNAL_ENTRY_ORDER}
         LIMIT ?
       `,
-        PAGE_SIZE
+        [session.user.id, PAGE_SIZE]
       );
 
       setEntries(rows.map(mapJournalEntryRow));
@@ -82,12 +104,26 @@ export default function JournalListScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [auth]);
 
   useFocusEffect(
     useCallback(() => {
       void loadEntries();
     }, [loadEntries])
+  );
+
+  // The sign-in pull is fire-and-forget and lands after this list has already read an
+  // empty table — without this the journal stays empty until the user navigates away
+  // and back, however many dreams the pull just wrote. The pull announces itself as it
+  // goes, so the list fills in as the dreams land rather than after the last image has
+  // finished downloading.
+  useEffect(
+    () =>
+      subscribeToPullActivity(() => {
+        setIsSyncing(isPullInFlight());
+        void loadEntries();
+      }),
+    [loadEntries]
   );
 
   /**
@@ -225,12 +261,22 @@ export default function JournalListScreen() {
       ) : null}
 
       {noDreams ? (
-        <EmptyState
-          title={t('journal.emptyTitle')}
-          subtitle={t('journal.emptySubtitle')}
-          ctaLabel={t('journal.emptyCta')}
-          onCta={() => router.navigate('/(main)/log')}
-        />
+        /**
+         * An empty table while a backfill is running is not an empty journal — it is a
+         * journal whose dreams are still on their way down. Offering "log your first
+         * dream" there tells a returning user on a fresh install that everything they
+         * have ever written is gone.
+         */
+        isSyncing ? (
+          <LoadingState message={t('journal.loading')} />
+        ) : (
+          <EmptyState
+            title={t('journal.emptyTitle')}
+            subtitle={t('journal.emptySubtitle')}
+            ctaLabel={t('journal.emptyCta')}
+            onCta={() => router.navigate('/(main)/log')}
+          />
+        )
       ) : noResults ? (
         <EmptyState
           title={t('journal.noResultsTitle')}

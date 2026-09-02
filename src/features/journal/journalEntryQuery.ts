@@ -42,6 +42,18 @@ export const JOURNAL_ENTRY_JOINS = `
 `;
 
 /**
+ * Every journal query is scoped to one account. Local SQLite is shared by every user
+ * who has signed in on this device and is deliberately not wiped on sign-out (an
+ * offline dream that hasn't pushed yet would go with it), so `is_deleted = 0` alone
+ * showed a freshly created account the previous account's entire journal until a sync
+ * cycle happened to clear it.
+ *
+ * The binding for the `?` is the user id, and it comes first in every caller's
+ * parameter list.
+ */
+export const JOURNAL_ENTRY_SCOPE = `d.user_id = ? AND d.is_deleted = 0`;
+
+/**
  * occurred_at is date-only ('2026-08-26'), so every dream logged on the same night
  * sorts equal and SQLite is free to return them in any order. logged_at is a full
  * timestamp and breaks the tie, which is what makes "most recent first" actually true

@@ -50,7 +50,11 @@ jest.mock('@features/recurrence/recurrenceRepository', () => ({
   recordRecurrence: (...args: unknown[]) => mockRecordRecurrence(...args),
 }));
 
-import { pullRemoteChanges } from '@features/sync/pullService';
+import {
+  isPullInFlight,
+  pullRemoteChanges,
+  subscribeToPullActivity,
+} from '@features/sync/pullService';
 
 /** Builds a chainable query-builder stub matching how pullService calls the
  * Supabase client. Most queries end in an explicit `.limit()`; the deletion
@@ -70,6 +74,30 @@ function chainable(result: { data: unknown[] | null; error: unknown }) {
 }
 
 const EMPTY = { data: [], error: null };
+
+/**
+ * The columns a drizzle `where` condition actually names. `and(eq(a, …), eq(b, …))`
+ * builds a nested SQL object rather than a string, so asserting on the *shape* of the
+ * scope means walking its chunks for the `Column` instances — each of which carries the
+ * underlying SQLite column name.
+ */
+function columnNamesIn(condition: unknown, seen = new Set<unknown>()): string[] {
+  if (condition == null || typeof condition !== 'object' || seen.has(condition)) return [];
+  seen.add(condition);
+
+  const record = condition as Record<string, unknown>;
+  const names: string[] = [];
+  if (typeof record['name'] === 'string' && 'table' in record) names.push(record['name']);
+
+  for (const value of Object.values(record)) {
+    if (Array.isArray(value)) {
+      for (const item of value) names.push(...columnNamesIn(item, seen));
+    } else if (value && typeof value === 'object') {
+      names.push(...columnNamesIn(value, seen));
+    }
+  }
+  return names;
+}
 
 const baseRemoteDream = {
   id: 'dream-1',
@@ -248,6 +276,199 @@ describe('pullRemoteChanges', () => {
         expect.objectContaining({ message: 'boom' })
       );
     });
+
+    /**
+     * `remoteActiveIds` is one account's dreams. An unscoped candidate set therefore
+     * contained every *other* account's local dreams too, none of which can possibly
+     * appear in that set — so signing into a second account on the same device silently
+     * hard-deleted the first account's entire journal, interpretations and images
+     * included.
+     */
+    it('restricts the candidate set to the signed-in account', async () => {
+      mockFrom.mockImplementation(sequencedDreamsResponses([EMPTY, { data: [], error: null }]));
+
+      await pullRemoteChanges('user-1');
+
+      expect(mockSelectWhere).toHaveBeenCalled();
+      const condition = mockSelectWhere.mock.calls.at(-1)?.[0];
+      expect(columnNamesIn(condition)).toContain('user_id');
+    });
+  });
+
+  /**
+   * A cycle ends with `hydrateMediaCache`, which downloads up to 24 images. The dreams
+   * are readable long before that returns, so a signal that only fired at the very end
+   * left the journal blank for the whole download — and made a pull-to-refresh, which
+   * awaits the same cycle, look like it had done nothing.
+   */
+  describe('activity signalling', () => {
+    it('announces that it has written the dreams before the image downloads start', async () => {
+      const seenWhileHydrating: boolean[] = [];
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'dreams') return chainable({ data: [baseRemoteDream], error: null });
+        return chainable(EMPTY);
+      });
+      // One image to hydrate, so the slow tail of the cycle is actually exercised.
+      mockGetAllAsync.mockImplementation((sql: string) =>
+        Promise.resolve(sql.includes('FROM media') ? [{ id: 'media-1' }] : [])
+      );
+
+      let notifications = 0;
+      const unsubscribe = subscribeToPullActivity(() => {
+        notifications += 1;
+      });
+      mediaCache.cacheMedia.mockImplementation(() => {
+        // Whatever the list heard by now, it heard before this download began.
+        seenWhileHydrating.push(notifications > 1);
+        return Promise.resolve('/local/media/media-1.png');
+      });
+
+      await pullRemoteChanges('user-1', mediaCache);
+      unsubscribe();
+
+      expect(seenWhileHydrating).toEqual([true]);
+    });
+
+    it('reports itself in flight for the length of the cycle and settled after it', async () => {
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+      const inFlightDuringPull: boolean[] = [];
+      mockGetAllAsync.mockImplementation(() => {
+        inFlightDuringPull.push(isPullInFlight());
+        return Promise.resolve([]);
+      });
+
+      expect(isPullInFlight()).toBe(false);
+      await pullRemoteChanges('user-1');
+
+      expect(inFlightDuringPull).toContain(true);
+      expect(isPullInFlight()).toBe(false);
+    });
+
+    it('stays in flight until the last of two overlapping cycles settles', async () => {
+      let releaseFirst: () => void = () => {};
+      const firstPull = new Promise<void>(resolve => {
+        releaseFirst = resolve;
+      });
+      let call = 0;
+      mockFrom.mockImplementation(() => {
+        call += 1;
+        // Stall the very first query, holding cycle one open across cycle two.
+        if (call === 1)
+          return {
+            select: () => ({
+              eq: () => ({
+                gt: () => ({ order: () => ({ limit: () => firstPull.then(() => EMPTY) }) }),
+              }),
+            }),
+          };
+        return chainable(EMPTY);
+      });
+
+      const first = pullRemoteChanges('user-1');
+      await pullRemoteChanges('user-1');
+
+      // The second cycle has settled, but the first has not — a shared boolean would
+      // have reported "done" here and dropped the journal into its empty state.
+      expect(isPullInFlight()).toBe(true);
+      releaseFirst();
+      await first;
+      expect(isPullInFlight()).toBe(false);
+    });
+
+    it('settles even when a listener throws', async () => {
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+      const unsubscribe = subscribeToPullActivity(() => {
+        throw new Error('a screen unmounted mid-notification');
+      });
+
+      await pullRemoteChanges('user-1');
+      unsubscribe();
+
+      expect(isPullInFlight()).toBe(false);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'A pull-activity listener threw:',
+        expect.any(Error)
+      );
+    });
+  });
+
+  describe('foreign-account cleanup', () => {
+    /** Routes the two `getAllAsync` consumers apart: the cleanup's own "not mine" scan
+     * and the recurrence rebuild / media hydration queries that follow it. */
+    function foreignDreams(ids: string[]) {
+      return (sql: string) =>
+        Promise.resolve(sql.includes('user_id != ?') ? ids.map(id => ({ id })) : []);
+    }
+
+    it('purges the previous account’s dreams, and their cached images with them', async () => {
+      mockGetAllAsync.mockImplementation(foreignDreams(['old-account-dream']));
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+
+      await pullRemoteChanges('user-1', mediaCache);
+
+      expect(mockPurgeDreamLocally).toHaveBeenCalledWith('old-account-dream', mediaCache);
+      expect(mockRunAsync).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE FROM recurrence_patterns'),
+        'user-1'
+      );
+    });
+
+    it('leaves the signed-in account’s own dreams untouched', async () => {
+      mockGetAllAsync.mockImplementation(foreignDreams([]));
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+
+      await pullRemoteChanges('user-1', mediaCache);
+
+      expect(mockPurgeDreamLocally).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * A cursor is a high-water mark over one account's `last_modified_at` values. Shared
+   * across accounts it read as "already pulled" for rows the second account had never
+   * seen, so `gt(cursor)` matched nothing and the journal stayed permanently empty with
+   * no way to refill it.
+   */
+  describe('per-account cursors', () => {
+    it('starts a second account from the epoch rather than the first account’s cursor', async () => {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'dreams') return chainable({ data: [baseRemoteDream], error: null });
+        return chainable(EMPTY);
+      });
+      await pullRemoteChanges('user-1');
+      expect(await AsyncStorage.getItem('sync_dreams_last_pulled_at:user-1')).toBe(
+        baseRemoteDream.last_modified_at
+      );
+
+      const builders: Array<Record<string, jest.Mock>> = [];
+      mockFrom.mockImplementation((table: string) => {
+        const builder = chainable(EMPTY);
+        if (table === 'dreams') builders.push(builder);
+        return builder;
+      });
+
+      await pullRemoteChanges('user-2');
+
+      expect(await AsyncStorage.getItem('sync_dreams_last_pulled_at:user-2')).toBeNull();
+      expect(builders[0]!['gt']).toHaveBeenCalledWith(
+        'last_modified_at',
+        '1970-01-01T00:00:00.000Z'
+      );
+    });
+
+    it('leaves the other account’s cursor intact when it advances its own', async () => {
+      await AsyncStorage.setItem('sync_dreams_last_pulled_at:user-2', '2026-01-01T00:00:00.000Z');
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'dreams') return chainable({ data: [baseRemoteDream], error: null });
+        return chainable(EMPTY);
+      });
+
+      await pullRemoteChanges('user-1');
+
+      expect(await AsyncStorage.getItem('sync_dreams_last_pulled_at:user-2')).toBe(
+        '2026-01-01T00:00:00.000Z'
+      );
+    });
   });
 
   it('skips a remote row that is older than the local one (last-write-wins protects an unpushed local edit)', async () => {
@@ -334,13 +555,19 @@ describe('pullRemoteChanges', () => {
 
     await pullRemoteChanges('user-1');
 
-    await expect(AsyncStorage.getItem('sync_dreams_last_pulled_at')).resolves.toBe(
+    await expect(AsyncStorage.getItem('sync_dreams_last_pulled_at:user-1')).resolves.toBe(
       baseRemoteDream.last_modified_at
     );
   });
 
   it('does not advance the cursor when applying a page throws partway through', async () => {
-    mockRunAsync.mockRejectedValueOnce(new Error('disk full'));
+    // Targeted at the dream upsert rather than "the first runAsync": the cycle now opens
+    // with the foreign-account cleanup, whose own DELETE would otherwise absorb this.
+    mockRunAsync.mockImplementation((sql: string) =>
+      sql.includes('INSERT INTO dreams')
+        ? Promise.reject(new Error('disk full'))
+        : Promise.resolve(undefined)
+    );
     mockFrom.mockImplementation((table: string) => {
       if (table === 'dreams') return chainable({ data: [baseRemoteDream], error: null });
       return chainable(EMPTY);
@@ -348,7 +575,7 @@ describe('pullRemoteChanges', () => {
 
     await pullRemoteChanges('user-1');
 
-    await expect(AsyncStorage.getItem('sync_dreams_last_pulled_at')).resolves.toBeNull();
+    await expect(AsyncStorage.getItem('sync_dreams_last_pulled_at:user-1')).resolves.toBeNull();
     expect(consoleErrorSpy).toHaveBeenCalledWith('Pull sync failed for dreams:', expect.any(Error));
   });
 
@@ -519,7 +746,7 @@ describe('pullRemoteChanges', () => {
 
       await pullRemoteChanges('user-1');
 
-      expect(await AsyncStorage.getItem('sync_interpretations_last_pulled_at')).toBe(
+      expect(await AsyncStorage.getItem('sync_interpretations_last_pulled_at:user-1')).toBe(
         '2026-08-01T00:00:00.000Z'
       );
     });
@@ -699,7 +926,7 @@ describe('pullRemoteChanges', () => {
     );
     // The retry ran to completion, so the cursor advanced rather than silently
     // staying put as it would have when the pull just returned on error.
-    await expect(AsyncStorage.getItem('sync_dreams_last_pulled_at')).resolves.toBe(
+    await expect(AsyncStorage.getItem('sync_dreams_last_pulled_at:user-1')).resolves.toBe(
       baseRemoteDream.last_modified_at
     );
   });
@@ -719,7 +946,7 @@ describe('pullRemoteChanges', () => {
     await pullRemoteChanges('user-1');
 
     expect(mockRefreshSession).toHaveBeenCalledTimes(1);
-    await expect(AsyncStorage.getItem('sync_dreams_last_pulled_at')).resolves.toBe(
+    await expect(AsyncStorage.getItem('sync_dreams_last_pulled_at:user-1')).resolves.toBe(
       baseRemoteDream.last_modified_at
     );
   });
@@ -906,7 +1133,7 @@ describe('pullRemoteChanges', () => {
 
       await pullRemoteChanges('user-1');
 
-      expect(await AsyncStorage.getItem('sync_recurrence_folded_through')).toBe(
+      expect(await AsyncStorage.getItem('sync_recurrence_folded_through:user-1')).toBe(
         '2026-08-01T00:00:00.000Z'
       );
       const [sql, bindings] = mockGetAllAsync.mock.calls.find(([q]) =>
