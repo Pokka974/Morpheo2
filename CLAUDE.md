@@ -104,6 +104,16 @@ npx expo run:android      # Run on Android emulator
 npm test                  # Run Jest tests
 npm run typecheck         # TypeScript check
 npm run lint              # ESLint
+npm run format:check      # Prettier — separate gate from ESLint
+npm run format            # Prettier, fixing in place
+```
+
+**The full CI gate, in one line.** `.github/workflows/ci.yml` runs these four; the job
+is named "Lint & Typecheck" but `format:check` is inside it, so a green `lint` says
+nothing about formatting. Run all four before pushing:
+
+```bash
+npm run lint && npm run format:check && npm run typecheck && npm run test:ci
 ```
 
 ## Definition of Done
@@ -111,6 +121,8 @@ npm run lint              # ESLint
 Every code change must satisfy all of the following before it's considered complete:
 
 - **Lint** — `npm run lint` passes with no new errors/warnings
+- **Format** — `npm run format:check` passes. ESLint does not cover this; Prettier is
+  its own CI step and fails the build on whitespace alone. `npm run format` fixes it
 - **Typecheck** — `npm run typecheck` passes (TypeScript strict mode)
 - **Error handling** — failure paths are handled explicitly: no silently
   swallowed errors, no `.single()` where a zero-row result is valid (use
