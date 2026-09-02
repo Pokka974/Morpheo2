@@ -789,10 +789,20 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.border,
     gap: spacing.sm + 4,
+    // The glow's properties are declared here unconditionally, muted to zero,
+    // rather than being introduced by `editorFocused` on focus. Adding shadow
+    // props to this View mid-focus reconfigured its backing layer, which tore
+    // the child TextInput off first responder: the field focused, blurred a
+    // few frames later, and the keyboard never finished presenting. Focus now
+    // changes only the *values* of properties that are always present.
+    ...glow.soft,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   editorFocused: {
     borderColor: colors.accent,
-    ...glow.soft,
+    shadowOpacity: glow.soft.shadowOpacity,
+    elevation: glow.soft.elevation,
   },
   textArea: {
     flex: 1,

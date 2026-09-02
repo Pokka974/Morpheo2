@@ -106,6 +106,9 @@ const mediaCache = {
   getSignedUrl: jest.fn<Promise<string>, [string]>(),
   cacheMedia: jest.fn<Promise<string>, [string, string]>(),
   removeCachedMedia: jest.fn<Promise<void>, [string]>(),
+  // Defaults to "nothing is on this device", which is the state every existing
+  // hydration case was written against.
+  isCached: jest.fn<Promise<boolean>, [string]>(),
 };
 
 describe('pullRemoteChanges', () => {
@@ -122,6 +125,7 @@ describe('pullRemoteChanges', () => {
     mediaCache.getSignedUrl.mockReset().mockResolvedValue('https://example.com/signed.png');
     mediaCache.cacheMedia.mockReset().mockResolvedValue('/local/media/media-1.png');
     mediaCache.removeCachedMedia.mockReset().mockResolvedValue(undefined);
+    mediaCache.isCached.mockReset().mockResolvedValue(false);
     mockPurgeDreamLocally.mockReset().mockResolvedValue(undefined);
     mockRefreshSession.mockReset().mockResolvedValue({ data: { session: {} }, error: null });
     await AsyncStorage.clear();
@@ -971,7 +975,7 @@ describe('pullRemoteChanges', () => {
       return call[0] as string;
     }
 
-    it('only considers completed images that have a remote object but no local file', async () => {
+    it('only considers completed images that have a remote object', async () => {
       mockFrom.mockImplementation(() => chainable(EMPTY));
 
       await pullRemoteChanges('user-1', mediaCache);
@@ -981,7 +985,35 @@ describe('pullRemoteChanges', () => {
       const sql = hydrationQuery();
       expect(sql).toContain("generation_status = 'complete'");
       expect(sql).toContain('storage_key IS NOT NULL');
-      expect(sql).toContain('local_cache_path IS NULL');
+      // Deliberately *not* filtered on `local_cache_path IS NULL`: a recorded path
+      // can outlive the file it names, and those are the rows needing repair.
+      expect(sql).not.toContain('local_cache_path IS NULL');
+    });
+
+    it('leaves an already-cached image alone instead of downloading it again', async () => {
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+      mockGetAllAsync.mockResolvedValue([{ id: 'media-1' }]);
+      mediaCache.isCached.mockResolvedValue(true);
+
+      await pullRemoteChanges('user-1', mediaCache);
+
+      expect(mediaCache.getSignedUrl).not.toHaveBeenCalled();
+      expect(mediaCache.cacheMedia).not.toHaveBeenCalled();
+    });
+
+    it('re-downloads a row whose recorded file is gone — a purged cache or a reinstall', async () => {
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+      // The row still carries a `local_cache_path`; only the file behind it vanished.
+      mockGetAllAsync.mockResolvedValue([{ id: 'media-1' }]);
+      mediaCache.isCached.mockResolvedValue(false);
+
+      await pullRemoteChanges('user-1', mediaCache);
+
+      expect(mediaCache.getSignedUrl).toHaveBeenCalledWith('media-1');
+      expect(mockRunAsync).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE media SET local_cache_path'),
+        ['/local/media/media-1.png', 'media-1']
+      );
     });
 
     it('keeps caching the rest of the batch when one image cannot be downloaded', async () => {
@@ -1014,6 +1046,33 @@ describe('pullRemoteChanges', () => {
         expect.stringContaining('UPDATE media SET local_cache_path'),
         expect.anything()
       );
+    });
+
+    // The limit bounds downloads, not rows examined. Capping the query instead would
+    // let a wall of already-cached recent images hide an older broken one forever.
+    it('repairs an older image even when more recent ones fill the download budget', async () => {
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+      const ids = Array.from({ length: 40 }, (_, i) => ({ id: `media-${i}` }));
+      mockGetAllAsync.mockResolvedValue(ids);
+      // Everything recent is present; only the very last row lost its file.
+      mediaCache.isCached.mockImplementation(async (id: string) => id !== 'media-39');
+
+      await pullRemoteChanges('user-1', mediaCache);
+
+      expect(mediaCache.getSignedUrl).toHaveBeenCalledTimes(1);
+      expect(mediaCache.getSignedUrl).toHaveBeenCalledWith('media-39');
+    });
+
+    it('stops after the download budget so one sync cannot pull an entire library', async () => {
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+      mockGetAllAsync.mockResolvedValue(
+        Array.from({ length: 40 }, (_, i) => ({ id: `media-${i}` }))
+      );
+      mediaCache.isCached.mockResolvedValue(false);
+
+      await pullRemoteChanges('user-1', mediaCache);
+
+      expect(mediaCache.cacheMedia).toHaveBeenCalledTimes(24);
     });
 
     it('skips hydration entirely when no media cache is supplied', async () => {

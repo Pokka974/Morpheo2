@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
+import { Image } from 'expo-image';
 
 import { DreamCard, type JournalEntry } from '@features/journal/DreamCard';
 
@@ -79,6 +80,29 @@ describe('<DreamCard /> full', () => {
     // A sentence-less wall of text clips twice: once as the title, once as the excerpt.
     expect(clipped).toHaveLength(2);
     clipped.forEach(node => expect(String(node.props.children).length).toBeLessThan(150));
+  });
+});
+
+/**
+ * The journal renders these in a FlashList, which recycles the row views. Without a
+ * recycling key expo-image holds the previous dream's picture until the new file
+ * decodes, and `transition` cross-fades from it — one dream visibly wearing another's
+ * image. Both variants are checked because both are recycled.
+ */
+describe.each(['full', 'compact'] as const)('<DreamCard /> %s image recycling', variant => {
+  it("keys the image to the dream so a recycled row cannot keep the last one's picture", () => {
+    const uri = 'file:///cache/media/abc.jpg';
+    const { UNSAFE_getAllByType } = renderCard({ id: 'dream-42', thumbnailUri: uri }, variant);
+
+    // Selected by the thumbnail it carries rather than by type alone: under
+    // jest-expo, matching on the expo-image component also picks up the plain
+    // views it is composed of, which carry no image props of their own.
+    const thumbnails = UNSAFE_getAllByType(Image).filter(
+      node => (node.props as { source?: { uri?: string } }).source?.uri === uri
+    );
+
+    expect(thumbnails).toHaveLength(1);
+    expect(thumbnails[0]?.props.recyclingKey).toBe('dream-42');
   });
 });
 

@@ -112,6 +112,11 @@ export function DreamCard({ entry, variant = 'full', onPress }: DreamCardProps) 
             style={styles.compactThumb}
             contentFit="cover"
             transition={300}
+            // The journal is a FlashList, which recycles this view between dreams.
+            // Without a recycling key the recycled Image keeps displaying the
+            // previous dream's picture until the new file decodes — and `transition`
+            // cross-fades *from* it, so one dream visibly wears another's image.
+            recyclingKey={entry.id}
             accessibilityIgnoresInvertColors
           />
         ) : (
@@ -172,6 +177,9 @@ export function DreamCard({ entry, variant = 'full', onPress }: DreamCardProps) 
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             transition={300}
+            // See the compact variant above: FlashList recycling plus a missing
+            // recycling key is what puts one dream's image on another's card.
+            recyclingKey={entry.id}
             accessibilityIgnoresInvertColors
           />
         ) : (

@@ -12,6 +12,7 @@ const mediaCache = {
   getSignedUrl: jest.fn(async () => 'https://example.com/signed.png'),
   cacheMedia: jest.fn(async () => '/local/path.png'),
   removeCachedMedia: jest.fn(async () => {}),
+  isCached: jest.fn(async () => false),
 };
 
 import type { AuthService, AuthSession } from '@services/auth/AuthService';
