@@ -72,8 +72,12 @@ Rules, enforced by ESLint as **errors** (not warnings):
   `glow.highlight`; no drop shadows, and `tokens.test.ts` asserts zero offset.
 - **Amber (`colors.highlight`) is reserved** for positive emotions and the lucid-dream
   marker. Never for a destructive action.
-- **Icons are drawn**, never emoji or dingbats — inline `react-native-svg` on a 24px
-  grid, stroked, inheriting palette colours.
+- **Functional icons are drawn** — inline `react-native-svg` on a 24px grid, stroked,
+  inheriting palette colours. This covers icons that carry an action or a meaning:
+  tab bars, buttons, list affordances, status markers.
+  Brand and decorative marks are **exempt** — the app icon, the launch screen, logos
+  and ornamental glyphs may be raster assets or emoji, and are judged on how they look
+  rather than against this rule.
 - **Accessibility is a gate, not a polish pass.** `tests/unit/theme/contrast.test.ts`
   asserts WCAG AA (4.5:1) for every text/surface pairing and every emotion chip; a
   token edit that drops below AA fails CI. Interactive targets hold
