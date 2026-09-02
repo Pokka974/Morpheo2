@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { SkeletonCard } from '@shared/components/LoadingState';
 import { Button } from '@shared/components/Button';
 import { CloseIcon } from '@shared/components/icons';
+import { Nox } from '@shared/components/Nox';
 import {
   colors,
   emotionColors,
@@ -189,7 +190,13 @@ function Stage({ stage, state }: { stage: WaitingStage; state: 'done' | 'active'
   );
 }
 
-/** The breathing core at the centre — a lit disc inside a halo inside a ring. */
+/**
+ * The centre of the wait: Nox drifting inside a breathing aura and its ring.
+ *
+ * This is the mascot's only in-app appearance, by design — she greets and she waits,
+ * she never comments on a dream — and she stands exactly where the lit core disc used
+ * to, so the orb's footprint is unchanged and the screen still fits a small phone.
+ */
 function Orb() {
   const halo = useBreath(3600, { from: 0.12, to: 0.34 });
   return (
@@ -198,15 +205,17 @@ function Orb() {
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      <Animated.View style={[styles.orbHalo, { opacity: halo }]} />
+      <Animated.View style={[styles.orbHalo, { opacity: halo }]}>
+        <LinearGradient
+          colors={[...gradients.orb.colors]}
+          locations={[...gradients.orb.locations]}
+          start={{ x: 0.15, y: 0 }}
+          end={{ x: 0.85, y: 1 }}
+          style={styles.orbHaloFill}
+        />
+      </Animated.View>
       <View style={styles.orbRing} />
-      <LinearGradient
-        colors={[...gradients.orb.colors]}
-        locations={[...gradients.orb.locations]}
-        start={{ x: 0.15, y: 0 }}
-        end={{ x: 0.85, y: 1 }}
-        style={styles.orbCore}
-      />
+      <Nox testID="interpretation-nox" />
     </View>
   );
 }
@@ -376,22 +385,16 @@ const styles = StyleSheet.create({
     // object it used to be the registered-ID twin of, so it spreads the same way.
     ...StyleSheet.absoluteFill,
     borderRadius: radius.full,
-    backgroundColor: colors.accent,
+    overflow: 'hidden',
+  },
+  orbHaloFill: {
+    flex: 1,
   },
   orbRing: {
-    position: 'absolute',
-    top: 26,
-    left: 26,
-    right: 26,
-    bottom: 26,
+    ...StyleSheet.absoluteFill,
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.borderMystic,
-  },
-  orbCore: {
-    width: 26,
-    height: 26,
-    borderRadius: radius.full,
   },
   copy: {
     alignItems: 'center',

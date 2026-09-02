@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <title>Nox — fond adaptatif Android</title>
+  <defs>
+    <radialGradient id="noxBg" cx="0.3" cy="0.12" r="1.2">
+      <stop offset="0" stop-color="#3a2f6b"></stop>
+      <stop offset="0.74" stop-color="#0d0d1a"></stop>
+      <stop offset="1" stop-color="#0d0d1a"></stop>
+    </radialGradient>
+  </defs>
+  <rect width="108" height="108" fill="url(#noxBg)"></rect>
+</svg>

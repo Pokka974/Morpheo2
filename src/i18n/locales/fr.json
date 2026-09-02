@@ -10,6 +10,10 @@
     "loading": "Chargement…",
     "premium": "Premium"
   },
+  "splash": {
+    "tagline": "Journal de rêves",
+    "a11yLabel": "Morpheo s’ouvre"
+  },
   "tabs": {
     "journal": "Journal",
     "insights": "Insights",

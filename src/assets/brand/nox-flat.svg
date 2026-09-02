@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <title>Nox — variante plate, deux tons</title>
+  <circle cx="84" cy="14" r="4" fill="#e0a85c"></circle>
+  <circle cx="48" cy="48" r="38" fill="#b399e0"></circle>
+  <path d="M60.17 12 A38 38 0 0 1 60.17 84 A50 50 0 0 0 60.17 12 Z" fill="#0d0d1a" opacity="0.14"></path>
+  <path d="M17 44 q6 5.5 12 0" fill="none" stroke="#0d0d1a" stroke-width="3.6" stroke-linecap="round"></path>
+</svg>

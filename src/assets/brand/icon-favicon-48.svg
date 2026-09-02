@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <title>Morpheo — favicon 48</title>
+  <rect width="48" height="48" rx="10" fill="#0d0d1a"></rect>
+  <circle cx="24" cy="24" r="15" fill="#b399e0"></circle>
+  <path d="M31.48 11 A15 15 0 0 1 31.48 37 A20 20 0 0 0 31.48 11 Z" fill="#0d0d1a" opacity="0.14"></path>
+  <path d="M15.5 22.5 q3 2.6 6 0" fill="none" stroke="#0d0d1a" stroke-width="2.2" stroke-linecap="round"></path>
+  <circle cx="40" cy="8" r="2.4" fill="#e0a85c"></circle>
+</svg>

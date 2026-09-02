@@ -27,6 +27,8 @@ const palette = {
   purple: '#7c5cbf',
   purpleLight: '#9f7dd8',
   amethyst: '#b399e0',
+  /** The lit stop of Nox's disc — paler than amethyst, so the moon reads as lit. */
+  lilac: '#c9a7f0',
   amber: '#e0a85c',
 
   moonWhite: '#f0eeff',
@@ -225,6 +227,15 @@ export const gradients = {
   /** The breathing orb at the centre of the wait screen. */
   orb: {
     colors: [palette.amethyst, palette.purple] as const,
+    locations: [0, 1] as const,
+  },
+  /**
+   * Nox's disc, lit from the top-left. The mascot's full variant only — the flat and
+   * silhouette variants exist for the favicon and the notification icon, which are
+   * exported assets rather than anything this app renders.
+   */
+  nox: {
+    colors: [palette.lilac, palette.purple] as const,
     locations: [0, 1] as const,
   },
   /** The account avatar disc in Settings. */
@@ -524,8 +535,23 @@ export const sizes = {
   /** The lucid / preference switch. */
   toggleTrack: 44,
   toggleKnob: 20,
-  /** The breathing orb on the interpretation wait screen. */
+  /** The breathing aura and its ring on the interpretation wait screen. */
   orb: 132,
+  /**
+   * Nox, at the size the interpretation wait screen shows her — well inside `orb`,
+   * so the ring stays a visible halo around the moon rather than a collar on it.
+   */
+  nox: 88,
+  /**
+   * Nox on the launch screen, where she is the only subject and carries the whole
+   * frame. This is the native launch icon's own footprint, not a free choice: at
+   * `imageWidth` 288, `splash-icon.svg` lands its 96-unit grid on 186 points
+   * (96 × 6.9 ÷ 1024 × 288). Matching it is what keeps her from jumping size when
+   * the native splash cross-fades into `BrandSplash`.
+   */
+  noxSplash: 186,
+  /** The glow behind her there — a halo around the moon, not a disc under it. */
+  splashHalo: 320,
 } as const;
 
 export const tokens = {

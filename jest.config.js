@@ -41,6 +41,7 @@ module.exports = {
     '^expo-font$': '<rootDir>/__mocks__/expo-font.js',
     '^expo-localization$': '<rootDir>/__mocks__/expo-localization.js',
     '^expo-speech-recognition$': '<rootDir>/__mocks__/expo-speech-recognition.js',
+    '^expo-splash-screen$': '<rootDir>/__mocks__/expo-splash-screen.js',
     '^@app/(.*)$': '<rootDir>/src/app/$1',
     '^@features/(.*)$': '<rootDir>/src/features/$1',
     '^@services/(.*)$': '<rootDir>/src/services/$1',
