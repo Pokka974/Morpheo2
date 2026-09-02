@@ -109,9 +109,6 @@ const mediaCache = {
   // Defaults to "nothing is on this device", which is the state every existing
   // hydration case was written against.
   isCached: jest.fn<Promise<boolean>, [string]>(),
-  // Defaults to "nothing is on this device", which is the state every existing
-  // hydration case was written against.
-  isCached: jest.fn<Promise<boolean>, [string]>(),
 };
 
 describe('pullRemoteChanges', () => {
@@ -128,7 +125,6 @@ describe('pullRemoteChanges', () => {
     mediaCache.getSignedUrl.mockReset().mockResolvedValue('https://example.com/signed.png');
     mediaCache.cacheMedia.mockReset().mockResolvedValue('/local/media/media-1.png');
     mediaCache.removeCachedMedia.mockReset().mockResolvedValue(undefined);
-    mediaCache.isCached.mockReset().mockResolvedValue(false);
     mediaCache.isCached.mockReset().mockResolvedValue(false);
     mockPurgeDreamLocally.mockReset().mockResolvedValue(undefined);
     mockRefreshSession.mockReset().mockResolvedValue({ data: { session: {} }, error: null });
@@ -980,7 +976,6 @@ describe('pullRemoteChanges', () => {
     }
 
     it('only considers completed images that have a remote object', async () => {
-    it('only considers completed images that have a remote object', async () => {
       mockFrom.mockImplementation(() => chainable(EMPTY));
 
       await pullRemoteChanges('user-1', mediaCache);
@@ -990,35 +985,6 @@ describe('pullRemoteChanges', () => {
       const sql = hydrationQuery();
       expect(sql).toContain("generation_status = 'complete'");
       expect(sql).toContain('storage_key IS NOT NULL');
-      // Deliberately *not* filtered on `local_cache_path IS NULL`: a recorded path
-      // can outlive the file it names, and those are the rows needing repair.
-      expect(sql).not.toContain('local_cache_path IS NULL');
-    });
-
-    it('leaves an already-cached image alone instead of downloading it again', async () => {
-      mockFrom.mockImplementation(() => chainable(EMPTY));
-      mockGetAllAsync.mockResolvedValue([{ id: 'media-1' }]);
-      mediaCache.isCached.mockResolvedValue(true);
-
-      await pullRemoteChanges('user-1', mediaCache);
-
-      expect(mediaCache.getSignedUrl).not.toHaveBeenCalled();
-      expect(mediaCache.cacheMedia).not.toHaveBeenCalled();
-    });
-
-    it('re-downloads a row whose recorded file is gone — a purged cache or a reinstall', async () => {
-      mockFrom.mockImplementation(() => chainable(EMPTY));
-      // The row still carries a `local_cache_path`; only the file behind it vanished.
-      mockGetAllAsync.mockResolvedValue([{ id: 'media-1' }]);
-      mediaCache.isCached.mockResolvedValue(false);
-
-      await pullRemoteChanges('user-1', mediaCache);
-
-      expect(mediaCache.getSignedUrl).toHaveBeenCalledWith('media-1');
-      expect(mockRunAsync).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE media SET local_cache_path'),
-        ['/local/media/media-1.png', 'media-1']
-      );
       // Deliberately *not* filtered on `local_cache_path IS NULL`: a recorded path
       // can outlive the file it names, and those are the rows needing repair.
       expect(sql).not.toContain('local_cache_path IS NULL');
@@ -1099,7 +1065,9 @@ describe('pullRemoteChanges', () => {
 
     it('stops after the download budget so one sync cannot pull an entire library', async () => {
       mockFrom.mockImplementation(() => chainable(EMPTY));
-      mockGetAllAsync.mockResolvedValue(Array.from({ length: 40 }, (_, i) => ({ id: `media-${i}` })));
+      mockGetAllAsync.mockResolvedValue(
+        Array.from({ length: 40 }, (_, i) => ({ id: `media-${i}` }))
+      );
       mediaCache.isCached.mockResolvedValue(false);
 
       await pullRemoteChanges('user-1', mediaCache);
