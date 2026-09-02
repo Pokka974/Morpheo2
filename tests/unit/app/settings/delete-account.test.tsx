@@ -73,6 +73,26 @@ describe('DeleteAccountScreen', () => {
     expect(queryByText('Confirm delete')).toBeNull();
   });
 
+  it('step 2: a failed call is reported, and does not sign out or claim success', async () => {
+    // `invoke` resolves { data, error } on a non-2xx rather than throwing. Discarding it
+    // signed the user out and showed "deletion scheduled" when the write had failed —
+    // and a signed-out user cannot retry (#2).
+    mockInvoke.mockResolvedValueOnce({ data: null, error: { message: 'schedule_failed' } });
+
+    const { getByText, getByLabelText, queryByText } = render(<DeleteAccountScreen />);
+    fireEvent.press(getByText('I understand — proceed'));
+    fireEvent.changeText(getByLabelText('Type DELETE MY ACCOUNT to confirm'), 'DELETE MY ACCOUNT');
+    fireEvent.press(getByText('Confirm delete'));
+
+    await waitFor(() =>
+      expect(getByText('We could not schedule your deletion', { exact: false })).toBeTruthy()
+    );
+    expect(mockSignOut).not.toHaveBeenCalled();
+    expect(queryByText('Account deletion scheduled')).toBeNull();
+    // The screen stays on step 2 so the attempt can be repeated.
+    expect(getByText('Confirm delete')).toBeTruthy();
+  });
+
   it('step 2: shows a spinner while deleting is in flight', async () => {
     let resolveInvoke: (v: unknown) => void = () => {};
     mockInvoke.mockReturnValueOnce(

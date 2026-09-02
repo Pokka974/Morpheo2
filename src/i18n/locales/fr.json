@@ -373,6 +373,7 @@
     "confirmInstructionSuffix": "pour confirmer :",
     "confirmAccessibilityLabel": "Tapez {{phrase}} pour confirmer",
     "confirmDelete": "Confirmer la suppression",
+    "errorBody": "Nous n'avons pas pu programmer votre suppression. Rien n'a été modifié et vous êtes toujours connecté — veuillez réessayer.",
     "doneTitle": "Suppression du compte programmée",
     "doneBody": "Vous avez été déconnecté. Vos données seront entièrement supprimées sous 30 jours."
   },

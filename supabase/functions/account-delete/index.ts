@@ -71,7 +71,14 @@ serve(async (req: Request) => {
 
   // Sign out all sessions globally. Deletion is already recorded, so a failure here
   // is not fatal to the request — but it must not pass unnoticed.
-  const { error: signOutError } = await supabase.auth.admin.signOut(user.id, 'global');
+  //
+  // `admin.signOut` is not a lookup by user id: it POSTs /logout bearing whatever JWT it
+  // is handed. Passing `user.id` sent a bare UUID as the bearer token, so GoTrue answered
+  // `invalid JWT: ... token contains an invalid number of segments` on every deletion and
+  // every session stayed alive — logged, and swallowed, since the branch below is not
+  // fatal. Verified against the local stack in #2.
+  const accessToken = authHeader.replace(/^Bearer\s+/i, '');
+  const { error: signOutError } = await supabase.auth.admin.signOut(accessToken, 'global');
   if (signOutError) {
     console.error('Global sign-out after deletion scheduling failed', {
       userId: user.id,

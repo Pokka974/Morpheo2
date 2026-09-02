@@ -373,6 +373,7 @@
     "confirmInstructionSuffix": "to confirm:",
     "confirmAccessibilityLabel": "Type {{phrase}} to confirm",
     "confirmDelete": "Confirm delete",
+    "errorBody": "We could not schedule your deletion. Nothing has been changed and you are still signed in — please try again.",
     "doneTitle": "Account deletion scheduled",
     "doneBody": "Your account has been signed out. Your data will be fully removed within 30 days."
   },
