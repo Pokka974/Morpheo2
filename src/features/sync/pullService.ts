@@ -17,6 +17,23 @@ const HYDRATION_LIMIT = 24;
  * fresh install or a new device does a full backfill rather than "changes since now". */
 const EPOCH = '1970-01-01T00:00:00.000Z';
 
+/**
+ * Cursor *prefixes*, not keys — every one is qualified with the user id it belongs to
+ * (see `cursorKey`). A cursor answers "what has this device already pulled", and the
+ * answer is only ever true of one account: it is a high-water mark over that account's
+ * own `last_modified_at` values.
+ *
+ * Sharing one key across accounts silently bricked the journal on account switch.
+ * Signing into a second account left the first account's high-water mark in place, so
+ * `gt(cursor)` matched none of the second account's older rows; signing back into the
+ * first found its own cursor already past everything it owned. Either way the pull
+ * reported success, wrote nothing, and left a permanently empty list that no amount of
+ * pulling to refresh could fill.
+ *
+ * A qualified key also makes the recovery automatic: the old unqualified keys are
+ * simply never read again, so every account starts from `EPOCH` once and backfills in
+ * full.
+ */
 const CURSOR_KEYS = {
   dreams: 'sync_dreams_last_pulled_at',
   interpretations: 'sync_interpretations_last_pulled_at',
@@ -24,6 +41,62 @@ const CURSOR_KEYS = {
   /** Not a pull cursor: how far the local recurrence rebuild has folded. */
   recurrence: 'sync_recurrence_folded_through',
 } as const;
+
+function cursorKey(prefix: string, userId: string): string {
+  return `${prefix}:${userId}`;
+}
+
+type PullListener = () => void;
+const pullListeners = new Set<PullListener>();
+
+/** Reference-counted rather than a boolean: the sign-in pull and a pull-to-refresh can
+ * overlap, and the second one finishing must not report the first as settled. */
+let pullsInFlight = 0;
+
+/**
+ * Whether any pull cycle is currently running. What it buys a screen is the difference
+ * between "you have no dreams" and "your dreams haven't arrived yet" — a distinction an
+ * empty local table cannot make on its own, and getting it wrong greets a returning user
+ * with an empty-journal state on every fresh install.
+ */
+export function isPullInFlight(): boolean {
+  return pullsInFlight > 0;
+}
+
+/**
+ * Fires when a pull starts, when it has written something worth re-reading, and when it
+ * settles.
+ *
+ * The pull on sign-in is fire-and-forget from `useAuthSync`, and by the time it lands the
+ * journal is already mounted and has already read an empty table. Nothing then re-read
+ * it: the list stayed empty until the user happened to navigate away and back, which is
+ * what "the dreams are there but I can't load them" actually was.
+ *
+ * Firing *during* the cycle and not only at the end is the other half of that. A cycle
+ * ends with `hydrateMediaCache`, which downloads up to 24 images — the dreams are
+ * readable long before it returns, so a completion-only signal left the list blank for
+ * the whole download, and made a pull-to-refresh (which awaits the same cycle) look like
+ * it had done nothing at all.
+ *
+ * This carries no data, only the fact that there is now something new to read.
+ */
+export function subscribeToPullActivity(listener: PullListener): () => void {
+  pullListeners.add(listener);
+  return () => {
+    pullListeners.delete(listener);
+  };
+}
+
+/** One listener throwing must not stop the others from hearing about the pull. */
+function notifyPullActivity(): void {
+  for (const listener of pullListeners) {
+    try {
+      listener();
+    } catch (err) {
+      console.error('A pull-activity listener threw:', err);
+    }
+  }
+}
 
 interface RemoteDream {
   id: string;
@@ -91,14 +164,67 @@ export async function pullRemoteChanges(
   userId: string,
   mediaCache?: MediaCacheDeps
 ): Promise<void> {
-  await tryPull('dreams', () => pullDreams(userId, mediaCache));
-  await tryPull('dream deletions', () => reconcileDreamDeletions(userId, mediaCache));
-  await tryPull('interpretations', () => pullInterpretations(userId));
-  // Immediately after, and only ever from interpretations already on this device.
-  await tryPull('recurrence patterns', () => foldInterpretationsIntoRecurrence(userId));
-  await tryPull('media', () => pullMedia(userId, mediaCache));
-  // Last, and only once the rows it works from are actually present.
-  if (mediaCache) await tryPull('media cache', () => hydrateMediaCache(mediaCache));
+  // Announced before any work starts, so a journal that mounted a moment earlier can
+  // tell "no dreams" from "not here yet" and hold its loading state.
+  pullsInFlight += 1;
+  notifyPullActivity();
+
+  try {
+    // First, and before anything reads or reconciles the local tables: this device may
+    // still be holding the previous account's data.
+    await tryPull('foreign-account cleanup', () => purgeOtherAccountsData(userId, mediaCache));
+    await tryPull('dreams', () => pullDreams(userId, mediaCache));
+    await tryPull('dream deletions', () => reconcileDreamDeletions(userId, mediaCache));
+    // The journal is readable from here: every remaining pass only enriches the cards
+    // that already exist. Waiting for them is what left the list blank.
+    notifyPullActivity();
+
+    await tryPull('interpretations', () => pullInterpretations(userId));
+    // Immediately after, and only ever from interpretations already on this device.
+    await tryPull('recurrence patterns', () => foldInterpretationsIntoRecurrence(userId));
+    await tryPull('media', () => pullMedia(userId, mediaCache));
+    notifyPullActivity();
+
+    // Last, and only once the rows it works from are actually present. This is the slow
+    // one — up to 24 image downloads — which is why nothing above waits on it.
+    if (mediaCache) await tryPull('media cache', () => hydrateMediaCache(mediaCache));
+  } finally {
+    pullsInFlight -= 1;
+    notifyPullActivity();
+  }
+}
+
+/**
+ * Local SQLite is one database shared by every account that has ever signed in on this
+ * device — nothing is cleared on sign-out, because a dream logged offline and not yet
+ * pushed would go with it. So a second account inherits the first one's rows, and every
+ * screen that doesn't filter on `user_id` shows them as if they were its own.
+ *
+ * `dreams.user_id` is on every local row, which makes "not mine" exactly decidable
+ * without tracking who owned the database last. Each foreign dream goes through
+ * `purgeDreamLocally` rather than a bulk `DELETE` so its interpretation, its media rows
+ * and its cached image files go with it; leaving the files behind would keep another
+ * account's imagery on disk under this account's 200MB cap.
+ *
+ * `recurrence_patterns` carries its own `user_id` and no dream FK, so it is cleared
+ * separately — otherwise the constellation would keep drawing the previous account's
+ * symbols over the new account's (now empty) journal.
+ */
+async function purgeOtherAccountsData(userId: string, deps?: MediaCacheDeps): Promise<void> {
+  const foreign = await sqlite.getAllAsync<{ id: string }>(
+    `SELECT id FROM dreams WHERE user_id != ?`,
+    userId
+  );
+
+  for (const row of foreign) {
+    await purgeDreamLocally(row.id, deps);
+  }
+
+  await sqlite.runAsync(`DELETE FROM recurrence_patterns WHERE user_id != ?`, userId);
+
+  if (foreign.length > 0) {
+    console.warn(`Removed ${foreign.length} dream(s) belonging to a previously signed-in account.`);
+  }
 }
 
 /**
@@ -235,12 +361,16 @@ async function retryWithFreshSession(
   }
 }
 
-async function getCursor(key: string): Promise<string> {
-  return (await AsyncStorage.getItem(key)) ?? EPOCH;
+async function getCursor(prefix: string, userId: string): Promise<string> {
+  return (await AsyncStorage.getItem(cursorKey(prefix, userId))) ?? EPOCH;
+}
+
+async function setCursor(prefix: string, userId: string, value: string): Promise<void> {
+  await AsyncStorage.setItem(cursorKey(prefix, userId), value);
 }
 
 async function pullDreams(userId: string, deps?: MediaCacheDeps): Promise<void> {
-  let cursor = await getCursor(CURSOR_KEYS.dreams);
+  let cursor = await getCursor(CURSOR_KEYS.dreams, userId);
 
   for (;;) {
     const { data, error } = await supabase
@@ -265,7 +395,7 @@ async function pullDreams(userId: string, deps?: MediaCacheDeps): Promise<void> 
     }
 
     cursor = data[data.length - 1]!['last_modified_at'] as string;
-    await AsyncStorage.setItem(CURSOR_KEYS.dreams, cursor);
+    await setCursor(CURSOR_KEYS.dreams, userId, cursor);
 
     if (data.length < PAGE_SIZE) return;
   }
@@ -394,10 +524,17 @@ async function reconcileDreamDeletions(userId: string, deps?: MediaCacheDeps): P
   // Only rows this device already believes are synced and active are candidates —
   // a not-yet-pushed local dream simply doesn't exist remotely yet, which must not
   // be mistaken for "was deleted".
+  //
+  // And only rows belonging to `userId`. `remoteActiveIds` is one account's dreams,
+  // so without this scope every *other* account's local dreams are missing from it by
+  // construction and get purged as "deleted remotely" — signing into a second account
+  // permanently destroyed the first account's journal on this device.
   const candidates = await db
     .select()
     .from(dreams)
-    .where(and(eq(dreams.syncStatus, 'synced'), eq(dreams.isDeleted, false)));
+    .where(
+      and(eq(dreams.userId, userId), eq(dreams.syncStatus, 'synced'), eq(dreams.isDeleted, false))
+    );
 
   for (const local of candidates) {
     if (!remoteActiveIds.has(local.id)) {
@@ -447,7 +584,7 @@ function reportSkipped(label: string, skipped: string[]): void {
 /** Interpretations are never edited after creation, so this only ever fills in
  * rows this device hasn't seen yet — no LWW comparison needed. */
 async function pullInterpretations(userId: string): Promise<void> {
-  const startCursor = await getCursor(CURSOR_KEYS.interpretations);
+  const startCursor = await getCursor(CURSOR_KEYS.interpretations, userId);
   let cursor = startCursor;
   let appliedCursor = startCursor;
   let clamped = false;
@@ -510,7 +647,7 @@ async function pullInterpretations(userId: string): Promise<void> {
 
     cursor = data[data.length - 1]!['created_at'] as string;
     if (appliedCursor !== startCursor) {
-      await AsyncStorage.setItem(CURSOR_KEYS.interpretations, appliedCursor);
+      await setCursor(CURSOR_KEYS.interpretations, userId, appliedCursor);
     }
 
     if (data.length < PAGE_SIZE) {
@@ -540,7 +677,7 @@ async function pullInterpretations(userId: string): Promise<void> {
  * current time would make every old symbol look like it recurred today.
  */
 async function foldInterpretationsIntoRecurrence(userId: string): Promise<void> {
-  const cursor = await getCursor(CURSOR_KEYS.recurrence);
+  const cursor = await getCursor(CURSOR_KEYS.recurrence, userId);
 
   const rows = await sqlite.getAllAsync<{
     dream_id: string;
@@ -575,7 +712,7 @@ async function foldInterpretationsIntoRecurrence(userId: string): Promise<void> 
       row.created_at
     );
     await recordRecurrence(userId, row.dream_id, 'theme', parseTerms(row.themes), row.created_at);
-    await AsyncStorage.setItem(CURSOR_KEYS.recurrence, row.created_at);
+    await setCursor(CURSOR_KEYS.recurrence, userId, row.created_at);
   }
 }
 
@@ -592,7 +729,7 @@ function parseTerms(raw: string | null): string[] {
 }
 
 async function pullMedia(userId: string, deps?: MediaCacheDeps): Promise<void> {
-  const startCursor = await getCursor(CURSOR_KEYS.media);
+  const startCursor = await getCursor(CURSOR_KEYS.media, userId);
   let cursor = startCursor;
   let appliedCursor = startCursor;
   let clamped = false;
@@ -633,7 +770,7 @@ async function pullMedia(userId: string, deps?: MediaCacheDeps): Promise<void> {
 
     cursor = data[data.length - 1]!['updated_at'] as string;
     if (appliedCursor !== startCursor) {
-      await AsyncStorage.setItem(CURSOR_KEYS.media, appliedCursor);
+      await setCursor(CURSOR_KEYS.media, userId, appliedCursor);
     }
 
     if (data.length < PAGE_SIZE) {
