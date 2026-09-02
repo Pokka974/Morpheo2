@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { supabase } from '../../../supabase/client';
 import { Button } from '@shared/components/Button';
+import { ErrorState } from '@shared/components/ErrorState';
 import { TrashIcon, WarningIcon } from '@shared/components/icons';
 import { colors, radius, spacing, typography } from '@theme/tokens';
 
@@ -21,16 +22,27 @@ export default function DeleteAccountScreen() {
   const [confirmationText, setConfirmationText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleted, setDeleted] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const isConfirmed = confirmationText === CONFIRMATION_PHRASE;
 
   const handleConfirmDelete = async () => {
     if (!isConfirmed) return;
     setIsDeleting(true);
+    setFailed(false);
     try {
-      await supabase.functions.invoke('account-delete', {
+      // `invoke` resolves `{ data, error }` on a non-2xx instead of throwing, so
+      // discarding the result reads a 500 as success: the user would be signed out and
+      // shown "deletion scheduled" with nothing written, and a signed-out user cannot
+      // retry. The Edge Function only 5xxs when the write itself failed, which is
+      // exactly the case that must not be reported as done.
+      const response = (await supabase.functions.invoke<unknown>('account-delete', {
         body: { confirmation: CONFIRMATION_PHRASE },
-      });
+      })) as { error: unknown };
+      if (response.error) {
+        setFailed(true);
+        return;
+      }
       await supabase.auth.signOut();
       setDeleted(true);
     } finally {
@@ -97,6 +109,8 @@ export default function DeleteAccountScreen() {
               phrase: CONFIRMATION_PHRASE,
             })}
           />
+
+          {failed ? <ErrorState message={t('settingsDeleteAccount.errorBody')} /> : null}
 
           <Button
             label={t('settingsDeleteAccount.confirmDelete')}
