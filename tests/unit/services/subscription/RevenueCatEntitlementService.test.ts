@@ -5,12 +5,16 @@ const mockPurchasePackage = jest.fn();
 const mockShowManageSubscriptions = jest.fn();
 const mockSetLogLevel = jest.fn();
 const mockConfigure = jest.fn();
+const mockLogIn = jest.fn();
+const mockLogOut = jest.fn();
 
 jest.mock('react-native-purchases', () => ({
   __esModule: true,
   default: {
     setLogLevel: (...args: unknown[]) => mockSetLogLevel(...args),
     configure: (...args: unknown[]) => mockConfigure(...args),
+    logIn: (...args: unknown[]) => mockLogIn(...args),
+    logOut: () => mockLogOut(),
     getOfferings: () => mockGetOfferings(),
     purchasePackage: (...args: unknown[]) => mockPurchasePackage(...args),
     showManageSubscriptions: () => mockShowManageSubscriptions(),
@@ -278,11 +282,16 @@ describe('RevenueCatEntitlementService', () => {
   });
 
   describe('purchasePremium', () => {
-    it('calls Purchases.purchasePackage on success', async () => {
+    function offerPremiumPackage() {
       mockGetOfferings.mockResolvedValue({
         current: { availablePackages: [{ identifier: 'premium_monthly' }] },
       });
       mockPurchasePackage.mockResolvedValue({ customerInfo: {} });
+    }
+
+    it('calls Purchases.purchasePackage on success', async () => {
+      offerPremiumPackage();
+      mockSingle.mockResolvedValue({ data: PREMIUM_ENTITLEMENT, error: null });
 
       const result = await service.purchasePremium();
       expect(mockPurchasePackage).toHaveBeenCalled();
@@ -303,12 +312,134 @@ describe('RevenueCatEntitlementService', () => {
     });
 
     it('returns success=false when purchasePackage throws (e.g. user cancelled)', async () => {
-      mockGetOfferings.mockResolvedValue({
-        current: { availablePackages: [{ identifier: 'premium_monthly' }] },
-      });
+      offerPremiumPackage();
       mockPurchasePackage.mockRejectedValue(new Error('User cancelled'));
       const result = await service.purchasePremium();
       expect(result.success).toBe(false);
+    });
+
+    // #43: RevenueCat writes `entitlements` through a webhook it delivers out-of-band,
+    // so the row is still `free` at the instant purchasePackage() resolves. Reading once
+    // here — which is what this used to do — reports a successful purchase as unconfirmed
+    // every time, and the paywall looks like it failed on the first attempt.
+    describe('waiting for the webhook', () => {
+      beforeEach(() => {
+        jest.useFakeTimers();
+        jest.spyOn(console, 'warn').mockImplementation(() => {});
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+      });
+
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      it('confirms without waiting when the row already reads premium', async () => {
+        offerPremiumPackage();
+        mockSingle.mockResolvedValue({ data: PREMIUM_ENTITLEMENT, error: null });
+
+        const result = await service.purchasePremium();
+
+        expect(result).toEqual({ success: true, confirmed: true });
+        expect(mockSingle).toHaveBeenCalledTimes(1);
+      });
+
+      it('keeps polling until the webhook lands, then confirms', async () => {
+        offerPremiumPackage();
+        mockSingle
+          .mockResolvedValueOnce({ data: FREE_ENTITLEMENT, error: null })
+          .mockResolvedValueOnce({ data: FREE_ENTITLEMENT, error: null })
+          .mockResolvedValue({ data: PREMIUM_ENTITLEMENT, error: null });
+
+        const pending = service.purchasePremium();
+        await jest.runAllTimersAsync();
+
+        expect(await pending).toEqual({ success: true, confirmed: true });
+        expect(mockSingle).toHaveBeenCalledTimes(3);
+      });
+
+      // The purchase itself succeeded — the store settled it. Only the server's record
+      // of it is late, so this must not read as a refusal: the caller is told the
+      // payment stands and only the confirmation is missing.
+      it('reports success but not confirmation when the budget runs out', async () => {
+        offerPremiumPackage();
+        mockSingle.mockResolvedValue({ data: FREE_ENTITLEMENT, error: null });
+
+        const pending = service.purchasePremium();
+        await jest.runAllTimersAsync();
+
+        expect(await pending).toEqual({ success: true, confirmed: false });
+        expect(mockSingle).toHaveBeenCalledTimes(6);
+      });
+
+      // A read failing mid-poll says nothing about whether the purchase went through,
+      // so it must not end the wait early.
+      it('keeps waiting through a transient read failure', async () => {
+        offerPremiumPackage();
+        mockSingle
+          .mockRejectedValueOnce(new Error('network'))
+          .mockResolvedValue({ data: PREMIUM_ENTITLEMENT, error: null });
+
+        const pending = service.purchasePremium();
+        await jest.runAllTimersAsync();
+
+        expect(await pending).toEqual({ success: true, confirmed: true });
+      });
+    });
+  });
+
+  // #43: without this the SDK mints its own `$RCAnonymousID:…` and sends it as
+  // `app_user_id`. Both `entitlements` and `profiles` key on a uuid column, so the
+  // webhook matches no row and a real purchase settles with both tables left on `free`.
+  describe('identify / resetIdentity', () => {
+    beforeEach(() => {
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      process.env['EXPO_PUBLIC_REVENUECAT_IOS_KEY'] = 'appl_abc123';
+      mockPlatformOS = 'ios';
+      RevenueCatEntitlementService.configure();
+    });
+
+    it('binds the Supabase user id as the RevenueCat app_user_id', async () => {
+      await service.identify('11111111-2222-3333-4444-555555555555');
+      expect(mockLogIn).toHaveBeenCalledWith('11111111-2222-3333-4444-555555555555');
+    });
+
+    it('releases the binding on sign-out', async () => {
+      await service.resetIdentity();
+      expect(mockLogOut).toHaveBeenCalledTimes(1);
+    });
+
+    // This runs on the auth path. A purchase provider being unreachable is not a reason
+    // a user cannot sign in.
+    it('does not throw when logIn fails', async () => {
+      mockLogIn.mockRejectedValueOnce(new Error('offline'));
+      await expect(service.identify('user-1')).resolves.toBeUndefined();
+      expect(console.error).toHaveBeenCalled();
+    });
+
+    // `logOut()` throws when the id is already anonymous, which is exactly the state
+    // after a sign-out that never reached identify().
+    it('does not throw when logOut fails', async () => {
+      mockLogOut.mockRejectedValueOnce(new Error('already anonymous'));
+      await expect(service.resetIdentity()).resolves.toBeUndefined();
+    });
+
+    // A build with no key is a supported state — entitlement *reads* come from Supabase
+    // and stay correct. Calling into the native singleton before configure() throws, so
+    // the guard has to come first. Re-required to get the class back with its
+    // `configured` flag unset; the beforeEach above has already set it on the shared one.
+    it('says so and stays silent on the SDK when RevenueCat is not configured', async () => {
+      jest.resetModules();
+      const { RevenueCatEntitlementService: Unconfigured } = jest.requireActual<
+        typeof import('@services/subscription/RevenueCatEntitlementService')
+      >('@services/subscription/RevenueCatEntitlementService');
+
+      await new Unconfigured().identify('user-1');
+      await new Unconfigured().resetIdentity();
+
+      expect(mockLogIn).not.toHaveBeenCalled();
+      expect(mockLogOut).not.toHaveBeenCalled();
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('not configured'));
     });
   });
 

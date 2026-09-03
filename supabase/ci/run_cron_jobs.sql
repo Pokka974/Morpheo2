@@ -160,4 +160,125 @@ BEGIN
 END
 $reset$;
 
+-- expire-subscriptions is the safety net for a webhook RevenueCat never delivered, or
+-- delivered and we failed to write. It is the only path by which a lapsed subscriber is
+-- ever downgraded without an external event, so "it executes" is a particularly weak
+-- thing to know about it: every way it can be wrong leaves valid SQL behind.
+--
+-- Three properties, each of which fails silently:
+--
+--   * It must move BOTH tables. entitlements is the source of truth and
+--     profiles.subscription_tier is a denormalised copy that RLS reads (data-model.md);
+--     a downgrade that lands in one leaves a lapsed user premium wherever the other is
+--     consulted.
+--   * The two UPDATEs are order-dependent. profiles is updated first, selecting its rows
+--     through a subquery over entitlements. Swap them and entitlements is already 'free'
+--     by the time the subquery runs, so it matches nothing and profiles keeps a premium
+--     tier forever -- with both statements still executing cleanly.
+--   * `subscription_expires_at IS NOT NULL` is load-bearing. A premium row with a null
+--     expiry is one the webhook has not written an expiry to yet; dropping that guard
+--     downgrades every one of them on the next nightly run.
+--
+-- Read back from cron.job for the same reason the reset is: 011_schema_reconciliation.sql
+-- re-schedules this job, so the migration file is not the authority on what runs.
+
+DO $expire$
+DECLARE
+  expire_cmd    text;
+  lapsed_user   uuid := '00000000-0000-0000-0000-0000000000e1';
+  active_user   uuid := '00000000-0000-0000-0000-0000000000e2';
+  no_expiry     uuid := '00000000-0000-0000-0000-0000000000e3';
+  active_until  timestamptz := now() + interval '10 days';
+  e             entitlements%ROWTYPE;
+  p_tier        text;
+BEGIN
+  SELECT command INTO expire_cmd FROM cron.job WHERE jobname = 'expire-subscriptions';
+
+  IF expire_cmd IS NULL THEN
+    RAISE EXCEPTION
+      'No cron job named expire-subscriptions -- it was renamed or never scheduled';
+  END IF;
+
+  INSERT INTO auth.users (id) VALUES (lapsed_user), (active_user), (no_expiry);
+
+  -- Lapsed: premium in both tables, expiry a day in the past. The one row the job exists
+  -- for.
+  UPDATE entitlements
+  SET subscription_tier       = 'premium',
+      subscription_expires_at = now() - interval '1 day'
+  WHERE user_id = lapsed_user;
+  UPDATE profiles SET subscription_tier = 'premium' WHERE id = lapsed_user;
+
+  -- Paying, mid-term. Must be left alone -- this is what proves the WHERE still
+  -- discriminates rather than downgrading the whole premium table.
+  UPDATE entitlements
+  SET subscription_tier       = 'premium',
+      subscription_expires_at = active_until
+  WHERE user_id = active_user;
+  UPDATE profiles SET subscription_tier = 'premium' WHERE id = active_user;
+
+  -- Premium with no expiry recorded. Also must be left alone, and for a different
+  -- reason: this is a live subscriber whose renewal date the webhook has not written,
+  -- not a lapsed one. Only a fixture shaped like this can catch a dropped IS NOT NULL.
+  UPDATE entitlements
+  SET subscription_tier       = 'premium',
+      subscription_expires_at = NULL
+  WHERE user_id = no_expiry;
+  UPDATE profiles SET subscription_tier = 'premium' WHERE id = no_expiry;
+
+  EXECUTE expire_cmd;
+
+  -- The lapsed row, entitlements half.
+  SELECT * INTO e FROM entitlements WHERE user_id = lapsed_user;
+
+  IF e.subscription_tier <> 'free' THEN
+    RAISE EXCEPTION
+      'expire-subscriptions left a lapsed entitlements row at % (expired %) -- the safety '
+      'net for a missed RevenueCat webhook did not fire',
+      e.subscription_tier, e.subscription_expires_at;
+  END IF;
+
+  -- The lapsed row, profiles half. This assertion is the ordering guard: if the two
+  -- UPDATEs are ever swapped, entitlements above still reads 'free' and only this fails.
+  SELECT subscription_tier INTO p_tier FROM profiles WHERE id = lapsed_user;
+
+  IF p_tier <> 'free' THEN
+    RAISE EXCEPTION
+      'expire-subscriptions downgraded entitlements but left profiles.subscription_tier '
+      'at % -- the denormalised copy RLS reads is now out of step, which is what happens '
+      'if the profiles UPDATE stops running before the entitlements one', p_tier;
+  END IF;
+
+  -- The paying mid-term row: untouched in both tables.
+  SELECT * INTO e FROM entitlements WHERE user_id = active_user;
+  SELECT subscription_tier INTO p_tier FROM profiles WHERE id = active_user;
+
+  IF e.subscription_tier <> 'premium' OR p_tier <> 'premium' THEN
+    RAISE EXCEPTION
+      'expire-subscriptions downgraded a subscription that runs until % '
+      '(entitlements %, profiles %)', active_until, e.subscription_tier, p_tier;
+  END IF;
+
+  IF e.subscription_expires_at <> active_until THEN
+    RAISE EXCEPTION 'expire-subscriptions moved subscription_expires_at from % to %',
+      active_until, e.subscription_expires_at;
+  END IF;
+
+  -- The null-expiry row: untouched in both tables.
+  SELECT * INTO e FROM entitlements WHERE user_id = no_expiry;
+  SELECT subscription_tier INTO p_tier FROM profiles WHERE id = no_expiry;
+
+  IF e.subscription_tier <> 'premium' OR p_tier <> 'premium' THEN
+    RAISE EXCEPTION
+      'expire-subscriptions downgraded a premium row with no subscription_expires_at '
+      '(entitlements %, profiles %) -- a null expiry means the webhook has not written a '
+      'renewal date, not that the subscription has lapsed. Dropping the IS NOT NULL guard '
+      'downgrades every such subscriber on the next nightly run', e.subscription_tier, p_tier;
+  END IF;
+
+  RAISE NOTICE 'expire-subscriptions: lapsed row downgraded in both tables, '
+    'mid-term and null-expiry subscriptions untouched';
+END
+$expire$;
+
 ROLLBACK;
