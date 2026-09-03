@@ -1,7 +1,11 @@
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import { Platform } from 'react-native';
 import { supabase } from '../../supabase/client';
-import type { EntitlementService, Entitlement } from '../entitlement/EntitlementService';
+import type {
+  EntitlementService,
+  Entitlement,
+  PurchaseResult,
+} from '../entitlement/EntitlementService';
 
 /**
  * RevenueCat issues a public SDK key per *app*, not per project — the App Store app
@@ -28,7 +32,29 @@ const PUBLIC_SDK_KEY_PREFIXES = ['appl_', 'goog_', 'amzn_', 'mkpl_', 'rcb_', 'te
  */
 const SECRET_KEY_PREFIX = 'sk_';
 
+/**
+ * How long to wait, and how, for the purchase webhook to land the tier change.
+ *
+ * RevenueCat delivers `INITIAL_PURCHASE` out-of-band, so the row is still `free` at the
+ * instant `purchasePackage()` resolves. Backs off rather than hammering: the webhook
+ * usually lands within a second or two, and each attempt is a round trip to PostgREST.
+ * Totals ~9.75s of waiting across six reads.
+ */
+const CONFIRMATION_BACKOFF_MS = [250, 500, 1000, 2000, 3000, 3000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export class RevenueCatEntitlementService implements EntitlementService {
+  /**
+   * Whether `configure()` handed the SDK a key. Every `Purchases.*` call below is a
+   * no-op without one — the native singleton does not exist, and calling into it throws
+   * rather than failing soft. A build with no key is a supported state (entitlement
+   * *reads* come from Supabase and stay correct), so this must not become an exception.
+   */
+  private static configured = false;
+
   /**
    * Hands this platform's public SDK key to the SDK. Returns whether it was configured,
    * so a caller can tell "no key on this build" from "configured and ready".
@@ -72,7 +98,34 @@ export class RevenueCatEntitlementService implements EntitlementService {
 
     void Purchases.setLogLevel(LOG_LEVEL.ERROR);
     Purchases.configure({ apiKey });
+    RevenueCatEntitlementService.configured = true;
     return true;
+  }
+
+  async identify(userId: string): Promise<void> {
+    if (!RevenueCatEntitlementService.configured) {
+      console.warn(`RevenueCat is not configured; ${userId} was not identified to it.`);
+      return;
+    }
+    try {
+      await Purchases.logIn(userId);
+    } catch (err) {
+      // Non-fatal by design: this runs on the auth path, and a purchase provider being
+      // unreachable must not stop a user signing in. The cost is that a purchase made in
+      // this session would arrive anonymous — the webhook logs exactly that case.
+      console.error('Identifying the user to RevenueCat failed:', err);
+    }
+  }
+
+  async resetIdentity(): Promise<void> {
+    if (!RevenueCatEntitlementService.configured) return;
+    try {
+      await Purchases.logOut();
+    } catch (err) {
+      // `logOut()` throws when the current id is already anonymous — which is the state
+      // after a sign-out that never reached `identify()`, so it is expected, not a fault.
+      console.error('Resetting the RevenueCat identity failed:', err);
+    }
   }
 
   async fetchEntitlement(): Promise<Entitlement> {
@@ -148,18 +201,46 @@ export class RevenueCatEntitlementService implements EntitlementService {
     }
   }
 
-  async purchasePremium(): Promise<{ success: boolean }> {
+  async purchasePremium(): Promise<PurchaseResult> {
     try {
       const offerings = await Purchases.getOfferings();
       const pkg = offerings.current?.availablePackages[0];
-      if (!pkg) return { success: false };
+      if (!pkg) return { success: false, confirmed: false };
       await Purchases.purchasePackage(pkg);
-      // Re-fetch entitlement after purchase (webhook updates server, then we sync)
-      await this.fetchEntitlement();
-      return { success: true };
+      // The store has settled the payment. The server row has not moved yet: RevenueCat
+      // writes it through the webhook, which arrives out-of-band, so reading once here
+      // returns the pre-purchase `free` and the paywall looks like it failed.
+      return { success: true, confirmed: await this.waitForPremium() };
     } catch {
-      return { success: false };
+      return { success: false, confirmed: false };
     }
+  }
+
+  /**
+   * Polls the server row until it reads `premium`, or the backoff budget runs out.
+   *
+   * Deliberately re-reads Supabase rather than trusting `CustomerInfo` from the purchase
+   * result: `entitlements.subscription_tier` is what every gate in the app and every
+   * Edge Function checks, so "the purchase worked" has to mean *that* column moved.
+   * Returns false rather than throwing — the purchase itself already succeeded.
+   */
+  private async waitForPremium(): Promise<boolean> {
+    for (const waitMs of CONFIRMATION_BACKOFF_MS) {
+      try {
+        const e = await this.fetchEntitlement();
+        if (e.subscriptionTier === 'premium') return true;
+      } catch (err) {
+        // A transient read failure is not evidence the purchase failed; keep waiting.
+        console.error('Reading the entitlement while confirming a purchase failed:', err);
+      }
+      await sleep(waitMs);
+    }
+    console.warn(
+      'A purchase succeeded but the entitlement row still reads free after ' +
+        `${CONFIRMATION_BACKOFF_MS.reduce((a, b) => a + b, 0)}ms. ` +
+        'The RevenueCat webhook has not landed yet; the next fetch should see it.'
+    );
+    return false;
   }
 
   async manageSubscription(): Promise<void> {

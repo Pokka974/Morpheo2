@@ -17,6 +17,14 @@ const mediaCache = {
 
 import type { AuthService, AuthSession } from '@services/auth/AuthService';
 import type { NotificationService } from '@services/notifications/NotificationService';
+import type { EntitlementService } from '@services/entitlement/EntitlementService';
+
+const mockIdentify = jest.fn(async () => {});
+const mockResetIdentity = jest.fn(async () => {});
+const entitlement = {
+  identify: mockIdentify,
+  resetIdentity: mockResetIdentity,
+} as unknown as EntitlementService;
 
 const session: AuthSession = {
   user: { id: 'user-1', email: 'a@b.com', provider: 'email' },
@@ -27,6 +35,8 @@ const session: AuthSession = {
 describe('useAuthSync', () => {
   beforeEach(() => {
     mockPullRemoteChanges.mockReset().mockResolvedValue(undefined);
+    mockIdentify.mockClear();
+    mockResetIdentity.mockClear();
   });
 
   it('registers a push token when the auth state change carries a session', async () => {
@@ -41,7 +51,7 @@ describe('useAuthSync', () => {
     const registerPushToken = jest.fn().mockResolvedValue(undefined);
     const notifications = { registerPushToken } as unknown as NotificationService;
 
-    renderHook(() => useAuthSync(auth, notifications, mediaCache));
+    renderHook(() => useAuthSync(auth, notifications, entitlement, mediaCache));
 
     await capturedCallback(session);
     expect(registerPushToken).toHaveBeenCalledTimes(1);
@@ -59,7 +69,7 @@ describe('useAuthSync', () => {
     const registerPushToken = jest.fn().mockResolvedValue(undefined);
     const notifications = { registerPushToken } as unknown as NotificationService;
 
-    renderHook(() => useAuthSync(auth, notifications, mediaCache));
+    renderHook(() => useAuthSync(auth, notifications, entitlement, mediaCache));
 
     await capturedCallback(null);
     expect(registerPushToken).not.toHaveBeenCalled();
@@ -78,7 +88,7 @@ describe('useAuthSync', () => {
       registerPushToken: jest.fn().mockResolvedValue(undefined),
     } as unknown as NotificationService;
 
-    renderHook(() => useAuthSync(auth, notifications, mediaCache));
+    renderHook(() => useAuthSync(auth, notifications, entitlement, mediaCache));
 
     await capturedCallback(session);
     // Fire-and-forget: let the pull's microtask settle.
@@ -106,7 +116,7 @@ describe('useAuthSync', () => {
       registerPushToken: jest.fn().mockResolvedValue(undefined),
     } as unknown as NotificationService;
 
-    renderHook(() => useAuthSync(auth, notifications, mediaCache));
+    renderHook(() => useAuthSync(auth, notifications, entitlement, mediaCache));
 
     await capturedCallback(null);
     expect(mockPullRemoteChanges).not.toHaveBeenCalled();
@@ -126,7 +136,7 @@ describe('useAuthSync', () => {
       registerPushToken: jest.fn().mockResolvedValue(undefined),
     } as unknown as NotificationService;
 
-    renderHook(() => useAuthSync(auth, notifications, mediaCache));
+    renderHook(() => useAuthSync(auth, notifications, entitlement, mediaCache));
 
     expect(() => capturedCallback(session)).not.toThrow();
     await Promise.resolve();
@@ -146,13 +156,59 @@ describe('useAuthSync', () => {
     const registerPushToken = jest.fn().mockRejectedValue(new Error('push registration failed'));
     const notifications = { registerPushToken } as unknown as NotificationService;
 
-    renderHook(() => useAuthSync(auth, notifications, mediaCache));
+    renderHook(() => useAuthSync(auth, notifications, entitlement, mediaCache));
 
     expect(() => capturedCallback(session)).not.toThrow();
     // Let the fire-and-forget registerPushToken().catch() settle without an unhandled rejection.
     await Promise.resolve();
     await Promise.resolve();
     expect(registerPushToken).toHaveBeenCalledTimes(1);
+  });
+
+  // #43: RevenueCat holds its own identity across launches, so a restored session it was
+  // never told about still transacts as `$RCAnonymousID:…` — which matches no row in
+  // either uuid-keyed table, and a real purchase then leaves both on `free`. This fires
+  // on every session, restored or fresh, for that reason.
+  it('binds the session user to the purchase provider', async () => {
+    const unsubscribe = jest.fn();
+    let capturedCallback: (session: AuthSession | null) => void = () => {};
+    const auth = {
+      onAuthStateChange: jest.fn((cb: (s: AuthSession | null) => void) => {
+        capturedCallback = cb;
+        return unsubscribe;
+      }),
+    } as unknown as AuthService;
+    const notifications = {
+      registerPushToken: jest.fn().mockResolvedValue(undefined),
+    } as unknown as NotificationService;
+
+    renderHook(() => useAuthSync(auth, notifications, entitlement, mediaCache));
+
+    await capturedCallback(session);
+    expect(mockIdentify).toHaveBeenCalledWith('user-1');
+    expect(mockResetIdentity).not.toHaveBeenCalled();
+  });
+
+  // Otherwise the next account to sign in on this device inherits the previous one's
+  // purchases until RevenueCat is told otherwise.
+  it('releases the binding on sign-out', async () => {
+    const unsubscribe = jest.fn();
+    let capturedCallback: (session: AuthSession | null) => void = () => {};
+    const auth = {
+      onAuthStateChange: jest.fn((cb: (s: AuthSession | null) => void) => {
+        capturedCallback = cb;
+        return unsubscribe;
+      }),
+    } as unknown as AuthService;
+    const notifications = {
+      registerPushToken: jest.fn().mockResolvedValue(undefined),
+    } as unknown as NotificationService;
+
+    renderHook(() => useAuthSync(auth, notifications, entitlement, mediaCache));
+
+    await capturedCallback(null);
+    expect(mockResetIdentity).toHaveBeenCalledTimes(1);
+    expect(mockIdentify).not.toHaveBeenCalled();
   });
 
   it('unsubscribes on unmount', () => {
@@ -162,7 +218,7 @@ describe('useAuthSync', () => {
     } as unknown as AuthService;
     const notifications = { registerPushToken: jest.fn() } as unknown as NotificationService;
 
-    const { unmount } = renderHook(() => useAuthSync(auth, notifications, mediaCache));
+    const { unmount } = renderHook(() => useAuthSync(auth, notifications, entitlement, mediaCache));
     unmount();
 
     expect(unsubscribe).toHaveBeenCalledTimes(1);

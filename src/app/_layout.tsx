@@ -113,11 +113,18 @@ function AppNavigator({ onContentReady }: NavigatorProps) {
   const insets = useSafeAreaInsets();
   const [authState, setAuthState] = useState<AuthState>('loading');
 
-  useSyncOnConnect(services.auth, mediaCache);
-  useAuthSync(services.auth, services.notifications, mediaCache);
-
+  // Declared above `useAuthSync` on purpose. Effects run in declaration order, and
+  // `useAuthSync` identifies the session to RevenueCat — which the SDK rejects until it
+  // has been configured. Ordering it here makes that a guarantee rather than a race won
+  // by the fact that Supabase emits its first auth event asynchronously.
   useEffect(() => {
     RevenueCatEntitlementService.configure();
+  }, []);
+
+  useSyncOnConnect(services.auth, mediaCache);
+  useAuthSync(services.auth, services.notifications, services.entitlement, mediaCache);
+
+  useEffect(() => {
     void initApp();
   }, []);
 

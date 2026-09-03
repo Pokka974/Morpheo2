@@ -1,4 +1,4 @@
-import type { EntitlementService, Entitlement } from '../EntitlementService';
+import type { EntitlementService, Entitlement, PurchaseResult } from '../EntitlementService';
 
 export type MockMode = 'free' | 'premium' | 'limit_exceeded' | 'premium_required';
 
@@ -16,9 +16,20 @@ const FREE_ENTITLEMENT: Entitlement = {
 export class MockEntitlementService implements EntitlementService {
   private mode: MockMode = 'free';
 
+  /** The last id passed to `identify()`, or null once `resetIdentity()` has run. */
+  identifiedUserId: string | null = null;
+
   configure(mode: MockMode) {
     this.mode = mode;
     return this;
+  }
+
+  async identify(userId: string): Promise<void> {
+    this.identifiedUserId = userId;
+  }
+
+  async resetIdentity(): Promise<void> {
+    this.identifiedUserId = null;
   }
 
   async fetchEntitlement(): Promise<Entitlement> {
@@ -59,8 +70,8 @@ export class MockEntitlementService implements EntitlementService {
     return '7,99 €';
   }
 
-  async purchasePremium(): Promise<{ success: boolean }> {
-    return { success: true };
+  async purchasePremium(): Promise<PurchaseResult> {
+    return { success: true, confirmed: true };
   }
 
   async manageSubscription(): Promise<void> {}

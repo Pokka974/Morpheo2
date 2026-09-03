@@ -10,6 +10,7 @@ import { MockStorageService } from '@services/storage/__mocks__/MockStorageServi
 import { MockEntitlementService } from '@services/entitlement/__mocks__/MockEntitlementService';
 import { MockNotificationService } from '@services/notifications/__mocks__/MockNotificationService';
 import type { ServiceRegistry } from '@services/registry';
+import type { PurchaseResult } from '@services/entitlement/EntitlementService';
 
 const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
@@ -93,7 +94,9 @@ describe('PaywallScreen', () => {
 
   it('does not navigate back when the purchase is unsuccessful', async () => {
     const registry = buildRegistry();
-    jest.spyOn(registry.entitlement, 'purchasePremium').mockResolvedValueOnce({ success: false });
+    jest
+      .spyOn(registry.entitlement, 'purchasePremium')
+      .mockResolvedValueOnce({ success: false, confirmed: false });
 
     const { findByText } = render(
       <ServicesProvider services={registry}>
@@ -107,7 +110,7 @@ describe('PaywallScreen', () => {
 
   it('shows a spinner and disables the button while purchasing', async () => {
     const registry = buildRegistry();
-    let resolvePurchase!: (v: { success: boolean }) => void;
+    let resolvePurchase!: (v: PurchaseResult) => void;
     jest.spyOn(registry.entitlement, 'purchasePremium').mockReturnValueOnce(
       new Promise(resolve => {
         resolvePurchase = resolve;
@@ -123,7 +126,7 @@ describe('PaywallScreen', () => {
     await waitFor(() => expect(queryByText('Start Premium')).toBeNull());
 
     await act(async () => {
-      resolvePurchase({ success: true });
+      resolvePurchase({ success: true, confirmed: true });
     });
     await waitFor(() => expect(mockBack).toHaveBeenCalled());
   });
