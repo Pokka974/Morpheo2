@@ -10,6 +10,8 @@ import type { Entitlement } from '@services/entitlement/EntitlementService';
 import { SettingsRow, SettingsSection } from '@shared/components/SettingsRow';
 import { ProfileCard } from '@features/subscription/ProfileCard';
 import { seedSampleDreams } from '@features/dev/seedSampleDreams';
+import { pullRemoteChanges, resetSyncCursors } from '@features/sync/pullService';
+import { makeMediaCache } from '@features/sync/mediaCache';
 import { supabase } from '../../../supabase/client';
 import { colors, spacing, typography } from '@theme/tokens';
 
@@ -37,7 +39,8 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { storage, entitlement, auth } = useServices();
+  const services = useServices();
+  const { storage, entitlement, auth } = services;
   const [cacheSize, setCacheSize] = useState<number>(0);
   const [entitlementData, setEntitlementData] = useState<Entitlement | null>(null);
   const [email, setEmail] = useState<string | null>(null);
@@ -171,6 +174,31 @@ export default function SettingsScreen() {
     })();
   };
 
+  /**
+   * A dream a stale, superseded pull purged locally (the race `pullGeneration`
+   * guards against — see pullService.ts) is gone for good from an ordinary
+   * incremental pull: its cursor already sits past a `last_modified_at` it will
+   * never see again. The dream was never touched server-side, so rewinding this
+   * account's cursors to the epoch and pulling again recovers it exactly like a
+   * fresh install would. Dev-only because the guard now prevents new instances of
+   * that race — this is a repair tool for state a build predating the fix already
+   * left behind, not something a real user's build should ever need.
+   */
+  const handleForceResync = () => {
+    void (async () => {
+      const session = await auth.getSession();
+      if (!session) return;
+      try {
+        await resetSyncCursors(session.user.id);
+        await pullRemoteChanges(session.user.id, makeMediaCache(services));
+        Alert.alert(t('settings.forceResyncSuccessTitle'));
+      } catch (err) {
+        console.error('Failed to force a full re-sync:', err);
+        Alert.alert(t('settings.forceResyncErrorTitle'));
+      }
+    })();
+  };
+
   // The style row shows the short name of the choice, not the full radio label the
   // style screen uses ("Symbolic / Archetypal") — a row value has to fit on one line.
   const styleValue = preferences?.interpretationStyle
@@ -272,6 +300,11 @@ export default function SettingsScreen() {
           <SettingsRow
             label={t('settings.seedDreamsRow')}
             onPress={handleSeedDreams}
+            navigable={false}
+          />
+          <SettingsRow
+            label={t('settings.forceResyncRow')}
+            onPress={handleForceResync}
             navigable={false}
           />
         </SettingsSection>

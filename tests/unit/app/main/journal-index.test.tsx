@@ -109,6 +109,8 @@ jest.mock('@shopify/flash-list', () => {
           data: unknown[];
           renderItem: (info: { item: unknown; index: number }) => React.ReactElement;
           keyExtractor?: (item: unknown, index: number) => string;
+          // A rendered element, per how the screen passes it — never a component type.
+          ListEmptyComponent?: React.ReactElement | null;
           onRefresh?: () => void;
           refreshing?: boolean;
         },
@@ -116,6 +118,10 @@ jest.mock('@shopify/flash-list', () => {
       ) => {
         ReactActual.useImperativeHandle(ref, () => ({ scrollToOffset: mockScrollToOffset }));
         capturedFlashListProps = { onRefresh: props.onRefresh, refreshing: props.refreshing };
+        // Real FlashList renders ListEmptyComponent in place of the list once data is
+        // empty — the screen's pull-to-refresh has to reach it there, exactly as it
+        // does for a populated list, which is the whole point of the fix under test.
+        if (props.data.length === 0) return props.ListEmptyComponent ?? null;
         return ReactActual.createElement(
           ReactActual.Fragment,
           null,
@@ -419,8 +425,6 @@ describe('JournalListScreen', () => {
 
   describe('pull-to-refresh', () => {
     it('pushes pending dreams, pulls remote changes, then reloads the list', async () => {
-      // A non-empty row keeps the screen on its FlashList branch — an empty result
-      // renders the EmptyState instead, which has no pull-to-refresh handle.
       (db.getAllAsync as jest.Mock).mockResolvedValue([
         {
           id: 'dream-1',
@@ -457,8 +461,6 @@ describe('JournalListScreen', () => {
       mockPullRemoteChanges.mockImplementation(async () => {
         order.push('pull');
       });
-      // A non-empty row keeps the screen on its FlashList branch — an empty result
-      // renders the EmptyState instead, which has no pull-to-refresh handle.
       (db.getAllAsync as jest.Mock).mockResolvedValue([
         {
           id: 'dream-1',
@@ -495,6 +497,29 @@ describe('JournalListScreen', () => {
       expect(mockPullRemoteChanges).not.toHaveBeenCalled();
     });
 
+    // An empty journal used to render EmptyState as a sibling of the FlashList rather
+    // than through it, so pull-to-refresh had no scrollable surface to attach to —
+    // exactly the case where a stuck sync most needs a manual retry, and the one case
+    // where there was no way to get it short of leaving the screen and coming back
+    // (which does not repull). EmptyState now renders as the list's own
+    // ListEmptyComponent, so the same RefreshControl backs both states.
+    it('pulls to refresh from the empty-journal state, not just a populated one', async () => {
+      (db.getAllAsync as jest.Mock).mockResolvedValue([]);
+      const { getByText } = renderScreen();
+      await waitFor(() => expect(getByText('Your dream journal is empty')).toBeTruthy());
+
+      await act(async () => {
+        capturedFlashListProps.onRefresh?.();
+        await waitFor(() => expect(mockPullRemoteChanges).toHaveBeenCalledTimes(1));
+      });
+
+      expect(mockSyncPendingDreams).toHaveBeenCalledTimes(1);
+      expect(mockPullRemoteChanges).toHaveBeenCalledWith(
+        'mock-user-id',
+        expect.objectContaining({ getSignedUrl: expect.any(Function) })
+      );
+    });
+
     it('toggles refreshing on while the sync is in flight and off once it settles', async () => {
       let resolvePull: () => void = () => {};
       mockPullRemoteChanges.mockImplementation(
@@ -503,8 +528,6 @@ describe('JournalListScreen', () => {
             resolvePull = resolve;
           })
       );
-      // A non-empty row keeps the screen on its FlashList branch — an empty result
-      // renders the EmptyState instead, which has no pull-to-refresh handle.
       (db.getAllAsync as jest.Mock).mockResolvedValue([
         {
           id: 'dream-1',
@@ -530,8 +553,6 @@ describe('JournalListScreen', () => {
 
     it('still reloads the list even when the pull itself fails', async () => {
       mockPullRemoteChanges.mockRejectedValue(new Error('pull failed'));
-      // A non-empty row keeps the screen on its FlashList branch — an empty result
-      // renders the EmptyState instead, which has no pull-to-refresh handle.
       (db.getAllAsync as jest.Mock).mockResolvedValue([
         {
           id: 'dream-1',

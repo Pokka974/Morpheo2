@@ -53,20 +53,31 @@ jest.mock('@features/recurrence/recurrenceRepository', () => ({
 import {
   isPullInFlight,
   pullRemoteChanges,
+  resetSyncCursors,
   subscribeToPullActivity,
 } from '@features/sync/pullService';
 
 /** Builds a chainable query-builder stub matching how pullService calls the
  * Supabase client. Most queries end in an explicit `.limit()`; the deletion
  * reconciliation query doesn't call `.limit()` at all and instead awaits the
- * builder directly (real supabase-js query builders are themselves thenable), so
- * this stub supports both terminal styles. */
+ * builder directly (real supabase-js query builders are themselves thenable); the
+ * missing-dream point lookup ends in `.maybeSingle()` instead — so this stub
+ * supports all three terminal styles. */
 function chainable(result: { data: unknown[] | null; error: unknown }) {
   const builder: Record<string, jest.Mock> = {};
   for (const method of ['select', 'eq', 'gt', 'order']) {
     builder[method] = jest.fn(() => builder);
   }
   builder['limit'] = jest.fn(() => Promise.resolve(result));
+  // Real `.maybeSingle()` never resolves an array — zero matches is `data: null`, one
+  // match is the row itself. Reducing the fixture's list here (rather than asking
+  // every test to hand-shape both a list and a single-row result) is what keeps a bare
+  // `chainable(EMPTY)` correctly reading as "no such dream" for the point lookup, the
+  // same as it already does for the paged queries.
+  builder['maybeSingle'] = jest.fn(() => {
+    const { data, error } = result;
+    return Promise.resolve({ data: Array.isArray(data) ? (data[0] ?? null) : data, error });
+  });
   builder['then'] = jest.fn((resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
     Promise.resolve(result).then(resolve, reject)
   );
@@ -349,20 +360,17 @@ describe('pullRemoteChanges', () => {
       const firstPull = new Promise<void>(resolve => {
         releaseFirst = resolve;
       });
-      let call = 0;
-      mockFrom.mockImplementation(() => {
-        call += 1;
-        // Stall the very first query, holding cycle one open across cycle two.
-        if (call === 1)
-          return {
-            select: () => ({
-              eq: () => ({
-                gt: () => ({ order: () => ({ limit: () => firstPull.then(() => EMPTY) }) }),
-              }),
-            }),
-          };
-        return chainable(EMPTY);
+      // Stall cycle one's very first step (the foreign-account scan, ahead of anything
+      // that touches `mockFrom`) rather than a later one: once a newer cycle has
+      // started, cycle one is superseded and returns right after this step without
+      // ever reaching them — see `pullGeneration`.
+      let notMineCalls = 0;
+      mockGetAllAsync.mockImplementation((sql: string) => {
+        if (!sql.includes('user_id != ?')) return Promise.resolve([]);
+        notMineCalls += 1;
+        return notMineCalls === 1 ? firstPull.then(() => []) : Promise.resolve([]);
       });
+      mockFrom.mockImplementation(() => chainable(EMPTY));
 
       const first = pullRemoteChanges('user-1');
       await pullRemoteChanges('user-1');
@@ -373,6 +381,35 @@ describe('pullRemoteChanges', () => {
       releaseFirst();
       await first;
       expect(isPullInFlight()).toBe(false);
+    });
+
+    it('lets a superseded cycle exit quietly rather than redo the newer cycle’s work', async () => {
+      let releaseFirst: () => void = () => {};
+      const firstPull = new Promise<void>(resolve => {
+        releaseFirst = resolve;
+      });
+      let notMineCalls = 0;
+      mockGetAllAsync.mockImplementation((sql: string) => {
+        if (!sql.includes('user_id != ?')) return Promise.resolve([]);
+        notMineCalls += 1;
+        return notMineCalls === 1 ? firstPull.then(() => []) : Promise.resolve([]);
+      });
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+
+      const first = pullRemoteChanges('user-1');
+      await pullRemoteChanges('user-1');
+      const dreamsCallsFromSecondCycle = mockFrom.mock.calls.filter(
+        ([table]) => table === 'dreams'
+      ).length;
+
+      releaseFirst();
+      await first;
+
+      // Cycle one contributed nothing once it noticed cycle two had already started —
+      // it neither re-queried 'dreams' nor changed how many times cycle two did.
+      expect(mockFrom.mock.calls.filter(([table]) => table === 'dreams').length).toBe(
+        dreamsCallsFromSecondCycle
+      );
     });
 
     it('settles even when a listener throws', async () => {
@@ -421,6 +458,41 @@ describe('pullRemoteChanges', () => {
 
       expect(mockPurgeDreamLocally).not.toHaveBeenCalled();
     });
+
+    // A sign-out immediately followed by a sign-in — exactly what testing account
+    // deletion does — leaves the sign-out pull's scan still running under the *old*
+    // userId. If it resumes after the sign-in pull has already synced the new
+    // account's dreams down, those dreams are the only rows this scan finds, and
+    // without the supersede guard they read as "belongs to someone else" and get
+    // purged — permanently, since the dreams cursor never re-fetches a dream it
+    // already applied once. This is what turned the orphan warning from transient
+    // into one that repeats forever.
+    it('does not purge the newly signed-in account’s dreams when a stale sign-out pull’s scan resolves late', async () => {
+      let releaseStaleScan: () => void = () => {};
+      const staleScanStalled = new Promise<void>(resolve => {
+        releaseStaleScan = resolve;
+      });
+      let notMineCalls = 0;
+      mockGetAllAsync.mockImplementation((sql: string) => {
+        if (!sql.includes('user_id != ?')) return Promise.resolve([]);
+        notMineCalls += 1;
+        // The first "not mine" scan is the stale old-account pull's; hold it open. A
+        // real race wouldn't need a second call to also be stalled — the new account's
+        // own pull never sees this table as having anyone else's rows in it.
+        return notMineCalls === 1
+          ? staleScanStalled.then(() => [{ id: 'new-account-dream' }])
+          : Promise.resolve([]);
+      });
+      mockFrom.mockImplementation(() => chainable(EMPTY));
+
+      const staleSignOutPull = pullRemoteChanges('old-user', mediaCache);
+      await pullRemoteChanges('new-user', mediaCache);
+
+      releaseStaleScan();
+      await staleSignOutPull;
+
+      expect(mockPurgeDreamLocally).not.toHaveBeenCalledWith('new-account-dream', mediaCache);
+    });
   });
 
   /**
@@ -467,6 +539,57 @@ describe('pullRemoteChanges', () => {
 
       expect(await AsyncStorage.getItem('sync_dreams_last_pulled_at:user-2')).toBe(
         '2026-01-01T00:00:00.000Z'
+      );
+    });
+  });
+
+  describe('resetSyncCursors (repairs a dream the pre-guard supersede race purged for good)', () => {
+    it('clears every cursor for the given account so the next pull is a full backfill', async () => {
+      await AsyncStorage.setItem('sync_dreams_last_pulled_at:user-1', '2026-08-01T00:00:00.000Z');
+      await AsyncStorage.setItem(
+        'sync_interpretations_last_pulled_at:user-1',
+        '2026-08-01T00:00:00.000Z'
+      );
+      await AsyncStorage.setItem('sync_media_last_pulled_at:user-1', '2026-08-01T00:00:00.000Z');
+      await AsyncStorage.setItem(
+        'sync_recurrence_folded_through:user-1',
+        '2026-08-01T00:00:00.000Z'
+      );
+
+      await resetSyncCursors('user-1');
+
+      expect(await AsyncStorage.getItem('sync_dreams_last_pulled_at:user-1')).toBeNull();
+      expect(await AsyncStorage.getItem('sync_interpretations_last_pulled_at:user-1')).toBeNull();
+      expect(await AsyncStorage.getItem('sync_media_last_pulled_at:user-1')).toBeNull();
+      expect(await AsyncStorage.getItem('sync_recurrence_folded_through:user-1')).toBeNull();
+    });
+
+    it('leaves another account’s cursors alone', async () => {
+      await AsyncStorage.setItem('sync_dreams_last_pulled_at:user-2', '2026-08-01T00:00:00.000Z');
+
+      await resetSyncCursors('user-1');
+
+      expect(await AsyncStorage.getItem('sync_dreams_last_pulled_at:user-2')).toBe(
+        '2026-08-01T00:00:00.000Z'
+      );
+    });
+
+    it('makes the next pull for the account do a full backfill from the epoch', async () => {
+      await AsyncStorage.setItem('sync_dreams_last_pulled_at:user-1', '2026-08-01T00:00:00.000Z');
+      await resetSyncCursors('user-1');
+
+      const builders: Array<Record<string, jest.Mock>> = [];
+      mockFrom.mockImplementation((table: string) => {
+        const builder = chainable(EMPTY);
+        if (table === 'dreams') builders.push(builder);
+        return builder;
+      });
+
+      await pullRemoteChanges('user-1');
+
+      expect(builders[0]!['gt']).toHaveBeenCalledWith(
+        'last_modified_at',
+        '1970-01-01T00:00:00.000Z'
       );
     });
   });
@@ -765,6 +888,84 @@ describe('pullRemoteChanges', () => {
         expect.stringContaining('Skipped 1 interpretations whose dream is not on this device')
       );
       expect(consoleErrorSpy).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The case that actually matters: a dream this device thinks it never has (it's
+     * missing from SQLite, wherever that state came from — a version of this pull that
+     * raced a sign-out/sign-in before `pullGeneration` existed, a dropped connection
+     * mid-page) but that is still sitting on the server, untouched. Before this, the
+     * only way back was a manual `resetSyncCursors` backfill; this is what makes that
+     * unnecessary by fetching the one missing dream directly instead of waiting on a
+     * cursor that will never revisit it.
+     */
+    it('recovers a dream missing only from this device by fetching it directly, rather than only skipping its children', async () => {
+      mockGetFirstAsync.mockImplementation((_sql: string, id: string) =>
+        Promise.resolve(id === 'dream-1' ? { id } : null)
+      );
+      const recoverable = { ...baseRemoteDream, id: 'dream-deleted', is_deleted: false };
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'interpretations')
+          return chainable({ data: [orphanInterpretation, liveInterpretation], error: null });
+        if (table === 'dreams') return chainable({ data: [recoverable], error: null });
+        return chainable(EMPTY);
+      });
+
+      await pullRemoteChanges('user-1');
+
+      // The dream itself lands locally...
+      expect(mockRunAsync).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO dreams'),
+        expect.arrayContaining(['dream-deleted'])
+      );
+      // ...and its interpretation is no longer treated as an orphan.
+      expect(mockRunAsync).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT OR IGNORE INTO interpretations'),
+        expect.arrayContaining(['interp-orphan'])
+      );
+      expect(consoleWarnSpy).not.toHaveBeenCalledWith(expect.stringContaining('Skipped'));
+    });
+
+    it('still skips and warns when the point lookup finds the dream genuinely deleted', async () => {
+      onlyDreamOneIsLocal();
+      const deleted = { ...baseRemoteDream, id: 'dream-deleted', is_deleted: true };
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'interpretations')
+          return chainable({ data: [orphanInterpretation], error: null });
+        if (table === 'dreams') return chainable({ data: [deleted], error: null });
+        return chainable(EMPTY);
+      });
+
+      await pullRemoteChanges('user-1');
+
+      expect(mockRunAsync).not.toHaveBeenCalledWith(
+        expect.stringContaining('INSERT OR IGNORE INTO interpretations'),
+        expect.arrayContaining(['interp-orphan'])
+      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Skipped 1 interpretations whose dream is not on this device')
+      );
+    });
+
+    it('falls back to skip-and-warn rather than crashing the page when the point lookup itself fails', async () => {
+      onlyDreamOneIsLocal();
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'interpretations')
+          return chainable({ data: [orphanInterpretation, liveInterpretation], error: null });
+        if (table === 'dreams') return chainable({ data: null, error: { message: 'boom' } });
+        return chainable(EMPTY);
+      });
+
+      await expect(pullRemoteChanges('user-1')).resolves.toBeUndefined();
+
+      // The row behind the failed recovery attempt still goes through.
+      expect(mockRunAsync).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT OR IGNORE INTO interpretations'),
+        expect.arrayContaining(['interp-1'])
+      );
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Skipped 1 interpretations whose dream is not on this device')
+      );
     });
   });
 
