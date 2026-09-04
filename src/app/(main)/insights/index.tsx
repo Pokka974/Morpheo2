@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
@@ -71,23 +71,29 @@ export default function InsightsScreen() {
   const [chains, setChains] = useState<RecurrenceChain[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    async function init() {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
-        setUserId(user.id);
-        setIsPremium(await entitlement.isPremium());
-      } catch (err) {
-        console.error('Failed to resolve insights entitlement:', err);
-      } finally {
-        setIsLoading(false);
+  // Focus rather than mount: a purchase completes on the paywall screen and returns
+  // here, and without refetching on focus the premium-only view (period control, full
+  // recurrence limit) would stay gated until the app restarts, even though load()
+  // below already reacts to isPremium changing.
+  useFocusEffect(
+    useCallback(() => {
+      async function init() {
+        try {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (!user) return;
+          setUserId(user.id);
+          setIsPremium(await entitlement.isPremium());
+        } catch (err) {
+          console.error('Failed to resolve insights entitlement:', err);
+        } finally {
+          setIsLoading(false);
+        }
       }
-    }
-    void init();
-  }, [entitlement]);
+      void init();
+    }, [entitlement])
+  );
 
   const load = useCallback(async () => {
     if (!userId) return;

@@ -14,6 +14,12 @@ import type { ServiceRegistry } from '@services/registry';
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const React = jest.requireActual('react');
+    // No deps array: re-runs on every render, standing in for "the screen is
+    // always focused" in a test environment that never unmounts/refocuses.
+    React.useEffect(effect);
+  },
 }));
 
 const mockGetUser = jest.fn();
@@ -143,6 +149,39 @@ describe('InsightsScreen', () => {
     expect(queryByText('Full insights — Premium')).toBeNull();
     expect(getByText('90 d')).toBeTruthy();
   });
+
+  it('refreshes premium status when the screen regains focus after a purchase', async () => {
+    // The paywall calls router.back() on a successful purchase; without refetching
+    // on focus (rather than mount) this screen would keep gating the period switch
+    // behind "free", correctly paid for, until the app restarts. Two chained effects
+    // (isPremium, then load()) behind a Promise.all of four mocked calls make this
+    // slower than most screens under a loaded CI runner, hence the generous timeouts.
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
+    mockGetTopRecurrences.mockResolvedValue([]);
+    entitlementService.configure('free');
+
+    const { getByText, queryByText, rerender } = render(
+      <ServicesProvider services={buildRegistry()}>
+        <InsightsScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(getByText('Full insights — Premium')).toBeTruthy(), {
+      timeout: 10000,
+    });
+
+    entitlementService.configure('premium');
+    rerender(
+      <ServicesProvider services={buildRegistry()}>
+        <InsightsScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(queryByText('Full insights — Premium')).toBeNull(), {
+      timeout: 10000,
+    });
+    expect(getByText('90 d')).toBeTruthy();
+  }, 25000);
 
   it('premium tier: switching the period refetches over the new window', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });

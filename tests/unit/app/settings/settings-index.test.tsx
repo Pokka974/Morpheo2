@@ -19,6 +19,12 @@ jest.mock('expo-router', () => ({
     back: jest.fn(),
     replace: (...args: unknown[]) => mockReplace(...args),
   }),
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const React = jest.requireActual('react');
+    // No deps array: re-runs on every render, standing in for "the screen is
+    // always focused" in a test environment that never unmounts/refocuses.
+    React.useEffect(effect);
+  },
 }));
 
 // seedSampleDreams transitively imports syncPendingDreams -> the real Supabase client,
@@ -208,6 +214,31 @@ describe('SettingsScreen', () => {
     });
 
     const { getByText } = render(
+      <ServicesProvider services={registry}>
+        <SettingsScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(getByText('Premium')).toBeTruthy());
+  });
+
+  it('refreshes the entitlement badge when the screen regains focus after a purchase', async () => {
+    // The paywall calls router.back() on a successful purchase; without refetching
+    // on focus (rather than mount) this card would keep showing Free, correctly
+    // paid for, until the app restarts.
+    const entitlement = new MockEntitlementService().configure('free');
+    const registry = buildRegistry({ entitlement });
+
+    const { getByText, rerender } = render(
+      <ServicesProvider services={registry}>
+        <SettingsScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(getByText('Free')).toBeTruthy());
+
+    entitlement.configure('premium');
+    rerender(
       <ServicesProvider services={registry}>
         <SettingsScreen />
       </ServicesProvider>
