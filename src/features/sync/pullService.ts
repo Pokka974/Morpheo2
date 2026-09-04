@@ -54,6 +54,28 @@ const pullListeners = new Set<PullListener>();
 let pullsInFlight = 0;
 
 /**
+ * Bumped on every call to `pullRemoteChanges`. `supabase.auth.onAuthStateChange` fires
+ * on far more than sign-in — a token refresh, `INITIAL_SESSION`, the foreground handler,
+ * the reconnect handler and a pull-to-refresh all call it too, none of them cancelling
+ * whichever call is already in flight. Two calls for the *same* user racing is harmless:
+ * every write below is idempotent. Two calls for *different* users racing is not — a
+ * sign-out immediately followed by a sign-in (exactly what testing the account-delete
+ * flow does) leaves the first call's `userId` stale in its closure while it's still
+ * awaiting a network round trip. If that stale call's `purgeOtherAccountsData` or
+ * `reconcileDreamDeletions` runs *after* the second call has already synced the new
+ * account's dreams down, it reads those dreams as "belongs to a different account" or
+ * "missing from my remote snapshot" and hard-deletes them locally — permanently, since
+ * the dreams cursor is a high-water mark and won't re-fetch a dream it already applied
+ * once. That is what turned "Skipped N interpretations whose dream is not on this
+ * device" into a warning that repeats forever instead of resolving on the next pull.
+ *
+ * Each call captures the generation current when it starts; `isCurrentPull` lets it
+ * notice a newer call has since started and bail out before doing anything destructive,
+ * leaving the rest of the work to that newer call.
+ */
+let pullGeneration = 0;
+
+/**
  * Whether any pull cycle is currently running. What it buys a screen is the difference
  * between "you have no dreams" and "your dreams haven't arrived yet" — a distinction an
  * empty local table cannot make on its own, and getting it wrong greets a returning user
@@ -140,6 +162,11 @@ interface RemoteInterpretation {
   image_prompt: string | null;
 }
 
+/** Shared between `pullDreams`'s incremental page query and `recoverMissingDream`'s
+ * point lookup — both need the same columns to build a `RemoteDream`. */
+const DREAM_COLUMNS =
+  'id, user_id, description, occurred_at, emotions, is_lucid, logged_at, last_modified_at, is_deleted, edited_since_interpretation, bedtime, wake_time, sleep_quality, clarity, lucidity, tone, dream_ending, dream_type, characters, places, linked_dream_id';
+
 interface RemoteMedia {
   id: string;
   dream_id: string;
@@ -164,6 +191,13 @@ export async function pullRemoteChanges(
   userId: string,
   mediaCache?: MediaCacheDeps
 ): Promise<void> {
+  const myGeneration = ++pullGeneration;
+  // True only while no newer `pullRemoteChanges` call has started since this one did —
+  // see `pullGeneration`. Checked before every step, not just the destructive ones:
+  // once superseded, a step's writes are redundant with what the newer call is about
+  // to do (or has already done), so there's nothing left for this call to contribute.
+  const isCurrentPull = () => myGeneration === pullGeneration;
+
   // Announced before any work starts, so a journal that mounted a moment earlier can
   // tell "no dreams" from "not here yet" and hold its loading state.
   pullsInFlight += 1;
@@ -172,18 +206,28 @@ export async function pullRemoteChanges(
   try {
     // First, and before anything reads or reconciles the local tables: this device may
     // still be holding the previous account's data.
-    await tryPull('foreign-account cleanup', () => purgeOtherAccountsData(userId, mediaCache));
+    await tryPull('foreign-account cleanup', () =>
+      purgeOtherAccountsData(userId, mediaCache, isCurrentPull)
+    );
+    if (!isCurrentPull()) return;
     await tryPull('dreams', () => pullDreams(userId, mediaCache));
-    await tryPull('dream deletions', () => reconcileDreamDeletions(userId, mediaCache));
+    if (!isCurrentPull()) return;
+    await tryPull('dream deletions', () =>
+      reconcileDreamDeletions(userId, mediaCache, isCurrentPull)
+    );
     // The journal is readable from here: every remaining pass only enriches the cards
     // that already exist. Waiting for them is what left the list blank.
     notifyPullActivity();
+    if (!isCurrentPull()) return;
 
     await tryPull('interpretations', () => pullInterpretations(userId));
+    if (!isCurrentPull()) return;
     // Immediately after, and only ever from interpretations already on this device.
     await tryPull('recurrence patterns', () => foldInterpretationsIntoRecurrence(userId));
+    if (!isCurrentPull()) return;
     await tryPull('media', () => pullMedia(userId, mediaCache));
     notifyPullActivity();
+    if (!isCurrentPull()) return;
 
     // Last, and only once the rows it works from are actually present. This is the slow
     // one — up to 24 image downloads — which is why nothing above waits on it.
@@ -209,12 +253,26 @@ export async function pullRemoteChanges(
  * `recurrence_patterns` carries its own `user_id` and no dream FK, so it is cleared
  * separately — otherwise the constellation would keep drawing the previous account's
  * symbols over the new account's (now empty) journal.
+ *
+ * `isCurrentPull` guards against a stale call rather than a stale row: this scan is
+ * the first `await` in a whole `pullRemoteChanges` cycle, so a sign-out immediately
+ * followed by a sign-in — exactly what testing account deletion does — can leave it
+ * still running under the *old* account's `userId` after a newer call has already
+ * synced the *new* account's dreams down. To this call, those dreams simply look like
+ * they belong to someone else, and without the check it would delete a signed-in
+ * account's own journal, permanently: the dreams cursor is a high-water mark and won't
+ * re-fetch a dream it already applied once.
  */
-async function purgeOtherAccountsData(userId: string, deps?: MediaCacheDeps): Promise<void> {
+async function purgeOtherAccountsData(
+  userId: string,
+  deps?: MediaCacheDeps,
+  isCurrentPull: () => boolean = () => true
+): Promise<void> {
   const foreign = await sqlite.getAllAsync<{ id: string }>(
     `SELECT id FROM dreams WHERE user_id != ?`,
     userId
   );
+  if (!isCurrentPull()) return;
 
   for (const row of foreign) {
     await purgeDreamLocally(row.id, deps);
@@ -369,15 +427,39 @@ async function setCursor(prefix: string, userId: string, value: string): Promise
   await AsyncStorage.setItem(cursorKey(prefix, userId), value);
 }
 
+/**
+ * Forces the next pull for this account back to a full backfill from `EPOCH`, as if it
+ * had never synced before. Recovery, not routine maintenance: a dream that the
+ * superseded-pull race (see `pullGeneration`) purged locally before that guard existed
+ * is gone for good from an *incremental* pull — its cursor already sits past a
+ * `last_modified_at` it will never see again, which is exactly what let a handful of
+ * interpretations and media rows point at a dream permanently missing from this
+ * device. The dream itself was never touched server-side, so a full backfill recovers
+ * it; nothing here talks to Supabase or SQLite directly.
+ *
+ * The recurrence cursor is included too, even though it tracks a purely local table
+ * (`i.created_at > cursor` over interpretations already on this device, not a remote
+ * query): the recovered interpretations carry their original, now-old `created_at`,
+ * and without rewinding this cursor as well `foldInterpretationsIntoRecurrence` would
+ * skip them as already folded — the constellation would recover the dreams and their
+ * cards, but silently keep missing their stars.
+ */
+export async function resetSyncCursors(userId: string): Promise<void> {
+  await AsyncStorage.multiRemove([
+    cursorKey(CURSOR_KEYS.dreams, userId),
+    cursorKey(CURSOR_KEYS.interpretations, userId),
+    cursorKey(CURSOR_KEYS.media, userId),
+    cursorKey(CURSOR_KEYS.recurrence, userId),
+  ]);
+}
+
 async function pullDreams(userId: string, deps?: MediaCacheDeps): Promise<void> {
   let cursor = await getCursor(CURSOR_KEYS.dreams, userId);
 
   for (;;) {
     const { data, error } = await supabase
       .from('dreams')
-      .select(
-        'id, user_id, description, occurred_at, emotions, is_lucid, logged_at, last_modified_at, is_deleted, edited_since_interpretation, bedtime, wake_time, sleep_quality, clarity, lucidity, tone, dream_ending, dream_type, characters, places, linked_dream_id'
-      )
+      .select(DREAM_COLUMNS)
       .eq('user_id', userId)
       .gt('last_modified_at', cursor)
       .order('last_modified_at', { ascending: true })
@@ -503,8 +585,19 @@ async function applyRemoteDream(row: RemoteDream, deps?: MediaCacheDeps): Promis
  * That diff is also how a deletion made on another device now reaches this one:
  * `syncService.purgeDream` deletes the remote row outright, so there is no tombstone
  * for the incremental pull to carry and this is the pass that notices.
+ *
+ * `isCurrentPull` guards the same race `purgeOtherAccountsData` does: the network
+ * round trip above is long enough for a sign-out immediately followed by a sign-in to
+ * land a newer pull's dreams before this stale one resumes. Under the old (superseded)
+ * account those dreams aren't in `remoteActiveIds` — that set was fetched for the old
+ * account — so without the check every one of the new account's just-synced dreams
+ * reads as "deleted remotely" and gets purged.
  */
-async function reconcileDreamDeletions(userId: string, deps?: MediaCacheDeps): Promise<void> {
+async function reconcileDreamDeletions(
+  userId: string,
+  deps?: MediaCacheDeps,
+  isCurrentPull: () => boolean = () => true
+): Promise<void> {
   const { data, error } = await supabase
     .from('dreams')
     .select('id')
@@ -516,6 +609,7 @@ async function reconcileDreamDeletions(userId: string, deps?: MediaCacheDeps): P
     console.error('Reconcile dream deletions failed:', error);
     return;
   }
+  if (!isCurrentPull()) return;
 
   const remoteActiveIds = new Set(
     ((data as Array<{ id: string }> | null) ?? []).map(row => row.id)
@@ -566,6 +660,49 @@ async function dreamExistsLocally(dreamId: string): Promise<boolean> {
 }
 
 /**
+ * The fallback `dreamExistsLocally` reaches for before giving up on an orphan.
+ * `pullDreams` runs first in every cycle and normally means this is never needed —
+ * but "normally" isn't "always", and a cursor never revisits a row it has already
+ * advanced past. Anything that once desyncs a dream from its children — a version of
+ * this pull racing a sign-out/sign-in before `pullGeneration` existed and guarded
+ * against it, a dropped connection mid-page, a future bug nobody's found yet — leaves
+ * that dream permanently unrecoverable to an incremental pull, even though the row is
+ * still sitting on the server the whole time. Without this, the only way back was a
+ * full `resetSyncCursors` backfill; a symptom that repeats identically forever, with
+ * no cursor advancing and nothing to distinguish "will resolve next cycle" from "never
+ * will", is exactly the shape of that failure mode.
+ *
+ * A point lookup by id rather than waiting for the cursor to reach it. Returns whether
+ * the dream is on this device now — `false` covers both "genuinely deleted" and "the
+ * lookup itself failed", and either way the caller's existing skip-and-warn behaviour
+ * is unchanged.
+ *
+ * Caught rather than left to escape: this runs once per orphaned row inside a page
+ * loop, and a network hiccup on this one lookup must not take down every row behind
+ * it in the same page — the existing skip-and-warn path already handles "couldn't
+ * recover this one" without losing anything else.
+ */
+async function recoverMissingDream(dreamId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('dreams')
+      .select(DREAM_COLUMNS)
+      .eq('id', dreamId)
+      .maybeSingle();
+
+    if (error || !data) return false;
+    const row = data as RemoteDream;
+    if (row.is_deleted) return false;
+
+    await applyRemoteDream(row);
+    return true;
+  } catch (err) {
+    console.error(`Failed to recover dream ${dreamId} for an orphaned child row:`, err);
+    return false;
+  }
+}
+
+/**
  * The cursor may only advance over rows that were actually applied. An orphan is
  * usually permanent (its dream is deleted), but it is indistinguishable here from a
  * dream that simply hasn't arrived yet — the dreams pull failing earlier in this same
@@ -613,7 +750,7 @@ async function pullInterpretations(userId: string): Promise<void> {
     }
 
     for (const row of data as RemoteInterpretation[]) {
-      if (!(await dreamExistsLocally(row.dream_id))) {
+      if (!(await dreamExistsLocally(row.dream_id)) && !(await recoverMissingDream(row.dream_id))) {
         skipped.push(row.id);
         clamped = true;
         continue;
@@ -758,7 +895,7 @@ async function pullMedia(userId: string, deps?: MediaCacheDeps): Promise<void> {
     }
 
     for (const row of data as RemoteMedia[]) {
-      if (!(await dreamExistsLocally(row.dream_id))) {
+      if (!(await dreamExistsLocally(row.dream_id)) && !(await recoverMissingDream(row.dream_id))) {
         skipped.push(row.id);
         clamped = true;
         continue;

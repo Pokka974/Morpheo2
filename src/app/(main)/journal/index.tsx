@@ -260,57 +260,65 @@ export default function JournalListScreen() {
         </View>
       ) : null}
 
-      {noDreams ? (
-        /**
-         * An empty table while a backfill is running is not an empty journal — it is a
-         * journal whose dreams are still on their way down. Offering "log your first
-         * dream" there tells a returning user on a fresh install that everything they
-         * have ever written is gone.
-         */
-        isSyncing ? (
-          <LoadingState message={t('journal.loading')} />
-        ) : (
-          <EmptyState
-            title={t('journal.emptyTitle')}
-            subtitle={t('journal.emptySubtitle')}
-            ctaLabel={t('journal.emptyCta')}
-            onCta={() => router.navigate('/(main)/log')}
-          />
-        )
-      ) : noResults ? (
-        <EmptyState
-          title={t('journal.noResultsTitle')}
-          subtitle={t('journal.noResultsSubtitle')}
-          ctaLabel={t('journal.noResultsCta')}
-          onCta={() => {
-            setSearchQuery('');
-            clearSearch();
-          }}
-        />
-      ) : noFilterMatches ? (
-        <EmptyState
-          title={t('journal.noFilterMatchesTitle')}
-          subtitle={t('journal.noFilterMatchesSubtitle')}
-          ctaLabel={t('journal.filterClear')}
-          onCta={() => {
-            clearFilters();
-            setFilterPeriod('all');
-          }}
-        />
-      ) : (
-        <FlashList
-          ref={listRef}
-          data={displayEntries}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => <DreamCard entry={item} variant="full" onPress={openDream} />}
-          contentContainerStyle={styles.list}
-          ItemSeparatorComponent={Separator}
-          ListFooterComponent={displayEntries.length > 0 ? <WeeklyInsight /> : null}
-          showsVerticalScrollIndicator={false}
-          refreshing={isRefreshing}
-          onRefresh={() => void onRefresh()}
-        />
-      )}
+      {/*
+        Always the same FlashList, empty or not — its RefreshControl is what makes
+        pull-to-refresh work at all, and a separate non-list element standing in for
+        "no dreams yet" (as this used to do) has no scrollable surface for that gesture
+        to attach to. That stranded a returning user exactly when they most needed
+        pull-to-refresh: an empty journal *is* the state a stuck sync leaves behind, and
+        without this they had no way to retry short of leaving the screen and coming
+        back, which does not repull.
+      */}
+      <FlashList
+        ref={listRef}
+        data={displayEntries}
+        keyExtractor={item => item.id}
+        renderItem={({ item }) => <DreamCard entry={item} variant="full" onPress={openDream} />}
+        contentContainerStyle={styles.list}
+        ItemSeparatorComponent={Separator}
+        ListFooterComponent={displayEntries.length > 0 ? <WeeklyInsight /> : null}
+        ListEmptyComponent={
+          noDreams ? (
+            // An empty table while a backfill is running is not an empty journal — it
+            // is a journal whose dreams are still on their way down. Offering "log
+            // your first dream" there tells a returning user on a fresh install that
+            // everything they have ever written is gone.
+            isSyncing ? (
+              <LoadingState message={t('journal.loading')} />
+            ) : (
+              <EmptyState
+                title={t('journal.emptyTitle')}
+                subtitle={t('journal.emptySubtitle')}
+                ctaLabel={t('journal.emptyCta')}
+                onCta={() => router.navigate('/(main)/log')}
+              />
+            )
+          ) : noResults ? (
+            <EmptyState
+              title={t('journal.noResultsTitle')}
+              subtitle={t('journal.noResultsSubtitle')}
+              ctaLabel={t('journal.noResultsCta')}
+              onCta={() => {
+                setSearchQuery('');
+                clearSearch();
+              }}
+            />
+          ) : noFilterMatches ? (
+            <EmptyState
+              title={t('journal.noFilterMatchesTitle')}
+              subtitle={t('journal.noFilterMatchesSubtitle')}
+              ctaLabel={t('journal.filterClear')}
+              onCta={() => {
+                clearFilters();
+                setFilterPeriod('all');
+              }}
+            />
+          ) : null
+        }
+        showsVerticalScrollIndicator={false}
+        refreshing={isRefreshing}
+        onRefresh={() => void onRefresh()}
+      />
 
       <JournalFilterSheet
         visible={isFilterSheetOpen}
@@ -442,6 +450,12 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   list: {
+    // flexGrow, not flex: this is a *content container* — FlashList sizes it to its
+    // content by default, which is fine once there are cards to size to. An empty
+    // list has none, so without this the EmptyState/LoadingState rendered as
+    // ListEmptyComponent has no stretched parent to center itself within and
+    // collapses to the top of the screen instead.
+    flexGrow: 1,
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xl,
   },

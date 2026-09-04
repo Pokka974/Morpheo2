@@ -29,6 +29,16 @@ jest.mock('@features/dev/seedSampleDreams', () => ({
   seedSampleDreams: (...args: unknown[]) => mockSeedSampleDreams(...args),
 }));
 
+// pullService transitively imports the native AsyncStorage module, which throws in
+// this test environment (no native module registered), the same reason
+// seedSampleDreams is stubbed above rather than exercised for real.
+const mockPullRemoteChanges = jest.fn().mockResolvedValue(undefined);
+const mockResetSyncCursors = jest.fn().mockResolvedValue(undefined);
+jest.mock('@features/sync/pullService', () => ({
+  pullRemoteChanges: (...args: unknown[]) => mockPullRemoteChanges(...args),
+  resetSyncCursors: (...args: unknown[]) => mockResetSyncCursors(...args),
+}));
+
 // The screen reads the profile row for the values each settings row now reports
 // (style, reminder time, AI consent). The real client throws at import time without
 // EXPO_PUBLIC_SUPABASE_URL/ANON_KEY, so it is stubbed rather than configured.
@@ -80,6 +90,8 @@ describe('SettingsScreen', () => {
   beforeEach(() => {
     mockPush.mockClear();
     mockReplace.mockClear();
+    mockPullRemoteChanges.mockClear();
+    mockResetSyncCursors.mockClear().mockResolvedValue(undefined);
     alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
   });
 
@@ -376,6 +388,46 @@ describe('SettingsScreen', () => {
       'Sample dreams added',
       '6 dreams added. Open Insights to see the constellation and emotion ribbon.'
     );
+  });
+
+  it('resets this account’s sync cursors and pulls again on "Force full re-sync"', async () => {
+    const registry = buildRegistry();
+    const { getByText } = render(
+      <ServicesProvider services={registry}>
+        <SettingsScreen />
+      </ServicesProvider>
+    );
+    await waitFor(() => expect(getByText('Free')).toBeTruthy());
+
+    fireEvent.press(getByText('Force full re-sync'));
+
+    await waitFor(() => expect(mockPullRemoteChanges).toHaveBeenCalledTimes(1));
+    // The reset has to land before the pull that's meant to redo the backfill it enables.
+    expect(mockResetSyncCursors).toHaveBeenCalledWith('mock-user-id');
+    expect(mockPullRemoteChanges).toHaveBeenCalledWith(
+      'mock-user-id',
+      expect.objectContaining({ getSignedUrl: expect.any(Function) })
+    );
+    expect(mockResetSyncCursors.mock.invocationCallOrder[0]).toBeLessThan(
+      mockPullRemoteChanges.mock.invocationCallOrder[0]!
+    );
+    expect(alertSpy).toHaveBeenCalledWith('Re-sync started');
+  });
+
+  it('reports an error rather than crashing when the forced re-sync fails', async () => {
+    mockResetSyncCursors.mockRejectedValueOnce(new Error('AsyncStorage unavailable'));
+    const registry = buildRegistry();
+    const { getByText } = render(
+      <ServicesProvider services={registry}>
+        <SettingsScreen />
+      </ServicesProvider>
+    );
+    await waitFor(() => expect(getByText('Free')).toBeTruthy());
+
+    fireEvent.press(getByText('Force full re-sync'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith("Couldn't start a full re-sync"));
+    expect(mockPullRemoteChanges).not.toHaveBeenCalled();
   });
 
   it('does not crash when entitlement.fetchEntitlement() rejects (covers the catch branch)', async () => {
