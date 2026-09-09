@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, Text } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,7 @@ import { pullRemoteChanges, resetSyncCursors } from '@features/sync/pullService'
 import { makeMediaCache } from '@features/sync/mediaCache';
 import { supabase } from '../../../supabase/client';
 import { colors, spacing, typography } from '@theme/tokens';
+import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '@shared/legalLinks';
 
 const APP_VERSION = 'v1.0.0';
 
@@ -297,6 +298,21 @@ export default function SettingsScreen() {
           label={t('settings.deleteAccountRow')}
           onPress={() => router.push('/(main)/settings/delete-account')}
           destructive
+        />
+      </SettingsSection>
+
+      <SettingsSection title={t('settings.sectionLegal')}>
+        <SettingsRow
+          label={t('settings.privacyPolicyRow')}
+          onPress={() => {
+            void Linking.openURL(PRIVACY_POLICY_URL);
+          }}
+        />
+        <SettingsRow
+          label={t('settings.termsOfServiceRow')}
+          onPress={() => {
+            void Linking.openURL(TERMS_OF_SERVICE_URL);
+          }}
         />
       </SettingsSection>
 

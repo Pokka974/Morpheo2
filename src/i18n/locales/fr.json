@@ -267,6 +267,10 @@
     "symbolicDensityValue": "Densité symbolique : {{value}} sur {{max}}",
     "themeChip": "Thème : {{label}}"
   },
+  "onboardingConsent": {
+    "privacyPolicyLink": "Politique de confidentialité",
+    "termsOfServiceLink": "Conditions d'utilisation"
+  },
   "settings": {
     "title": "Paramètres",
     "sectionAccount": "Compte",
@@ -318,7 +322,10 @@
     "consentWithheld": "non accordé",
     "style_symbolic": "symbolique",
     "style_mythological": "mythologique",
-    "style_psychological": "psychologique"
+    "style_psychological": "psychologique",
+    "sectionLegal": "Mentions légales",
+    "privacyPolicyRow": "Politique de confidentialité",
+    "termsOfServiceRow": "Conditions d'utilisation"
   },
   "settingsStyle": {
     "title": "Style d'interprétation",

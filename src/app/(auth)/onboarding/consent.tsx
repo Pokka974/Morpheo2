@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@shared/components/Button';
 import { supabase } from '@services/../supabase/client';
 import { colors, fontSize, spacing } from '@theme/tokens';
+import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '@shared/legalLinks';
 
 export default function OnboardingConsentScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
 
   const handleAgree = async () => {
@@ -66,6 +69,25 @@ export default function OnboardingConsentScreen() {
           • Interpretations are symbolic and cultural — not clinical or therapeutic advice.
         </Text>
         <Text style={styles.bodyText}>• You can revoke consent at any time in Settings.</Text>
+        <View style={styles.linksRow}>
+          <Text
+            style={styles.link}
+            onPress={() => {
+              void Linking.openURL(PRIVACY_POLICY_URL);
+            }}
+          >
+            {t('onboardingConsent.privacyPolicyLink')}
+          </Text>
+          <Text style={styles.linkSeparator}>·</Text>
+          <Text
+            style={styles.link}
+            onPress={() => {
+              void Linking.openURL(TERMS_OF_SERVICE_URL);
+            }}
+          >
+            {t('onboardingConsent.termsOfServiceLink')}
+          </Text>
+        </View>
       </View>
       <Button
         label="I Agree"
@@ -106,5 +128,20 @@ const styles = StyleSheet.create({
   bold: {
     fontWeight: '700',
     color: colors.accentText,
+  },
+  linksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  link: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.accentText,
+    textDecorationLine: 'underline',
+  },
+  linkSeparator: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
   },
 });
