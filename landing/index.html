@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Morpheo — Turn your dreams into images</title>
+<meta name="description" content="Morpheo is an AI dream journal. Write your dream, get a possible interpretation, see it as an AI-generated image, and keep it all in one journal.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="mo-stars" class="starfield" aria-hidden="true"></div>
+<div class="glow glow-top" aria-hidden="true"></div>
+<div class="glow glow-bottom" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="container header-row">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <span class="brand-name">Morpheo</span>
+    </div>
+    <nav class="main-nav">
+      <a href="#how">How it works</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+      <a href="#download" class="btn btn-primary btn-small">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- Hero -->
+  <section class="section hero container">
+    <div class="hero-grid">
+      <div class="hero-copy" data-reveal>
+        <span class="badge">
+          <span class="badge-dot"></span>AI dream journal
+        </span>
+        <h1 class="hero-title">Turn your dreams into <em>images.</em></h1>
+        <p class="hero-lede">Understand your dreams, visualize them with AI, and keep your dream journal in one place.</p>
+        <div class="hero-actions">
+          <a href="#download" class="btn btn-primary btn-large">Download Morpheo</a>
+          <a href="#how" class="btn btn-outline btn-large">See how it works</a>
+        </div>
+        <div class="hero-meta">
+          <span class="hero-meta-item"><span class="dot dot-teal"></span>iOS &amp; Android</span>
+          <span class="divider"></span>
+          <span>Free to start · no dream leaves your journal without you</span>
+        </div>
+      </div>
+
+      <div class="hero-visual" data-reveal>
+        <div class="hero-image-frame image-slot image-slot--hero">
+          <div class="image-slot-fade"></div>
+          <div class="image-slot-badge">
+            <span class="dot dot-amber"></span>
+            <span>generated from your dream</span>
+          </div>
+          <div class="hero-image-caption">
+            <span class="caption-meta">Night of 14 August · 4 / 5 vividness</span>
+            <span class="caption-title">The moon that would not set</span>
+          </div>
+        </div>
+
+        <div class="float-card float-card--interpretation">
+          <div class="float-card-grip"></div>
+          <span class="float-card-eyebrow">Possible interpretation</span>
+          <p class="float-card-text">A moon that refuses to set might mean you are holding on to a night you are not ready to end.</p>
+          <div class="chip-row">
+            <span class="chip chip--highlight">nostalgia</span>
+            <span class="chip">moon</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- From dream to image -->
+  <section class="section container">
+    <div class="section-head" data-reveal>
+      <span class="eyebrow">From dream to image</span>
+      <h2 class="section-title">From a few words to a world you can <em>see.</em></h2>
+    </div>
+
+    <div class="steps-grid">
+      <div class="step-card" data-reveal>
+        <div class="step-card-head"><span class="step-num">01</span><span class="step-label">Describe</span></div>
+        <div class="step-mock">
+          <span class="step-mock-label">Last night</span>
+          <p class="step-mock-text">“I was walking through a dark forest when I saw a huge moon above me…<span class="caret"></span>”</p>
+        </div>
+        <p class="step-card-desc">Type it, or speak it while it is still warm. Half a memory is enough.</p>
+      </div>
+
+      <div class="step-card" data-reveal>
+        <div class="step-card-head"><span class="step-num">02</span><span class="step-label">Understand</span></div>
+        <div class="step-mock step-mock--interpretation">
+          <span class="step-mock-eyebrow">Possible interpretation</span>
+          <p class="step-mock-text step-mock-text--serif">The forest might stand for a decision you are walking into without a map — and the moon for the part of you that keeps watching anyway.</p>
+          <div class="chip-row">
+            <span class="chip">forest</span>
+            <span class="chip">moon</span>
+            <span class="chip chip--highlight">curiosity</span>
+          </div>
+        </div>
+        <p class="step-card-desc">A reading to think with — never a verdict on what your dream means.</p>
+      </div>
+
+      <div class="step-card" data-reveal>
+        <div class="step-card-head"><span class="step-num">03</span><span class="step-label">Visualize</span></div>
+        <div class="step-mock step-mock--image image-slot image-slot--visualize">
+          <span class="image-slot-tag">image ready</span>
+        </div>
+        <p class="step-card-desc">Morpheo paints the most vivid moment, so you can look at it again tomorrow.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Immersive statement -->
+  <section class="section-bleed">
+    <div class="bleed-frame image-slot image-slot--emotion" data-reveal>
+      <div class="bleed-fade"></div>
+      <div class="bleed-content container">
+        <h2 class="bleed-title">Some dreams disappear the moment you wake up.</h2>
+        <p class="bleed-lede">Morpheo helps you remember them, understand them, and see them again.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature cards -->
+  <section class="section container">
+    <div class="features-grid">
+      <div class="feature-card" data-reveal>
+        <div class="feature-icon feature-icon--purple">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="6.4" stroke="#fff" stroke-width="1.5" opacity=".9"/><circle cx="10" cy="10" r="2" fill="#fff"/></svg>
+        </div>
+        <span class="feature-eyebrow">Understand</span>
+        <h3 class="feature-title">Discover what your dreams might mean.</h3>
+        <p class="feature-desc">Explore personalized interpretations, emotions and themes hidden in your dreams.</p>
+      </div>
+
+      <div class="feature-card" data-reveal>
+        <div class="feature-icon feature-icon--amber">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="4.5" width="14" height="11" rx="2.5" stroke="#fff" stroke-width="1.5" opacity=".9"/><circle cx="7.6" cy="8.6" r="1.3" fill="#fff"/><path d="M3.6 14.4 8 10.6l3.2 2.6 2.4-2 2.8 3.2" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </div>
+        <span class="feature-eyebrow">Visualize</span>
+        <h3 class="feature-title">See your dreams come to life.</h3>
+        <p class="feature-desc">Turn the most vivid moments of your dreams into unique AI-generated images.</p>
+      </div>
+
+      <div class="feature-card" data-reveal>
+        <div class="feature-icon feature-icon--teal">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M5 3.5h8a2 2 0 0 1 2 2v11l-6-2.6-6 2.6V5.5a2 2 0 0 1 2-2Z" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" opacity=".9"/></svg>
+        </div>
+        <span class="feature-eyebrow">Remember</span>
+        <h3 class="feature-title">Build your personal dream journal.</h3>
+        <p class="feature-desc">Keep your dreams, images and insights together and discover patterns over time.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Dream journal showcase -->
+  <section class="section container">
+    <div class="section-head" data-reveal>
+      <span class="eyebrow">Dream journal</span>
+      <h2 class="section-title">Your dreams, <em>remembered.</em></h2>
+      <p class="section-lede">Keep every dream in one place and revisit the moments you might otherwise forget.</p>
+    </div>
+
+    <div class="showcase-grid">
+
+      <div class="showcase-item" data-reveal>
+        <div class="phone-card float-slow">
+          <div class="phone-grip"></div>
+          <div class="phone-head">
+            <span class="phone-title">Journal</span>
+            <span class="phone-meta">41 nights</span>
+          </div>
+          <div class="journal-list">
+            <div class="journal-row">
+              <div class="journal-thumb journal-thumb--purple"></div>
+              <div class="journal-row-copy">
+                <span class="journal-row-meta"><span class="journal-date">Thu 14 Aug</span><span class="dot dot-purple-light"></span></span>
+                <span class="journal-row-title">The moon that would not set</span>
+              </div>
+            </div>
+            <div class="journal-row">
+              <div class="journal-thumb journal-thumb--teal"></div>
+              <div class="journal-row-copy">
+                <span class="journal-row-meta"><span class="journal-date">Tue 12 Aug</span><span class="dot dot-teal"></span></span>
+                <span class="journal-row-title">Swimming above the rooftops</span>
+              </div>
+            </div>
+            <div class="journal-row">
+              <div class="journal-thumb journal-thumb--pink"></div>
+              <div class="journal-row-copy">
+                <span class="journal-row-meta"><span class="journal-date">Sun 10 Aug</span><span class="chip chip--nightmare">nightmare</span></span>
+                <span class="journal-row-title">The crowd with no faces</span>
+              </div>
+            </div>
+            <div class="journal-row journal-row--pending">
+              <div class="journal-thumb journal-thumb--pending"><span class="spinner"></span></div>
+              <div class="journal-row-copy">
+                <span class="journal-row-pending">painting your dream…</span>
+                <span class="journal-row-title journal-row-title--muted">The staircase into the water</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <span class="showcase-caption">Every night, kept</span>
+      </div>
+
+      <div class="showcase-item" data-reveal>
+        <div class="phone-card phone-card--accent">
+          <div class="phone-grip"></div>
+          <div class="journal-photo image-slot image-slot--journal">
+            <div class="journal-photo-fade"></div>
+            <div class="journal-photo-caption">
+              <span class="caption-meta">Thu 14 Aug · 4 / 5</span>
+              <span class="caption-title caption-title--sm">The moon that would not set</span>
+            </div>
+          </div>
+          <div class="chip-row">
+            <span class="chip chip--highlight">nostalgia</span>
+            <span class="chip chip--muted">curiosity</span>
+            <span class="chip chip--muted">+ 3</span>
+          </div>
+          <div class="interpretation-box">
+            <span class="interpretation-eyebrow">Possible interpretation</span>
+            <p class="interpretation-text">You walked without knowing the way, yet you kept looking up. A recurring pattern in your dreams this month.</p>
+          </div>
+          <button class="btn btn-primary btn-block" type="button">Regenerate image</button>
+        </div>
+        <span class="showcase-caption">Dream · image · reading</span>
+      </div>
+
+      <div class="showcase-item" data-reveal>
+        <div class="phone-card float-slow float-slow--alt">
+          <div class="phone-grip"></div>
+          <div class="phone-head">
+            <span class="phone-title">Insights</span>
+            <span class="phone-meta">last 30 nights</span>
+          </div>
+          <div class="insight-box">
+            <span class="insight-eyebrow">Nights, one square each</span>
+            <div class="heatmap" aria-hidden="true">
+              <span style="background:#a68ce8;opacity:.75"></span><span class="heatmap-empty"></span><span style="background:#6fc8b4;opacity:.6"></span><span style="background:#a68ce8;opacity:.45"></span><span class="heatmap-empty"></span><span style="background:#d46a88;opacity:.7"></span><span style="background:#a68ce8;opacity:.6"></span>
+              <span class="heatmap-empty"></span><span style="background:#6fc8b4;opacity:.8"></span><span style="background:#a68ce8;opacity:.5"></span><span style="background:#d894c0;opacity:.65"></span><span style="background:#a68ce8;opacity:.7"></span><span class="heatmap-empty"></span><span style="background:#6fc8b4;opacity:.55"></span>
+              <span style="background:#a68ce8;opacity:.85"></span><span style="background:#a68ce8;opacity:.4"></span><span class="heatmap-empty"></span><span style="background:#d46a88;opacity:.5"></span><span style="background:#6fc8b4;opacity:.7"></span><span style="background:#a68ce8;opacity:.6"></span><span style="background:#d894c0;opacity:.45"></span>
+              <span style="background:#6fc8b4;opacity:.5"></span><span style="background:#a68ce8;opacity:.75"></span><span class="heatmap-empty"></span><span style="background:#a68ce8;opacity:.55"></span><span class="heatmap-today"></span><span class="heatmap-empty"></span><span style="background:#a68ce8;opacity:.35"></span>
+            </div>
+          </div>
+          <div class="insight-box">
+            <span class="insight-eyebrow">Recurring patterns</span>
+            <div class="bar-row"><span class="bar-label">Flying</span><span class="bar-track"><span class="bar-fill" style="width:78%;background:#9f7dd8"></span></span></div>
+            <div class="bar-row"><span class="bar-label">Water</span><span class="bar-track"><span class="bar-fill" style="width:61%;background:#6fc8b4"></span></span></div>
+            <div class="bar-row"><span class="bar-label">Family</span><span class="bar-track"><span class="bar-fill" style="width:44%;background:#d894c0"></span></span></div>
+          </div>
+        </div>
+        <span class="showcase-caption">Patterns over time</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Dream insights -->
+  <section class="section container">
+    <div class="section-head" data-reveal>
+      <span class="eyebrow">Dream insights</span>
+      <h2 class="section-title">Discover the patterns hiding in your dreams.</h2>
+      <p class="section-lede section-lede--muted">Themes found in your own words, night after night. Readings to reflect on — not diagnoses.</p>
+    </div>
+
+    <div class="insights-grid">
+      <div class="insight-card" data-reveal>
+        <span class="insight-card-eyebrow">Emotions</span>
+        <div class="emotion-list">
+          <div class="emotion-row"><span class="emotion-label">Curiosity</span><span class="bar-track bar-track--lg"><span class="bar-fill" style="width:82%;background:#a68ce8"></span></span><span class="emotion-count">18</span></div>
+          <div class="emotion-row"><span class="emotion-label">Fear</span><span class="bar-track bar-track--lg"><span class="bar-fill" style="width:54%;background:#d46a88"></span></span><span class="emotion-count">12</span></div>
+          <div class="emotion-row"><span class="emotion-label">Freedom</span><span class="bar-track bar-track--lg"><span class="bar-fill" style="width:47%;background:#6fc8b4"></span></span><span class="emotion-count">10</span></div>
+          <div class="emotion-row"><span class="emotion-label">Nostalgia</span><span class="bar-track bar-track--lg"><span class="bar-fill" style="width:33%;background:#d894c0"></span></span><span class="emotion-count">7</span></div>
+        </div>
+        <p class="insight-footnote">Counted from the words you wrote, not inferred about you.</p>
+      </div>
+
+      <div class="insight-card" data-reveal>
+        <span class="insight-card-eyebrow">Recurring themes</span>
+        <div class="theme-chip-row">
+          <span class="theme-chip"><span class="dot" style="background:#9f7dd8"></span>Flying<span class="theme-chip-count">9</span></span>
+          <span class="theme-chip"><span class="dot" style="background:#6fc8b4"></span>Water<span class="theme-chip-count">7</span></span>
+          <span class="theme-chip"><span class="dot" style="background:#d894c0"></span>Family<span class="theme-chip-count">5</span></span>
+          <span class="theme-chip"><span class="dot" style="background:#e0a85c"></span>Unknown places<span class="theme-chip-count">4</span></span>
+        </div>
+        <div class="interpretation-box">
+          <span class="interpretation-eyebrow">Recurring pattern</span>
+          <p class="interpretation-text">Water came back four nights in a row, always calm. A possible interpretation: something is settling.</p>
+        </div>
+      </div>
+
+      <div class="insight-card" data-reveal>
+        <span class="insight-card-eyebrow">Over time</span>
+        <svg class="trend-chart" viewBox="0 0 320 132" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M8,104 C60,98 100,86 150,66 C200,46 258,38 312,30" fill="none" stroke="#b399e0" stroke-opacity=".3" stroke-width="2" stroke-dasharray="4 5"/>
+          <path d="M8,116 C56,112 96,96 150,88 C204,80 258,58 312,50 L312,132 L8,132 Z" fill="#7c5cbf" opacity=".22"/>
+          <path d="M8,116 C56,112 96,96 150,88 C204,80 258,58 312,50" fill="none" stroke="#9f7dd8" stroke-width="2"/>
+          <circle cx="150" cy="88" r="4.5" fill="#0d0d1a" stroke="#f0eeff" stroke-width="1.6"/>
+          <circle cx="312" cy="50" r="5" fill="#e0a85c"/>
+          <circle cx="312" cy="50" r="11" fill="#e0a85c" opacity=".18"/>
+        </svg>
+        <div class="trend-labels"><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span></div>
+        <p class="insight-footnote insight-footnote--body">Dreams remembered per week — the longer you keep the journal, the more the patterns show.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section id="how" class="section container">
+    <div class="section-head section-head--row" data-reveal>
+      <h2 class="section-title section-title--sm">How it works</h2>
+      <span class="section-tagline">four gestures, every morning</span>
+    </div>
+    <div class="how-grid">
+      <div class="how-card" data-reveal><span class="how-num">01</span><span class="how-title">Write your dream</span><span class="how-desc">Two lines are enough, before the day erases it.</span></div>
+      <div class="how-card" data-reveal><span class="how-num">02</span><span class="how-title">Understand it</span><span class="how-desc">A personalized reading of what it might mean.</span></div>
+      <div class="how-card" data-reveal><span class="how-num">03</span><span class="how-title">Visualize it</span><span class="how-desc">One image, generated from your own words.</span></div>
+      <div class="how-card" data-reveal><span class="how-num">04</span><span class="how-title">Remember it</span><span class="how-desc">It joins your journal, and the patterns it belongs to.</span></div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="pricing" class="section container">
+    <div class="section-head section-head--center" data-reveal>
+      <span class="eyebrow">Pricing</span>
+      <h2 class="section-title">Start exploring your dreams.</h2>
+    </div>
+
+    <div class="pricing-grid">
+      <div class="price-card" data-reveal>
+        <div class="price-head">
+          <span class="price-plan">Free</span>
+          <span class="price-amount">€0</span>
+          <span class="price-note">forever, no card</span>
+        </div>
+        <div class="price-features">
+          <span class="price-feature"><span class="feature-bullet">·</span>3 dream interpretations / month</span>
+          <span class="price-feature"><span class="feature-bullet">·</span>3 AI image generations / month</span>
+          <span class="price-feature"><span class="feature-bullet">·</span>Unlimited dream journal</span>
+          <span class="price-feature"><span class="feature-bullet">·</span>Basic insights</span>
+        </div>
+        <a href="#download" class="btn btn-outline btn-block">Start for free</a>
+      </div>
+
+      <div class="price-card price-card--premium" data-reveal>
+        <div class="price-glow" aria-hidden="true"></div>
+        <div class="price-head">
+          <div class="price-plan-row">
+            <span class="price-plan price-plan--accent">Premium</span>
+            <span class="pill">every night</span>
+          </div>
+          <span class="price-amount-row"><span class="price-amount">€7.99</span><span class="price-period">/ month</span></span>
+          <span class="price-note">cancel anytime</span>
+        </div>
+        <div class="price-features price-features--light">
+          <span class="price-feature"><span class="feature-bullet feature-bullet--amber">·</span>Unlimited dream interpretations*</span>
+          <span class="price-feature"><span class="feature-bullet feature-bullet--amber">·</span>Unlimited AI image generations*</span>
+          <span class="price-feature"><span class="feature-bullet feature-bullet--amber">·</span>Full dream insights</span>
+          <span class="price-feature"><span class="feature-bullet feature-bullet--amber">·</span>Recurring dream analysis</span>
+          <span class="price-feature"><span class="feature-bullet feature-bullet--amber">·</span>Advanced emotion &amp; theme analysis</span>
+          <span class="price-feature"><span class="feature-bullet feature-bullet--amber">·</span>All future premium features</span>
+        </div>
+        <a href="#download" class="btn btn-primary btn-block">Go Premium</a>
+        <span class="price-fineprint">*Subject to fair-use limits.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="section container container--narrow">
+    <div class="section-head" data-reveal>
+      <span class="eyebrow">FAQ</span>
+      <h2 class="section-title">Before your first night</h2>
+    </div>
+
+    <div class="faq-list" data-reveal>
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false">
+          <span>What is Morpheo?</span><span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer" hidden>
+          <p>An AI dream journal. You write the dream you remember, Morpheo offers a possible interpretation, generates an image of it, and keeps both in a journal where recurring themes and emotions slowly appear.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false">
+          <span>Is dream interpretation scientifically accurate?</span><span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer" hidden>
+          <p>No. Morpheo provides AI-generated interpretations designed for reflection and exploration. They are not medical or scientific diagnoses.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false">
+          <span>How does AI image generation work?</span><span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer" hidden>
+          <p>Morpheo picks the most vivid scene from what you wrote and turns it into a single image. You can regenerate it, keep several versions, or delete them — the image belongs to your dream, not to a feed.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false">
+          <span>Can I keep my dreams for free?</span><span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer" hidden>
+          <p>Yes. The journal itself is unlimited on the free plan — the monthly limits only apply to interpretations and generated images.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false">
+          <span>Can I cancel Premium anytime?</span><span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer" hidden>
+          <p>Anytime, from your app store subscriptions. Your dreams, images and insights stay in your journal after the plan ends.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false">
+          <span>How much does Premium cost?</span><span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer" hidden>
+          <p>€7.99 per month, with unlimited interpretations and images subject to fair-use limits.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download CTA -->
+  <section id="download" class="section-bleed section-bleed--cta">
+    <div class="bleed-frame image-slot image-slot--final" data-reveal>
+      <div class="bleed-fade bleed-fade--strong"></div>
+      <div class="bleed-content bleed-content--center">
+        <h2 class="bleed-title bleed-title--light">What did you dream last night?</h2>
+        <p class="bleed-lede">Write it down. Understand it. See it. Remember it.</p>
+        <a href="#download" class="btn btn-primary btn-large btn-glow">Download Morpheo</a>
+        <span class="bleed-fineprint">Free to start · iOS &amp; Android</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-row">
+    <div class="brand brand--footer">
+      <div class="brand-mark brand-mark--sm"></div>
+      <span class="brand-name brand-name--muted">Morpheo</span>
+    </div>
+    <nav class="footer-nav">
+      <a href="#">Privacy Policy</a>
+      <a href="#">Terms of Service</a>
+      <a href="#">Contact</a>
+      <a href="#">Instagram</a>
+      <a href="#">TikTok</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
