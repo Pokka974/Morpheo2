@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
@@ -48,20 +48,25 @@ export default function SettingsScreen() {
   const [since, setSince] = useState<Date | null>(null);
   const [preferences, setPreferences] = useState<Preferences | null>(null);
 
-  useEffect(() => {
-    storage
-      .getCacheSize()
-      .then(setCacheSize)
-      .catch((err: unknown) => {
-        console.error('Failed to read cache size:', err);
-      });
-    entitlement
-      .fetchEntitlement()
-      .then(setEntitlementData)
-      .catch((err: unknown) => {
-        console.error('Failed to load entitlement:', err);
-      });
-  }, [storage, entitlement]);
+  // Focus rather than mount: a purchase completes on the paywall screen, which then
+  // calls router.back() here — without refetching on focus this card would keep
+  // showing the free tier, correctly paid for, until the app restarts.
+  useFocusEffect(
+    useCallback(() => {
+      storage
+        .getCacheSize()
+        .then(setCacheSize)
+        .catch((err: unknown) => {
+          console.error('Failed to read cache size:', err);
+        });
+      entitlement
+        .fetchEntitlement()
+        .then(setEntitlementData)
+        .catch((err: unknown) => {
+          console.error('Failed to load entitlement:', err);
+        });
+    }, [storage, entitlement])
+  );
 
   useEffect(() => {
     void (async () => {
