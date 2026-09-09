@@ -56,7 +56,8 @@ export default function OnboardingConsentScreen() {
           (FLUX).
         </Text>
         <Text style={styles.bodyText}>
-          • Your dream text is sent securely and encrypted in transit.
+          • Your dream text is sent securely and encrypted in transit, and your dream journal is
+          encrypted at rest on this device.
         </Text>
         <Text style={styles.bodyText}>
           • Your dreams are <Text style={styles.bold}>never used to train AI models</Text>.

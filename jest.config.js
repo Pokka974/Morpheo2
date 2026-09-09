@@ -33,6 +33,7 @@ module.exports = {
   moduleNameMapper: {
     // Expo native modules — prevent requireNativeModule() from throwing in unit tests
     '^expo-secure-store$': '<rootDir>/__mocks__/expo-secure-store.js',
+    '^expo-crypto$': '<rootDir>/__mocks__/expo-crypto.js',
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',
     // drizzle-orm/expo-sqlite uses the old expo-sqlite/next subpath (removed in v15)
     '^expo-sqlite/next$': '<rootDir>/__mocks__/expo-sqlite.js',

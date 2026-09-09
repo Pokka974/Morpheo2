@@ -21,5 +21,6 @@ const mockDb = {
 module.exports = {
   openDatabaseSync: jest.fn(() => mockDb),
   openDatabaseAsync: jest.fn(async () => mockDb),
+  deleteDatabaseSync: jest.fn(),
   SQLiteDatabase: jest.fn(),
 };
