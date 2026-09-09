@@ -1,10 +1,50 @@
 import * as SQLite from 'expo-sqlite';
 import { drizzle } from 'drizzle-orm/expo-sqlite';
 import * as schema from './schema';
+import { getOrCreateDbEncryptionKey } from './encryptionKey';
 
 const DB_NAME = 'morpheo.db';
 
-export const sqlite = SQLite.openDatabaseSync(DB_NAME);
+// SQLCipher (compiled in via the `useSQLCipher` expo-sqlite plugin flag) requires
+// `PRAGMA key` before any other statement touches the file. `x'<64 hex chars>'` passes
+// the 32 random bytes straight through as the encryption key, skipping SQLCipher's
+// PBKDF2 passphrase derivation since the key is already full-entropy.
+function keyDatabase(instance: SQLite.SQLiteDatabase, key: string): void {
+  instance.execSync(`PRAGMA key = "x'${key}'";`);
+}
+
+// SQLCipher can't tell "wrong/rotated key" apart from "genuinely unencrypted file" —
+// both surface as this exact SQLite error text (SQLITE_NOTADB) on the first real page
+// read, since the key is only actually exercised then, not at PRAGMA-key time. Only
+// this specific message means "pre-#6 plaintext database"; anything else (a lock, an
+// I/O error, low memory) must NOT be treated as that or it would delete real data.
+function isNotADatabaseError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('file is not a database');
+}
+
+// Pre-#6 installs have a plaintext database, which SQLCipher cannot parse as
+// ciphertext. The app is pre-launch (no real user data at risk yet — see #72 for the
+// real migration this needs before production), so treat that as a fresh install:
+// drop the plaintext file and start over encrypted.
+function openEncryptedDatabase(): SQLite.SQLiteDatabase {
+  const key = getOrCreateDbEncryptionKey();
+  let instance = SQLite.openDatabaseSync(DB_NAME);
+  keyDatabase(instance, key);
+  try {
+    instance.execSync(`SELECT count(*) FROM sqlite_master;`);
+  } catch (error) {
+    if (!isNotADatabaseError(error)) {
+      throw error;
+    }
+    instance.closeSync();
+    SQLite.deleteDatabaseSync(DB_NAME);
+    instance = SQLite.openDatabaseSync(DB_NAME);
+    keyDatabase(instance, key);
+  }
+  return instance;
+}
+
+export const sqlite = openEncryptedDatabase();
 
 sqlite.execSync(`PRAGMA journal_mode = WAL;`);
 sqlite.execSync(`PRAGMA foreign_keys = ON;`);
