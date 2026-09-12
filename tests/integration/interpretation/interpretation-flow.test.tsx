@@ -234,6 +234,19 @@ describe('InterpretationScreen', () => {
     await waitFor(() => expect(queryByText('Interpretation')).toBeTruthy());
   });
 
+  it('shows a non-retryable safety notice on ContentSafetyError, with no Try again button', async () => {
+    interpretationService.configure('safety_blocked');
+    const { getByText, queryByText } = render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+    await waitFor(() => {
+      expect(getByText("Couldn't interpret this dream")).toBeTruthy();
+    });
+    expect(queryByText('Try again')).toBeNull();
+  });
+
   it('persists the interpretation to local SQLite and navigates back to the detail screen on success', async () => {
     render(
       <ServicesProvider services={buildRegistry()}>

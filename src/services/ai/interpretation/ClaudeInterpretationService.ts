@@ -8,6 +8,7 @@ import type {
 import {
   InterpretationLimitError,
   ConsentRequiredError,
+  ContentSafetyError,
   InterpretationProviderError,
 } from './InterpretationService';
 
@@ -20,7 +21,9 @@ export class ClaudeInterpretationService implements InterpretationService {
 
     if (error) {
       const status = (error as { status?: number }).status;
+      const body = data as { error?: string } | null;
       if (status === 403) throw new ConsentRequiredError();
+      if (status === 400 && body?.error === 'safety_blocked') throw new ContentSafetyError();
       if (status === 429) {
         const resetDate = new Date(
           (data as { resetDate?: string })?.resetDate ?? Date.now() + 30 * 24 * 60 * 60 * 1000

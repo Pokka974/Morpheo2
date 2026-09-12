@@ -1,6 +1,7 @@
 import {
   InterpretationLimitError,
   ConsentRequiredError,
+  ContentSafetyError,
   InterpretationProviderError,
 } from '@services/ai/interpretation/InterpretationService';
 import { MockInterpretationService } from '@services/ai/interpretation/__mocks__/MockInterpretationService';
@@ -56,6 +57,14 @@ describe('ClaudeInterpretationService (real class, mocked supabase)', () => {
   it('throws ConsentRequiredError on a 403 response', async () => {
     mockInvoke.mockResolvedValueOnce({ data: null, error: { status: 403 } });
     await expect(service.interpret(testRequest)).rejects.toThrow(ConsentRequiredError);
+  });
+
+  it('throws ContentSafetyError on a 400 safety_blocked response', async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: { error: 'safety_blocked' },
+      error: { status: 400 },
+    });
+    await expect(service.interpret(testRequest)).rejects.toThrow(ContentSafetyError);
   });
 
   it('throws InterpretationLimitError with resetDate on a 429 response', async () => {
@@ -228,6 +237,13 @@ describe('InterpretationService contract (via mock)', () => {
     await expect(
       service.interpret({ dreamId: 'test-id', description: 'A dream.', style: 'symbolic' })
     ).rejects.toThrow(ConsentRequiredError);
+  });
+
+  it('safety_blocked mode throws ContentSafetyError', async () => {
+    service.configure('safety_blocked');
+    await expect(
+      service.interpret({ dreamId: 'test-id', description: 'A dream.', style: 'symbolic' })
+    ).rejects.toThrow(ContentSafetyError);
   });
 
   it('getInterpretation returns null in failure mode', async () => {

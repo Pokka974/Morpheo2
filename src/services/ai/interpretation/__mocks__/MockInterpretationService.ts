@@ -6,10 +6,12 @@ import type {
 import {
   InterpretationLimitError,
   ConsentRequiredError,
+  ContentSafetyError,
   InterpretationProviderError,
 } from '../InterpretationService';
 
-export type MockMode = 'success' | 'degraded' | 'failure' | 'limit_exceeded' | 'consent_required';
+export type MockMode =
+  'success' | 'degraded' | 'failure' | 'limit_exceeded' | 'consent_required' | 'safety_blocked';
 
 const SUCCESS_RESULT: InterpretationResult = {
   id: 'mock-interp-id',
@@ -50,6 +52,8 @@ export class MockInterpretationService implements InterpretationService {
         throw new InterpretationLimitError(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
       case 'consent_required':
         throw new ConsentRequiredError();
+      case 'safety_blocked':
+        throw new ContentSafetyError();
     }
   }
 
