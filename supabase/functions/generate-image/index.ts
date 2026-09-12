@@ -1,9 +1,13 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.120.0';
+import { screenDreamText } from '../_shared/contentScreening.ts';
 
 const FLUX_API_KEY = Deno.env.get('FLUX_API_KEY') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 
 /**
  * Black Forest Labs FLUX.1 Kontext [pro]. Flat 4 credits ($0.04) per image regardless of
@@ -51,6 +55,49 @@ function isModerationStatus(status: string): boolean {
 }
 
 type ServiceClient = ReturnType<typeof createClient>;
+
+const SAFETY_BLOCKED_MESSAGE = 'Content safety filtering blocked this generation.';
+
+/**
+ * A safety block used to end the request with a 400 and nothing else — no row, no record
+ * that it ever happened. This writes the dream's media row (updating it in place if one
+ * already exists, exactly like the success path) so a blocked entry is visible to the
+ * client instead of silently looking like "no illustration yet" (issue #12).
+ *
+ * Best-effort: this runs on a path that is already failing the request, so a write failure
+ * here is logged and swallowed rather than turned into a different error for the user.
+ */
+async function markSafetyBlocked(
+  supabase: ServiceClient,
+  opts: {
+    dreamId: string;
+    userId: string;
+    existingMedia: { id: string; regeneration_count: number; max_regenerations: number } | null;
+  }
+): Promise<void> {
+  try {
+    const { error } = opts.existingMedia
+      ? await supabase
+          .from('media')
+          .update({
+            generation_status: 'safety_blocked',
+            error_message: SAFETY_BLOCKED_MESSAGE,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', opts.existingMedia.id)
+      : await supabase.from('media').insert({
+          dream_id: opts.dreamId,
+          user_id: opts.userId,
+          media_type: 'image',
+          generation_status: 'safety_blocked',
+          error_message: SAFETY_BLOCKED_MESSAGE,
+        });
+
+    if (error) console.error('Failed to record safety_blocked media row:', error);
+  } catch (err) {
+    console.error('markSafetyBlocked failed:', err);
+  }
+}
 
 /**
  * Retires everything the generation that just succeeded replaced: the object the live row
@@ -214,6 +261,15 @@ serve(async (req: Request) => {
       console.error('Existing media lookup failed:', existingMediaError);
     }
 
+    // Screen the raw dream text before anything is spent on it. A dream can be
+    // illustrated without ever being interpreted (the fallback template below), in which
+    // case Flux's own moderation of the *derived* prompt was previously the only screen —
+    // and it never ran until after a credit was already charged and Flux already called.
+    if (await screenDreamText(anthropic, description)) {
+      await markSafetyBlocked(supabase, { dreamId, userId: user.id, existingMedia });
+      return json({ error: 'safety_blocked' }, 400);
+    }
+
     if (
       isRegeneration &&
       existingMedia &&
@@ -328,6 +384,7 @@ serve(async (req: Request) => {
       // 422 is BFL's validation/moderation rejection of the prompt itself.
       if (submitResponse.status === 422) {
         console.error('Flux rejected the prompt (422):', detail);
+        await markSafetyBlocked(supabase, { dreamId, userId: user.id, existingMedia });
         return await fail({ error: 'safety_blocked' }, 400);
       }
       // The two operational failures, called out by name. Both otherwise present to the
@@ -390,6 +447,7 @@ serve(async (req: Request) => {
       }
       if (isModerationStatus(status)) {
         console.error('Flux moderated the request for dream', dreamId, '-', status);
+        await markSafetyBlocked(supabase, { dreamId, userId: user.id, existingMedia });
         return await fail({ error: 'safety_blocked' }, 400);
       }
       if (status === 'Error' || status === 'Failed') {

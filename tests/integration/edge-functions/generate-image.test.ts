@@ -55,6 +55,40 @@ describe('generate-image Edge Function reliability', () => {
     expect(source).toContain("error: 'safety_blocked'");
   });
 
+  // Regression guard: a safety block used to end the request with a 400 and nothing
+  // else — no row, no record it ever happened (issue #12). Both of Flux's moderation
+  // outcomes must now persist the block onto the dream's media row.
+  it('records safety_blocked on the media row for both Flux moderation outcomes, not just a 400', () => {
+    const submitBlockAt = source.indexOf('if (submitResponse.status === 422)');
+    const pollBlockAt = source.indexOf('if (isModerationStatus(status))');
+    expect(submitBlockAt).toBeGreaterThan(-1);
+    expect(pollBlockAt).toBeGreaterThan(-1);
+
+    const submitBlockBody = source.slice(submitBlockAt, source.indexOf('}', submitBlockAt));
+    const pollBlockBody = source.slice(pollBlockAt, source.indexOf('}', pollBlockAt));
+    expect(submitBlockBody).toContain('await markSafetyBlocked(supabase,');
+    expect(pollBlockBody).toContain('await markSafetyBlocked(supabase,');
+  });
+});
+
+describe('generate-image Edge Function pre-dispatch content safety screening', () => {
+  const source = readFile('supabase/functions/generate-image/index.ts');
+
+  // A dream can be illustrated without ever being interpreted (the fallback template
+  // path), in which case Flux moderating the *derived* prompt used to be the only
+  // screen the raw dream text ever passed through (issue #12, FR-014).
+  it('screens the raw dream text before spending a credit or calling Flux', () => {
+    expect(source).toContain("import { screenDreamText } from '../_shared/contentScreening.ts';");
+    expect(source).toContain('await screenDreamText(anthropic, description)');
+
+    const screenAt = source.indexOf('await screenDreamText(anthropic, description)');
+    const creditConsumeAt = source.indexOf("supabase.rpc(\n        'consume_image_credit'");
+    const fluxSubmitAt = source.indexOf('await fetch(FLUX_ENDPOINT');
+    expect(screenAt).toBeGreaterThan(-1);
+    expect(creditConsumeAt).toBeGreaterThan(screenAt);
+    expect(fluxSubmitAt).toBeGreaterThan(screenAt);
+  });
+
   it('re-rolls the seed on regeneration, so "regenerate" is not the same image again', () => {
     expect(source).toContain('submitBody.seed');
   });

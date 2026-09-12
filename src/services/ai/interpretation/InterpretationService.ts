@@ -82,6 +82,13 @@ export class ConsentRequiredError extends Error {
   }
 }
 
+export class ContentSafetyError extends Error {
+  constructor() {
+    super('Content safety check failed');
+    this.name = 'ContentSafetyError';
+  }
+}
+
 export class InterpretationProviderError extends Error {
   constructor(public readonly retryable: boolean) {
     super('AI provider unavailable');

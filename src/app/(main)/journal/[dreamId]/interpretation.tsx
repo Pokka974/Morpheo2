@@ -248,6 +248,12 @@ export default function InterpretationScreen() {
           onRetry={handleRetry}
           fullScreen
         />
+      ) : state.status === 'safety_blocked' ? (
+        <ErrorState
+          message={t('dream.interpretationSafetyBlockedBody')}
+          title={t('dream.interpretationSafetyBlockedTitle')}
+          fullScreen
+        />
       ) : state.status === 'limit_exceeded' ? (
         <EmptyState
           icon={<LockIcon />}

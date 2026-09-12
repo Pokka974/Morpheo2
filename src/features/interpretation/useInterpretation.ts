@@ -6,6 +6,7 @@ import type {
 import {
   InterpretationLimitError,
   ConsentRequiredError,
+  ContentSafetyError,
 } from '@services/ai/interpretation/InterpretationService';
 import { useServices } from '@services/useServices';
 
@@ -17,6 +18,7 @@ type State =
   | { status: 'error'; error: Error }
   | { status: 'limit_exceeded'; resetDate: Date }
   | { status: 'consent_required' }
+  | { status: 'safety_blocked' }
   | { status: 'paywall' };
 
 export function useInterpretation() {
@@ -48,6 +50,8 @@ export function useInterpretation() {
       } catch (err) {
         if (err instanceof ConsentRequiredError) {
           setState({ status: 'consent_required' });
+        } else if (err instanceof ContentSafetyError) {
+          setState({ status: 'safety_blocked' });
         } else if (err instanceof InterpretationLimitError) {
           setState({ status: 'limit_exceeded', resetDate: err.resetDate });
         } else {

@@ -112,6 +112,30 @@ describe('interpret Edge Function metadata block', () => {
   });
 });
 
+describe('interpret Edge Function content safety screening', () => {
+  const source = readFile('supabase/functions/interpret/index.ts');
+
+  // Previously the only screen on this path was Flux rejecting the *derived* image
+  // prompt as a side effect — dream text reached Claude with no screening at all
+  // (issue #12, FR-014).
+  it('screens the raw dream text before it reaches Claude', () => {
+    expect(source).toContain("import { screenDreamText } from '../_shared/contentScreening.ts';");
+    expect(source).toContain('await screenDreamText(anthropic, body.description)');
+  });
+
+  it('runs the screen before the interpretation call, refunds the credit and never inserts a row on a block', () => {
+    const screenAt = source.indexOf('await screenDreamText(anthropic, body.description)');
+    const interpretCallAt = source.indexOf('anthropic.messages.create({');
+    const insertAt = source.indexOf(".from('interpretations')\n      .insert(");
+    expect(screenAt).toBeGreaterThan(-1);
+    expect(interpretCallAt).toBeGreaterThan(screenAt);
+    expect(insertAt).toBeGreaterThan(interpretCallAt);
+
+    expect(source).toContain("await refundCredit('content safety screening blocked dream text')");
+    expect(source).toContain("JSON.stringify({ error: 'safety_blocked' })");
+  });
+});
+
 describe('interpret Edge Function style resolution', () => {
   // The client no longer sends a style, so this fallback is what makes the dreamer's own
   // profiles.interpretation_style setting take effect at all.

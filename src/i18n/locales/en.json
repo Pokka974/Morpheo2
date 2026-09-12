@@ -74,6 +74,8 @@
     "thisDream": "this dream",
     "interpretationUnavailableTitle": "Interpretation unavailable",
     "interpretationUnavailableBody": "Your dream is saved. We will retry as soon as the network is back.",
+    "interpretationSafetyBlockedTitle": "Couldn't interpret this dream",
+    "interpretationSafetyBlockedBody": "This dream's description was flagged by content safety filtering, so it wasn't sent for interpretation.",
     "degradedNotice": "This reading came back with low confidence. Treat it as a loose thread, not a conclusion.",
     "styleLabel": "{{style}}",
     "deleteConfirmTitle": "Delete this dream?",

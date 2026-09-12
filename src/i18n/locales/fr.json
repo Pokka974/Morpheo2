@@ -74,6 +74,8 @@
     "thisDream": "ce rêve",
     "interpretationUnavailableTitle": "Interprétation indisponible",
     "interpretationUnavailableBody": "Votre rêve est enregistré. Nous réessaierons dès le retour du réseau.",
+    "interpretationSafetyBlockedTitle": "Ce rêve n'a pas pu être interprété",
+    "interpretationSafetyBlockedBody": "La description de ce rêve a été signalée par le filtrage de sécurité et n'a donc pas été envoyée pour interprétation.",
     "degradedNotice": "Cette lecture est revenue peu assurée. Prenez-la comme une piste, pas comme une conclusion.",
     "styleLabel": "{{style}}",
     "deleteConfirmTitle": "Supprimer ce rêve ?",

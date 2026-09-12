@@ -82,6 +82,15 @@ describe('useInterpretation', () => {
     expect(result.current.state.status).toBe('consent_required');
   });
 
+  it('transitions to safety_blocked on ContentSafetyError', async () => {
+    interpretationService.configure('safety_blocked');
+    const { result } = renderHook(() => useInterpretation(), { wrapper });
+    await act(async () => {
+      result.current.interpret(testRequest);
+    });
+    expect(result.current.state.status).toBe('safety_blocked');
+  });
+
   it('shows paywall before any service call when entitlement blocked', async () => {
     entitlementService.configure('limit_exceeded');
     const { result } = renderHook(() => useInterpretation(), { wrapper });

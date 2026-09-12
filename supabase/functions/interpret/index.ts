@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.120.0';
+import { screenDreamText } from '../_shared/contentScreening.ts';
 
 const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
 
@@ -289,6 +290,14 @@ serve(async (req: Request) => {
       languageHint?: string;
       metadata?: RequestMetadata;
     };
+
+    // Screen the raw dream text before it reaches Claude at all — previously the only
+    // screen on this path was Flux rejecting the *derived* image prompt, which never
+    // covered interpretation and never ran for a dream never sent for illustration.
+    if (await screenDreamText(anthropic, body.description)) {
+      await refundCredit('content safety screening blocked dream text');
+      return new Response(JSON.stringify({ error: 'safety_blocked' }), { status: 400 });
+    }
 
     // Fetch active system prompt
     const { data: promptRow } = await supabase
