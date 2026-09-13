@@ -30,7 +30,15 @@ export default function OnboardingConsentScreen() {
           return;
         }
 
-        await supabase.from('consent_records').insert({ user_id: user.id, action: 'granted' });
+        const { error: consentRecordError } = await supabase
+          .from('consent_records')
+          .insert({ user_id: user.id, action: 'granted' });
+        // Non-fatal: profiles.ai_consent_granted is the source of truth the rest of the
+        // app gates on, and it already wrote successfully above. This row is an audit
+        // trail, not a second copy of the flag — logged rather than blocking onboarding.
+        if (consentRecordError) {
+          console.error('Consent record insert failed:', consentRecordError);
+        }
       }
       router.push('/(auth)/onboarding/lock-setup');
     } catch (e) {

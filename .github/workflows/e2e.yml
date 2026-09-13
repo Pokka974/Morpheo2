@@ -1,0 +1,73 @@
+# Runs the Maestro E2E flows (tests/e2e/flows/) against an Android build on a GitHub-hosted
+# emulator, on the same push/PR triggers as ci.yml.
+#
+# Needs an `EXPO_TOKEN` repo secret (an Expo access token, for a non-interactive `eas build`)
+# — this workflow fails at the build step until one is added. Building via EAS also spends
+# build minutes/credits on every run this triggers.
+#
+# The flow file this drives (p1-core-flow.yaml) was rewritten to match the current app's
+# screens but has not yet been watched pass on a real build — expect the first runs to need
+# adjustment (timing, keyboard/animation waits, copy drift).
+#
+# iOS is intentionally out of scope here: this app signs with a free Apple developer team
+# (see project notes — 7-day provisioning profiles, no CI-eligible distribution), so an iOS
+# simulator build in CI isn't viable without a paid account. Android-only until that changes.
+name: E2E (Maestro)
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: {}
+
+jobs:
+  maestro-android:
+    name: Build + run Maestro flows on an Android emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Install the EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Build an Android APK (EAS "preview" profile)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        # `--output` only works with `--local` builds; a normal (cloud) build has to be
+        # downloaded from the artifact URL the build result reports instead.
+        run: |
+          eas build --platform android --profile preview --non-interactive --wait --json > eas-build-result.json
+          BUILD_URL=$(jq -r 'if type == "array" then .[0].artifacts.buildUrl else .artifacts.buildUrl end' eas-build-result.json)
+          echo "Downloading build artifact from $BUILD_URL"
+          curl -fL "$BUILD_URL" -o ./app-e2e.apk
+
+      - name: Install Maestro
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Boot an Android emulator and run the flows
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            adb install ./app-e2e.apk
+            maestro test tests/e2e/flows/
+
+      - name: Upload Maestro debug output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-debug-output
+          path: ~/.maestro/tests/
+          if-no-files-found: ignore

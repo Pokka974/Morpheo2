@@ -1,60 +1,83 @@
 appId: com.morpheo.app
 name: P1 Core Flow — Fresh install to interpretation
 
+# Rewritten against the app as it actually ships today (see tests/e2e/README.md — this file
+# had never been run, and had drifted from the real screens: onboarding copy, the sign-up
+# form, the log screen's two save actions, and the detail screen's interpret/illustration
+# affordances have all changed shape since it was first drafted). Every string below is
+# copied from the screen it targets, not guessed — see the component/i18n source cited in
+# each comment. Still unverified end to end on a device/emulator; a first supervised run is
+# expected to need adjustment (timing, keyboard dismissal, network waits).
+
 ---
 
 - launchApp:
     clearState: true
 
-# Onboarding
-- assertVisible: "Welcome to Morpheo"
+# Onboarding — welcome (src/app/(auth)/onboarding/welcome.tsx)
+- assertVisible: "Morpheo"
 - tapOn: "Get Started"
 
-# Consent
-- assertVisible: "Your dreams, your data"
+# Consent (src/app/(auth)/onboarding/consent.tsx)
+- assertVisible: "A quick note about privacy"
 - tapOn: "I Agree"
 
-# PIN setup
-- assertVisible: "Set Up Lock"
+# PIN setup (src/app/(auth)/onboarding/lock-setup.tsx)
+- assertVisible: "Protect your dream journal"
+- tapOn: "Create PIN"
 - inputRandomNumber:
     length: 4
-    label: "Enter PIN"
-- tapOn: "Continue"
+- tapOn: "Confirm PIN"
 - inputRandomNumber:
     length: 4
-    label: "Confirm PIN"
-- tapOn: "Set PIN"
+- tapOn: "Set Up Protection"
 
-# Sign up
-- assertVisible: "Create Account"
-- tapOn:
-    id: "email-input"
-- inputText: "test@morpheo.app"
-- tapOn:
-    id: "password-input"
+# Sign up (src/app/(auth)/sign-up.tsx) — fields have no accessibilityLabel/testID, so
+# Maestro matches on the placeholder text actually rendered. A random email (rather than a
+# fixed one) is required for the flow to be re-runnable — Supabase auth rejects a signup
+# against an address that's already registered from a previous run.
+- assertVisible: "Create your account"
+- tapOn: "Email"
+- inputRandomEmail
+- tapOn: "Password (min 8 characters)"
+- inputText: "TestPassword123!"
+- tapOn: "Confirm password"
 - inputText: "TestPassword123!"
 - tapOn: "Create Account"
 
-# Wait for journal
+# Empty journal (src/app/(main)/journal/index.tsx, journal.emptyTitle/emptyCta)
 - assertVisible: "Your dream journal is empty"
+- tapOn: "Log a dream"
 
-# Log dream (offline simulation skipped in yaml — use device airplane mode before this step)
-- tapOn: "Log a Dream"
-- tapOn:
-    id: "dream-description-input"
+# Log a dream (src/app/(main)/log/index.tsx) — "Dream description" is the field's real
+# accessibilityLabel; "Save draft" leaves the interpretation for the next step rather than
+# firing it immediately, so the journal-card and detail-screen assertions below have
+# something to navigate through first.
+- tapOn: "Dream description"
 - inputText: "I was standing on a cliff above a vast dark ocean. The moon was huge and red, and strange fish-like shapes moved in the clouds above me. I felt both terrified and at peace."
-- tapOn: "Save Dream"
+- hideKeyboard
+- tapOn: "Save draft"
 
-# Navigate to dream detail
-- assertVisible: "Interpret Dream"
-- tapOn: "Interpret Dream"
+# Back on the journal list, now with one card. `deriveTitle` (DreamCard.tsx) renders the
+# dream's first sentence as the card's visible title, so the logged text above is what's
+# actually on screen to tap — not a placeholder.
+- assertVisible: "I was standing on a cliff above a vast dark ocean."
+- tapOn: "I was standing on a cliff above a vast dark ocean."
 
-# Wait for interpretation
-- waitForAnimationToEnd
+# Dream detail (src/app/(main)/journal/[dreamId]/detail.tsx) — a drafted, uninterpreted
+# dream still shows the standalone "Interpret this dream" button (dream.interpretButton).
+- assertVisible: "Interpret this dream"
+- tapOn: "Interpret this dream"
+
+# Interpretation fires automatically on this screen (src/app/(main)/journal/[dreamId]/
+# interpretation.tsx) — there is no second "confirm" tap. Waits are generous because this
+# is a real round trip through the interpret Edge Function and Claude.
+- waitForAnimationToEnd:
+    timeout: 30000
 - assertVisible: "Interpretation"
-- assertVisible: "Symbols"
-- assertVisible: "Emotions"
 
-# Verify image generation triggered
-- waitForAnimationToEnd
+# Image generation is triggered automatically alongside interpretation; the illustration's
+# accessibilityLabel is dream.imageIllustrationLabel.
+- waitForAnimationToEnd:
+    timeout: 30000
 - assertVisible: "Dream illustration"
