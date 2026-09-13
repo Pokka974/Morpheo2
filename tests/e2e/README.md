@@ -16,14 +16,30 @@ maestro test tests/e2e/flows/
 
 ### P1 Core Flow Test
 
-The file `flows/p1-core-flow.yaml` covers the full P1 vertical slice:
-1. Fresh install → onboarding (consent + PIN setup)
-2. Sign up with email
-3. Log a dream offline (airplane mode)
-4. Return online → verify sync
-5. Tap "Interpret Dream" → verify interpretation result renders
-6. Verify image generation triggers automatically
-7. Verify all 4 interpretation sections render
+The file `flows/p1-core-flow.yaml` covers the P1 vertical slice, rewritten to match the app's
+actual current screens/copy rather than an early spec draft (issue #16 — it had never been
+run, and had drifted):
+1. Fresh install → onboarding (welcome, consent, PIN setup)
+2. Sign up with a random email
+3. Log a dream as a draft
+4. Open it from the journal list and tap "Interpret this dream"
+5. Verify the interpretation renders, and that image generation fires automatically
+
+**Known gap, not covered here:** logging a dream offline and verifying it syncs once
+reconnected — the original draft named this as a step but never actually simulated airplane
+mode. Worth its own flow rather than folding back into this one.
+
+### Running in CI
+
+`.github/workflows/e2e.yml` runs this against an Android emulator, `workflow_dispatch` only
+(not on every push) — it spends EAS build minutes and needs an `EXPO_TOKEN` repo secret that
+does not exist yet. See that file's header comment before enabling it further. iOS is out of
+scope for CI: this app currently signs with a free Apple developer team (7-day provisioning
+profiles), which isn't viable for automated distribution.
+
+Until that secret is added and a first run is supervised, treat this flow as **verified by
+reading, not by execution** — every string in it is copied from the screen it targets, but
+no one has watched it pass on a device yet.
 
 ## Cold Start Profiling (T130)
 
