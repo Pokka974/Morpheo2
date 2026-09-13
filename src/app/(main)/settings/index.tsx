@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, Text } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -8,12 +8,14 @@ import { sqlite as db } from '@db/client';
 import { useServices } from '@services/useServices';
 import type { Entitlement } from '@services/entitlement/EntitlementService';
 import { SettingsRow, SettingsSection } from '@shared/components/SettingsRow';
+import { ScrollToTopButton } from '@shared/components/ScrollToTopButton';
+import { useScrollToTopVisibility } from '@shared/hooks/useScrollToTopVisibility';
 import { ProfileCard } from '@features/subscription/ProfileCard';
 import { seedSampleDreams } from '@features/dev/seedSampleDreams';
 import { pullRemoteChanges, resetSyncCursors } from '@features/sync/pullService';
 import { makeMediaCache } from '@features/sync/mediaCache';
 import { supabase } from '../../../supabase/client';
-import { colors, spacing, typography } from '@theme/tokens';
+import { colors, sizes, spacing, typography } from '@theme/tokens';
 import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '@shared/legalLinks';
 
 const APP_VERSION = 'v1.0.0';
@@ -48,6 +50,8 @@ export default function SettingsScreen() {
   const [dreamCount, setDreamCount] = useState(0);
   const [since, setSince] = useState<Date | null>(null);
   const [preferences, setPreferences] = useState<Preferences | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const { isVisible: isScrollToTopVisible, onScroll } = useScrollToTopVisibility();
 
   // Focus rather than mount: a purchase completes on the paywall screen, which then
   // calls router.back() here — without refetching on focus this card would keep
@@ -227,110 +231,121 @@ export default function SettingsScreen() {
       : t('settings.consentWithheld');
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.sm }]}
-    >
-      <Text style={styles.title}>{t('settings.title')}</Text>
+    <View style={styles.container}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.container}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.sm }]}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      >
+        <Text style={styles.title}>{t('settings.title')}</Text>
 
-      <ProfileCard
-        email={email}
-        dreamCount={dreamCount}
-        since={since}
-        entitlement={entitlementData}
-        onUpgrade={() => router.push('/(main)/paywall')}
-      />
+        <ProfileCard
+          email={email}
+          dreamCount={dreamCount}
+          since={since}
+          entitlement={entitlementData}
+          onUpgrade={() => router.push('/(main)/paywall')}
+        />
 
-      <SettingsSection title={t('settings.sectionReading')}>
-        <SettingsRow
-          label={t('settings.interpretationStyleRow')}
-          value={styleValue}
-          onPress={() => router.push('/(main)/settings/style')}
-        />
-        <SettingsRow
-          label={t('settings.notificationsRow')}
-          value={reminderValue}
-          onPress={() => router.push('/(main)/settings/notifications')}
-        />
-      </SettingsSection>
+        <SettingsSection title={t('settings.sectionReading')}>
+          <SettingsRow
+            label={t('settings.interpretationStyleRow')}
+            value={styleValue}
+            onPress={() => router.push('/(main)/settings/style')}
+          />
+          <SettingsRow
+            label={t('settings.notificationsRow')}
+            value={reminderValue}
+            onPress={() => router.push('/(main)/settings/notifications')}
+          />
+        </SettingsSection>
 
-      <SettingsSection title={t('settings.sectionData')}>
-        <SettingsRow
-          label={t('settings.aiConsentRow')}
-          value={consentValue}
-          onPress={() => router.push('/(main)/settings/privacy')}
-        />
-        <SettingsRow
-          label={t('settings.exportDataRow')}
-          onPress={() => router.push('/(main)/settings/export')}
-        />
-        <SettingsRow
-          label={t('settings.clearCacheRow')}
-          value={t('settings.cacheUsed', { size: formatBytes(cacheSize) })}
-          onPress={handleClearCache}
-          navigable={false}
-        />
-      </SettingsSection>
+        <SettingsSection title={t('settings.sectionData')}>
+          <SettingsRow
+            label={t('settings.aiConsentRow')}
+            value={consentValue}
+            onPress={() => router.push('/(main)/settings/privacy')}
+          />
+          <SettingsRow
+            label={t('settings.exportDataRow')}
+            onPress={() => router.push('/(main)/settings/export')}
+          />
+          <SettingsRow
+            label={t('settings.clearCacheRow')}
+            value={t('settings.cacheUsed', { size: formatBytes(cacheSize) })}
+            onPress={handleClearCache}
+            navigable={false}
+          />
+        </SettingsSection>
 
-      <SettingsSection title={t('settings.sectionAccount')}>
-        {/*
+        <SettingsSection title={t('settings.sectionAccount')}>
+          {/*
           No tier value here: the badge on the profile card already states it, and the
           design shows the tier exactly once. This row is the way out to the store.
         */}
-        <SettingsRow
-          label={t('settings.subscriptionRow')}
-          onPress={() => {
-            void entitlement.manageSubscription();
-          }}
-        />
-        <SettingsRow
-          label={t('settings.manageSubscriptionRow')}
-          onPress={() => router.push('/(main)/paywall')}
-        />
-        <SettingsRow label={t('settings.aboutRow')} value={APP_VERSION} navigable={false} />
-        <SettingsRow label={t('settings.signOutRow')} onPress={handleSignOut} navigable={false} />
-        {/*
+          <SettingsRow
+            label={t('settings.subscriptionRow')}
+            onPress={() => {
+              void entitlement.manageSubscription();
+            }}
+          />
+          <SettingsRow
+            label={t('settings.manageSubscriptionRow')}
+            onPress={() => router.push('/(main)/paywall')}
+          />
+          <SettingsRow label={t('settings.aboutRow')} value={APP_VERSION} navigable={false} />
+          <SettingsRow label={t('settings.signOutRow')} onPress={handleSignOut} navigable={false} />
+          {/*
           The only red on this screen. The design puts sign-out and deletion in the same
           group — they are both "leaving" — but only deletion is irreversible, so only
           deletion carries the tone.
         */}
-        <SettingsRow
-          label={t('settings.deleteAccountRow')}
-          onPress={() => router.push('/(main)/settings/delete-account')}
-          destructive
-        />
-      </SettingsSection>
-
-      <SettingsSection title={t('settings.sectionLegal')}>
-        <SettingsRow
-          label={t('settings.privacyPolicyRow')}
-          onPress={() => {
-            void Linking.openURL(PRIVACY_POLICY_URL);
-          }}
-        />
-        <SettingsRow
-          label={t('settings.termsOfServiceRow')}
-          onPress={() => {
-            void Linking.openURL(TERMS_OF_SERVICE_URL);
-          }}
-        />
-      </SettingsSection>
-
-      {__DEV__ ? (
-        <SettingsSection title={t('settings.sectionDeveloper')}>
           <SettingsRow
-            label={t('settings.seedDreamsRow')}
-            onPress={handleSeedDreams}
-            navigable={false}
-          />
-          <SettingsRow
-            label={t('settings.forceResyncRow')}
-            onPress={handleForceResync}
-            navigable={false}
+            label={t('settings.deleteAccountRow')}
+            onPress={() => router.push('/(main)/settings/delete-account')}
+            destructive
           />
         </SettingsSection>
-      ) : null}
-    </ScrollView>
+
+        <SettingsSection title={t('settings.sectionLegal')}>
+          <SettingsRow
+            label={t('settings.privacyPolicyRow')}
+            onPress={() => {
+              void Linking.openURL(PRIVACY_POLICY_URL);
+            }}
+          />
+          <SettingsRow
+            label={t('settings.termsOfServiceRow')}
+            onPress={() => {
+              void Linking.openURL(TERMS_OF_SERVICE_URL);
+            }}
+          />
+        </SettingsSection>
+
+        {__DEV__ ? (
+          <SettingsSection title={t('settings.sectionDeveloper')}>
+            <SettingsRow
+              label={t('settings.seedDreamsRow')}
+              onPress={handleSeedDreams}
+              navigable={false}
+            />
+            <SettingsRow
+              label={t('settings.forceResyncRow')}
+              onPress={handleForceResync}
+              navigable={false}
+            />
+          </SettingsSection>
+        ) : null}
+      </ScrollView>
+
+      <ScrollToTopButton
+        visible={isScrollToTopVisible}
+        onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        bottomOffset={Math.max(insets.bottom, spacing.md) + sizes.tabBarContentHeight + spacing.md}
+      />
+    </View>
   );
 }
 

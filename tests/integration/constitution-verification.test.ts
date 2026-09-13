@@ -103,9 +103,10 @@ describe('Morpheo Constitution Verification (T133)', () => {
 
     it('generate-image Edge Function checks entitlement server-side', () => {
       const source = readFile('supabase/functions/generate-image/index.ts');
-      expect(source).toContain('entitlements');
       // Same one-statement check-and-increment as the interpretation path, for the same
-      // reason (019_image_credit_rpc.sql).
+      // reason (019_image_credit_rpc.sql) — the edge function itself no longer queries
+      // `entitlements` directly (it used to, only to derive the now-retired per-entry
+      // regeneration budget); the gate is entirely delegated to the RPC.
       expect(source).toContain('consume_image_credit');
 
       const rpc = readFile('supabase/migrations/019_image_credit_rpc.sql');

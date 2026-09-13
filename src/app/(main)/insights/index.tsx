@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,8 @@ import { LoadingState } from '@shared/components/LoadingState';
 import { Button } from '@shared/components/Button';
 import { Chip, ChipRow } from '@shared/components/Chip';
 import { SegmentedControl } from '@shared/components/SegmentedControl';
+import { ScrollToTopButton } from '@shared/components/ScrollToTopButton';
+import { useScrollToTopVisibility } from '@shared/hooks/useScrollToTopVisibility';
 import {
   ConstellationChart,
   type ConstellationNode,
@@ -35,6 +37,7 @@ import {
   constellationBackground,
   gradients,
   radius,
+  sizes,
   spacing,
   typography,
 } from '@theme/tokens';
@@ -70,6 +73,8 @@ export default function InsightsScreen() {
   const [tonePoints, setTonePoints] = useState<EmotionTonePoint[]>([]);
   const [chains, setChains] = useState<RecurrenceChain[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const scrollRef = useRef<ScrollView>(null);
+  const { isVisible: isScrollToTopVisible, onScroll } = useScrollToTopVisibility();
 
   // Focus rather than mount: a purchase completes on the paywall screen and returns
   // here, and without refetching on focus the premium-only view (period control, full
@@ -158,164 +163,175 @@ export default function InsightsScreen() {
   if (isLoading) return <LoadingState message={t('insights.loading')} />;
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + spacing.sm, paddingBottom: spacing.xxl },
-      ]}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerMeta}>
-            {t('insights.subtitle', { count: keywords.length, since: periodLabel })}
-          </Text>
-          <Text style={styles.headerTitle}>{t('insights.title')}</Text>
-        </View>
-
-        {isPremium ? (
-          <SegmentedControl
-            segments={PERIODS.map(value => ({
-              value,
-              label: t(PERIOD_KEYS[value]),
-              accessibilityLabel: t('a11y.selectPeriod', { period: t(PERIOD_KEYS[value]) }),
-            }))}
-            value={period}
-            onChange={setPeriod}
-          />
-        ) : null}
-      </View>
-
-      <LinearGradient
-        colors={[...constellationBackground.colors]}
-        locations={[...constellationBackground.locations]}
-        start={{ x: 0.25, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.panel}
+    <View style={styles.screen}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.screen}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + spacing.sm, paddingBottom: spacing.xxl },
+        ]}
+        showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
       >
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>{t('insights.constellationTitle')}</Text>
-          <Text style={styles.panelMeta}>{periodLabel}</Text>
-        </View>
-        <Text style={styles.panelLegend}>
-          {t('insights.constellationLegend')}
-          {nodes.length >= 3 ? ` · ${t('insights.constellationZoomHint')}` : ''}
-        </Text>
-        <ConstellationChart nodes={nodes} testID="constellation" />
-      </LinearGradient>
-
-      <View style={styles.surfacePanel}>
-        <Text style={styles.panelTitle}>{t('insights.ribbonTitle')}</Text>
-        {ribbon.length >= 2 ? (
-          <>
-            <Text style={styles.panelLegend}>
-              {t('insights.ribbonSubtitle', { period: periodLabel })}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.headerMeta}>
+              {t('insights.subtitle', { count: keywords.length, since: periodLabel })}
             </Text>
-            <EmotionRibbon points={ribbon} testID="emotion-ribbon" />
-          </>
-        ) : (
-          <>
-            <Text style={styles.panelTitleSecondary}>{t('insights.ribbonEmptyTitle')}</Text>
-            <Text style={styles.panelLegend}>{t('insights.ribbonEmptyBody')}</Text>
-          </>
-        )}
-      </View>
+            <Text style={styles.headerTitle}>{t('insights.title')}</Text>
+          </View>
 
-      {emotions.length > 0 ? (
-        <View style={styles.surfacePanel}>
-          <Text style={styles.panelTitle}>{t('insights.topEmotions')}</Text>
-          <ChipRow>
-            {emotions.map(e => (
-              <Chip key={e.id} label={e.term} />
-            ))}
-          </ChipRow>
-        </View>
-      ) : null}
-
-      <View style={styles.surfacePanel}>
-        <Text style={styles.panelTitle}>{t('insights.sleepClarityTitle')}</Text>
-        {sleepClarity.bars.length > 0 ? (
-          <>
-            <Text style={styles.panelLegend}>
-              {t('insights.sleepClaritySubtitle', { period: periodLabel })}
-            </Text>
-            <SleepClarityBars
-              bars={sleepClarity.bars}
-              highlightQuality={sleepClarity.captionQuality}
-              testID="sleep-clarity-bars"
+          {isPremium ? (
+            <SegmentedControl
+              segments={PERIODS.map(value => ({
+                value,
+                label: t(PERIOD_KEYS[value]),
+                accessibilityLabel: t('a11y.selectPeriod', { period: t(PERIOD_KEYS[value]) }),
+              }))}
+              value={period}
+              onChange={setPeriod}
             />
-            {sleepClarity.captionQuality != null ? (
-              <Text style={styles.panelCaption}>
-                {t('insights.sleepClarityCaption', { quality: sleepClarity.captionQuality })}
-              </Text>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <Text style={styles.panelTitleSecondary}>{t('insights.sleepClarityEmptyTitle')}</Text>
-            <Text style={styles.panelLegend}>{t('insights.sleepClarityEmptyBody')}</Text>
-          </>
-        )}
-      </View>
-
-      {chains.length > 0 ? (
-        <View style={styles.surfacePanel}>
-          <Text style={styles.panelTitle}>{t('insights.chainsTitle')}</Text>
-          <Text style={styles.panelLegend}>{t('insights.chainsSubtitle')}</Text>
-          <View style={styles.chainList}>
-            {chains.map(chain => (
-              <View key={chain.id} style={styles.chainCard}>
-                <Text style={styles.panelMeta}>
-                  {t('insights.chainLength', { count: chain.dreams.length })}
-                </Text>
-                {chain.dreams.map(dream => (
-                  <Pressable
-                    key={dream.id}
-                    onPress={() => router.push(`/(main)/journal/${dream.id}/detail`)}
-                    accessibilityRole="button"
-                    accessibilityLabel={dream.title}
-                    style={styles.chainRow}
-                  >
-                    <Text style={styles.chainRowDate}>
-                      {new Date(dream.occurredAt).toLocaleDateString(undefined, {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
-                    </Text>
-                    <Text style={styles.chainRowTitle} numberOfLines={1}>
-                      {dream.title}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            ))}
-          </View>
+          ) : null}
         </View>
-      ) : null}
 
-      {!isPremium ? (
         <LinearGradient
-          colors={[...gradients.mystic.colors]}
-          locations={[...gradients.mystic.locations]}
-          start={{ x: 0, y: 0 }}
+          colors={[...constellationBackground.colors]}
+          locations={[...constellationBackground.locations]}
+          start={{ x: 0.25, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.upgradeCard}
+          style={styles.panel}
         >
-          <View style={styles.premiumRow}>
-            <View style={styles.premiumDot} />
-            <Text style={styles.premiumLabel}>{t('common.premium')}</Text>
+          <View style={styles.panelHeader}>
+            <Text style={styles.panelTitle}>{t('insights.constellationTitle')}</Text>
+            <Text style={styles.panelMeta}>{periodLabel}</Text>
           </View>
-          <Text style={styles.upgradeTitle}>{t('insights.upgradeTitle')}</Text>
-          <Text style={styles.upgradeBody}>{t('insights.upgradeBody')}</Text>
-          <Button
-            label={t('insights.upgradeCta')}
-            onPress={() => router.push('/(main)/paywall')}
-            style={styles.upgradeCta}
-          />
+          <Text style={styles.panelLegend}>
+            {t('insights.constellationLegend')}
+            {nodes.length >= 3 ? ` · ${t('insights.constellationZoomHint')}` : ''}
+          </Text>
+          <ConstellationChart nodes={nodes} testID="constellation" />
         </LinearGradient>
-      ) : null}
-    </ScrollView>
+
+        <View style={styles.surfacePanel}>
+          <Text style={styles.panelTitle}>{t('insights.ribbonTitle')}</Text>
+          {ribbon.length >= 2 ? (
+            <>
+              <Text style={styles.panelLegend}>
+                {t('insights.ribbonSubtitle', { period: periodLabel })}
+              </Text>
+              <EmotionRibbon points={ribbon} testID="emotion-ribbon" />
+            </>
+          ) : (
+            <>
+              <Text style={styles.panelTitleSecondary}>{t('insights.ribbonEmptyTitle')}</Text>
+              <Text style={styles.panelLegend}>{t('insights.ribbonEmptyBody')}</Text>
+            </>
+          )}
+        </View>
+
+        {emotions.length > 0 ? (
+          <View style={styles.surfacePanel}>
+            <Text style={styles.panelTitle}>{t('insights.topEmotions')}</Text>
+            <ChipRow>
+              {emotions.map(e => (
+                <Chip key={e.id} label={e.term} />
+              ))}
+            </ChipRow>
+          </View>
+        ) : null}
+
+        <View style={styles.surfacePanel}>
+          <Text style={styles.panelTitle}>{t('insights.sleepClarityTitle')}</Text>
+          {sleepClarity.bars.length > 0 ? (
+            <>
+              <Text style={styles.panelLegend}>
+                {t('insights.sleepClaritySubtitle', { period: periodLabel })}
+              </Text>
+              <SleepClarityBars
+                bars={sleepClarity.bars}
+                highlightQuality={sleepClarity.captionQuality}
+                testID="sleep-clarity-bars"
+              />
+              {sleepClarity.captionQuality != null ? (
+                <Text style={styles.panelCaption}>
+                  {t('insights.sleepClarityCaption', { quality: sleepClarity.captionQuality })}
+                </Text>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <Text style={styles.panelTitleSecondary}>{t('insights.sleepClarityEmptyTitle')}</Text>
+              <Text style={styles.panelLegend}>{t('insights.sleepClarityEmptyBody')}</Text>
+            </>
+          )}
+        </View>
+
+        {chains.length > 0 ? (
+          <View style={styles.surfacePanel}>
+            <Text style={styles.panelTitle}>{t('insights.chainsTitle')}</Text>
+            <Text style={styles.panelLegend}>{t('insights.chainsSubtitle')}</Text>
+            <View style={styles.chainList}>
+              {chains.map(chain => (
+                <View key={chain.id} style={styles.chainCard}>
+                  <Text style={styles.panelMeta}>
+                    {t('insights.chainLength', { count: chain.dreams.length })}
+                  </Text>
+                  {chain.dreams.map(dream => (
+                    <Pressable
+                      key={dream.id}
+                      onPress={() => router.push(`/(main)/journal/${dream.id}/detail`)}
+                      accessibilityRole="button"
+                      accessibilityLabel={dream.title}
+                      style={styles.chainRow}
+                    >
+                      <Text style={styles.chainRowDate}>
+                        {new Date(dream.occurredAt).toLocaleDateString(undefined, {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                      </Text>
+                      <Text style={styles.chainRowTitle} numberOfLines={1}>
+                        {dream.title}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {!isPremium ? (
+          <LinearGradient
+            colors={[...gradients.mystic.colors]}
+            locations={[...gradients.mystic.locations]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.upgradeCard}
+          >
+            <View style={styles.premiumRow}>
+              <View style={styles.premiumDot} />
+              <Text style={styles.premiumLabel}>{t('common.premium')}</Text>
+            </View>
+            <Text style={styles.upgradeTitle}>{t('insights.upgradeTitle')}</Text>
+            <Text style={styles.upgradeBody}>{t('insights.upgradeBody')}</Text>
+            <Button
+              label={t('insights.upgradeCta')}
+              onPress={() => router.push('/(main)/paywall')}
+              style={styles.upgradeCta}
+            />
+          </LinearGradient>
+        ) : null}
+      </ScrollView>
+
+      <ScrollToTopButton
+        visible={isScrollToTopVisible}
+        onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        bottomOffset={Math.max(insets.bottom, spacing.md) + sizes.tabBarContentHeight + spacing.md}
+      />
+    </View>
   );
 }
 

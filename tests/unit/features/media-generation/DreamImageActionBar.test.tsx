@@ -11,9 +11,19 @@ const FAILED_MEDIA: MediaResult = {
   generationStatus: 'failed',
   signedUrl: null,
   localCachePath: null,
-  regenerationCount: 0,
-  maxRegenerations: 3,
   errorMessage: 'stored error message',
+  createdAt: '2026-08-14T00:00:00Z',
+  updatedAt: '2026-08-14T00:00:00Z',
+};
+
+const COMPLETE_MEDIA: MediaResult = {
+  id: 'media-001',
+  dreamId: 'dream-001',
+  mediaType: 'image',
+  generationStatus: 'complete',
+  signedUrl: 'https://example.com/img.jpg',
+  localCachePath: null,
+  errorMessage: null,
   createdAt: '2026-08-14T00:00:00Z',
   updatedAt: '2026-08-14T00:00:00Z',
 };
@@ -21,7 +31,12 @@ const FAILED_MEDIA: MediaResult = {
 describe('DreamImageActionBar', () => {
   it('shows a generic placeholder when there is no media and no error', () => {
     const { getByText } = render(
-      <DreamImageActionBar media={null} isGenerating={false} canRegenerate={false} />
+      <DreamImageActionBar
+        media={null}
+        isGenerating={false}
+        canRegenerate={false}
+        imagesRemaining={null}
+      />
     );
     expect(getByText('No illustration yet')).toBeTruthy();
   });
@@ -33,6 +48,7 @@ describe('DreamImageActionBar', () => {
         isGenerating={false}
         errorMessage="a safety block or limit reason"
         canRegenerate={false}
+        imagesRemaining={null}
       />
     );
     expect(getByText('a safety block or limit reason')).toBeTruthy();
@@ -41,7 +57,12 @@ describe('DreamImageActionBar', () => {
 
   it('falls back to media.errorMessage when no errorMessage prop is passed', () => {
     const { getByText } = render(
-      <DreamImageActionBar media={FAILED_MEDIA} isGenerating={false} canRegenerate={false} />
+      <DreamImageActionBar
+        media={FAILED_MEDIA}
+        isGenerating={false}
+        canRegenerate={false}
+        imagesRemaining={null}
+      />
     );
     expect(getByText('stored error message')).toBeTruthy();
   });
@@ -53,6 +74,7 @@ describe('DreamImageActionBar', () => {
         isGenerating={false}
         errorMessage="something went wrong"
         canRegenerate={false}
+        imagesRemaining={null}
         onGenerate={jest.fn()}
       />
     );
@@ -65,6 +87,7 @@ describe('DreamImageActionBar', () => {
         media={null}
         isGenerating={false}
         canRegenerate={false}
+        imagesRemaining={null}
         onGenerate={jest.fn()}
       />
     );
@@ -78,9 +101,68 @@ describe('DreamImageActionBar', () => {
         isGenerating={true}
         errorMessage="a leftover error from a previous attempt"
         canRegenerate={false}
+        imagesRemaining={null}
       />
     );
     expect(getByText('Illustrating your dream…')).toBeTruthy();
     expect(queryByText('a leftover error from a previous attempt')).toBeNull();
+  });
+
+  // Regenerating spends the same monthly image credit generating does — there is no
+  // separate per-entry regeneration budget any more, so the button's visibility no
+  // longer depends on any count carried by `media` itself.
+  describe('regenerate button (entitlement-based, no per-entry budget)', () => {
+    it('shows the button with the entitlement count once an image is complete', () => {
+      const { getByText } = render(
+        <DreamImageActionBar
+          media={COMPLETE_MEDIA}
+          isGenerating={false}
+          canRegenerate={true}
+          imagesRemaining={2}
+          onRegenerate={jest.fn()}
+        />
+      );
+      expect(getByText('Regenerate (2 left)')).toBeTruthy();
+    });
+
+    it('shows the count even when it is zero — the press itself surfaces the real limit, same as Generate', () => {
+      const { getByText } = render(
+        <DreamImageActionBar
+          media={COMPLETE_MEDIA}
+          isGenerating={false}
+          canRegenerate={true}
+          imagesRemaining={0}
+          onRegenerate={jest.fn()}
+        />
+      );
+      expect(getByText('Regenerate (0 left)')).toBeTruthy();
+    });
+
+    it('shows the unlimited label with no count for a premium account', () => {
+      const { getByText, queryByText } = render(
+        <DreamImageActionBar
+          media={COMPLETE_MEDIA}
+          isGenerating={false}
+          canRegenerate={true}
+          imagesRemaining={null}
+          onRegenerate={jest.fn()}
+        />
+      );
+      expect(getByText('Regenerate')).toBeTruthy();
+      expect(queryByText(/left/)).toBeNull();
+    });
+
+    it('does not show the button when canRegenerate is false, regardless of imagesRemaining', () => {
+      const { queryByText } = render(
+        <DreamImageActionBar
+          media={COMPLETE_MEDIA}
+          isGenerating={false}
+          canRegenerate={false}
+          imagesRemaining={5}
+          onRegenerate={jest.fn()}
+        />
+      );
+      expect(queryByText(/Regenerate/)).toBeNull();
+    });
   });
 });

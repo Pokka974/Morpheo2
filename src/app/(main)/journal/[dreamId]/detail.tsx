@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +11,7 @@ import {
   type StyleProp,
   type TextStyle,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,10 +34,21 @@ import { Button } from '@shared/components/Button';
 import { Chip, ChipRow } from '@shared/components/Chip';
 import { ClarityDots } from '@shared/components/ClarityDots';
 import { CollapsibleSection } from '@shared/components/CollapsibleSection';
-import { CloseIcon, SymbolIcon } from '@shared/components/icons';
+import {
+  CloseIcon,
+  MoonDashedIcon,
+  MoonFullIcon,
+  MoonWaningIcon,
+  MoreIcon,
+  SymbolIcon,
+} from '@shared/components/icons';
 import { ordinal } from '@shared/ordinal';
 import { DreamImageActionBar } from '@features/media-generation/DreamImageActionBar';
 import { useImageGeneration } from '@features/media-generation/useImageGeneration';
+import { DeleteDreamModal } from '@features/journal/DeleteDreamModal';
+import { AnotherAngleSheet } from '@features/journal/AnotherAngleSheet';
+import { ScrollToTopButton } from '@shared/components/ScrollToTopButton';
+import { useScrollToTopVisibility } from '@shared/hooks/useScrollToTopVisibility';
 import { useServices } from '@services/useServices';
 import {
   colors,
@@ -51,9 +62,12 @@ import {
 } from '@theme/tokens';
 import type {
   CulturalReference,
+  InterpretationRequest,
   InterpretationResult,
 } from '@services/ai/interpretation/InterpretationService';
 import type { MediaResult } from '@services/ai/image/ImageGenerationService';
+
+type AngleStyle = NonNullable<InterpretationRequest['style']>;
 
 interface DreamDetail {
   id: string;
@@ -72,6 +86,7 @@ interface DreamDetail {
   places: string[];
   linkedDreamId: string | null;
   loggedAt: string;
+  editedSinceInterpretation: boolean;
 }
 
 function parseStringArray(raw: string | null | undefined): string[] {
@@ -104,130 +119,208 @@ const HERO_HEIGHT = 320;
 const CONTENT_OVERLAP = 56;
 
 export default function DreamDetailScreen() {
-  const { dreamId } = useLocalSearchParams<{ dreamId: string }>();
+  const { dreamId, autoRegenerateImage } = useLocalSearchParams<{
+    dreamId: string;
+    autoRegenerateImage?: string;
+  }>();
   const router = useRouter();
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const services = useServices();
-  const { imageGeneration, auth } = services;
+  const { imageGeneration, auth, entitlement } = services;
 
   const [dream, setDream] = useState<DreamDetail | null>(null);
   const [interpretation, setInterpretation] = useState<InterpretationResult | null>(null);
   const [imageMedia, setImageMedia] = useState<MediaResult | null>(null);
+  // Images left against the monthly entitlement — `null` means unlimited (premium).
+  // Regenerating spends the same credit generating does; there is no separate per-entry
+  // regeneration budget any more (see useImageGeneration.ts).
+  const [imagesRemaining, setImagesRemaining] = useState<number | null>(null);
+  // Same pattern as imagesRemaining, for the "Another angle" sheet's footer caption.
+  const [interpretationsRemaining, setInterpretationsRemaining] = useState<number | null>(null);
   const [chain, setChain] = useState<RecurrenceChain | null>(null);
   const [monthlyTheme, setMonthlyTheme] = useState<MonthlyThemeRecurrence | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFullscreenOpen, setFullscreenOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isAngleSheetOpen, setIsAngleSheetOpen] = useState(false);
+  const [selectedAngleStyle, setSelectedAngleStyle] = useState<AngleStyle>('symbolic');
+  const scrollRef = useRef<ScrollView>(null);
+  const { isVisible: isScrollToTopVisible, onScroll } = useScrollToTopVisibility();
 
   const { state: imageState, generate, regenerate } = useImageGeneration();
+  // Guards against re-firing the auto-regenerate-image effect for the same request on
+  // every re-render while it's in flight; keyed by value (not a plain boolean) so a
+  // genuinely new request — a fresh `autoRegenerateImage` value from a later edit — is
+  // never permanently blocked once the first one has fired.
+  const autoRegenerateImageHandledForRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const dreamRow = await db.getFirstAsync<{
-          id: string;
-          description: string;
-          occurred_at: string;
-          emotions: string;
-          lucidity: string;
-          tone: string | null;
-          clarity: number | null;
-          sleep_quality: number | null;
-          bedtime: string | null;
-          wake_time: string | null;
-          dream_ending: string | null;
-          dream_type: string;
-          characters: string;
-          places: string;
-          linked_dream_id: string | null;
-          logged_at: string;
-        }>(
-          `SELECT id, description, occurred_at, emotions, lucidity, tone, clarity,
+  const load = useCallback(async () => {
+    try {
+      const dreamRow = await db.getFirstAsync<{
+        id: string;
+        description: string;
+        occurred_at: string;
+        emotions: string;
+        lucidity: string;
+        tone: string | null;
+        clarity: number | null;
+        sleep_quality: number | null;
+        bedtime: string | null;
+        wake_time: string | null;
+        dream_ending: string | null;
+        dream_type: string;
+        characters: string;
+        places: string;
+        linked_dream_id: string | null;
+        logged_at: string;
+        edited_since_interpretation: number;
+      }>(
+        `SELECT id, description, occurred_at, emotions, lucidity, tone, clarity,
                   sleep_quality, bedtime, wake_time, dream_ending, dream_type,
-                  characters, places, linked_dream_id, logged_at
+                  characters, places, linked_dream_id, logged_at, edited_since_interpretation
            FROM dreams WHERE id = ? AND is_deleted = 0`,
-          dreamId
-        );
-        if (!dreamRow) return;
-        setDream({
-          id: dreamRow.id,
-          description: dreamRow.description,
-          occurredAt: dreamRow.occurred_at,
-          emotions: parseStringArray(dreamRow.emotions),
-          lucidity: dreamRow.lucidity as Lucidity,
-          tone: dreamRow.tone as Tone | null,
-          clarity: dreamRow.clarity,
-          sleepQuality: dreamRow.sleep_quality,
-          bedtime: dreamRow.bedtime,
-          wakeTime: dreamRow.wake_time,
-          dreamEnding: dreamRow.dream_ending as DreamDetail['dreamEnding'],
-          dreamType: parseStringArray(dreamRow.dream_type),
-          characters: parseStringArray(dreamRow.characters),
-          places: parseStringArray(dreamRow.places),
-          linkedDreamId: dreamRow.linked_dream_id,
-          loggedAt: dreamRow.logged_at,
+        dreamId
+      );
+      if (!dreamRow) return;
+      setDream({
+        id: dreamRow.id,
+        description: dreamRow.description,
+        occurredAt: dreamRow.occurred_at,
+        emotions: parseStringArray(dreamRow.emotions),
+        lucidity: dreamRow.lucidity as Lucidity,
+        tone: dreamRow.tone as Tone | null,
+        clarity: dreamRow.clarity,
+        sleepQuality: dreamRow.sleep_quality,
+        bedtime: dreamRow.bedtime,
+        wakeTime: dreamRow.wake_time,
+        dreamEnding: dreamRow.dream_ending as DreamDetail['dreamEnding'],
+        dreamType: parseStringArray(dreamRow.dream_type),
+        characters: parseStringArray(dreamRow.characters),
+        places: parseStringArray(dreamRow.places),
+        linkedDreamId: dreamRow.linked_dream_id,
+        loggedAt: dreamRow.logged_at,
+        editedSinceInterpretation: dreamRow.edited_since_interpretation === 1,
+      });
+
+      const interpRow = await db.getFirstAsync<{
+        id: string;
+        overall_reading: string;
+        keywords: string;
+        emotions: string;
+        cultural_references: string;
+        confidence: string | null;
+        prompt_version: string;
+        model_used: string;
+        created_at: string;
+        archetype: string | null;
+        themes: string | null;
+        symbolic_density: number | null;
+        image_prompt: string | null;
+      }>(
+        'SELECT id, overall_reading, keywords, emotions, cultural_references, confidence, prompt_version, model_used, created_at, archetype, themes, symbolic_density, image_prompt FROM interpretations WHERE dream_id = ? ORDER BY created_at DESC LIMIT 1',
+        dreamId
+      );
+      if (interpRow) {
+        const confidence = (interpRow.confidence ?? 'medium') as 'high' | 'medium' | 'low';
+        setInterpretation({
+          id: interpRow.id,
+          dreamId,
+          overallReading: interpRow.overall_reading,
+          keywords: JSON.parse(interpRow.keywords ?? '[]') as string[],
+          emotions: JSON.parse(interpRow.emotions ?? '[]') as string[],
+          culturalReferences: JSON.parse(
+            interpRow.cultural_references ?? '[]'
+          ) as CulturalReference[],
+          confidence,
+          isDegraded: confidence === 'low',
+          promptVersion: interpRow.prompt_version,
+          modelUsed: interpRow.model_used,
+          createdAt: interpRow.created_at,
+          archetype: interpRow.archetype,
+          themes: parseStringArray(interpRow.themes),
+          symbolicDensity: interpRow.symbolic_density,
+          imagePrompt: interpRow.image_prompt,
         });
-
-        const interpRow = await db.getFirstAsync<{
-          id: string;
-          overall_reading: string;
-          keywords: string;
-          emotions: string;
-          cultural_references: string;
-          confidence: string | null;
-          prompt_version: string;
-          model_used: string;
-          created_at: string;
-          archetype: string | null;
-          themes: string | null;
-          symbolic_density: number | null;
-          image_prompt: string | null;
-        }>(
-          'SELECT id, overall_reading, keywords, emotions, cultural_references, confidence, prompt_version, model_used, created_at, archetype, themes, symbolic_density, image_prompt FROM interpretations WHERE dream_id = ? ORDER BY created_at DESC LIMIT 1',
-          dreamId
-        );
-        if (interpRow) {
-          const confidence = (interpRow.confidence ?? 'medium') as 'high' | 'medium' | 'low';
-          setInterpretation({
-            id: interpRow.id,
-            dreamId,
-            overallReading: interpRow.overall_reading,
-            keywords: JSON.parse(interpRow.keywords ?? '[]') as string[],
-            emotions: JSON.parse(interpRow.emotions ?? '[]') as string[],
-            culturalReferences: JSON.parse(
-              interpRow.cultural_references ?? '[]'
-            ) as CulturalReference[],
-            confidence,
-            isDegraded: confidence === 'low',
-            promptVersion: interpRow.prompt_version,
-            modelUsed: interpRow.model_used,
-            createdAt: interpRow.created_at,
-            archetype: interpRow.archetype,
-            themes: parseStringArray(interpRow.themes),
-            symbolicDensity: interpRow.symbolic_density,
-            imagePrompt: interpRow.image_prompt,
-          });
-        }
-
-        const media = await imageGeneration.getImage(dreamId);
-        setImageMedia(media);
-
-        const session = await auth.getSession();
-        if (session) {
-          const chains = await getRecurrenceChains(session.user.id);
-          setChain(chains.find(c => c.dreams.some(d => d.id === dreamId)) ?? null);
-        }
-        setMonthlyTheme(await getMonthlyThemeForDream(dreamId, dreamRow.occurred_at));
-      } catch (err) {
-        console.error('Failed to load dream detail:', err);
-      } finally {
-        setIsLoading(false);
       }
+
+      const media = await imageGeneration.getImage(dreamId);
+      setImageMedia(media);
+
+      try {
+        const e = await entitlement.fetchEntitlement();
+        setImagesRemaining(
+          e.subscriptionTier === 'premium' || e.monthlyImageLimit === null
+            ? null
+            : Math.max(e.monthlyImageLimit - e.imagesUsedThisMonth, 0) +
+                (e.bonusImageCredits > 0 ? 1 : 0)
+        );
+        setInterpretationsRemaining(
+          e.subscriptionTier === 'premium' || e.monthlyInterpretationLimit === null
+            ? null
+            : Math.max(e.monthlyInterpretationLimit - e.interpretationsUsedThisMonth, 0)
+        );
+      } catch (err) {
+        console.error('Failed to load the entitlement for the Regenerate/angle counts:', err);
+      }
+
+      const session = await auth.getSession();
+      if (session) {
+        const chains = await getRecurrenceChains(session.user.id);
+        setChain(chains.find(c => c.dreams.some(d => d.id === dreamId)) ?? null);
+      }
+      setMonthlyTheme(await getMonthlyThemeForDream(dreamId, dreamRow.occurred_at));
+    } catch (err) {
+      console.error('Failed to load dream detail:', err);
+    } finally {
+      setIsLoading(false);
     }
-    void load();
-  }, [dreamId, imageGeneration, auth]);
+  }, [dreamId, imageGeneration, auth, entitlement]);
+
+  // `journal` and `log`/other screens are sibling tabs, so React Navigation keeps this
+  // screen mounted and merely re-focuses it after an edit or a regeneration — a plain
+  // mount-time effect keyed on `dreamId` would never rerun and this would keep showing
+  // whatever it first loaded. useFocusEffect (already the pattern in journal/index.tsx,
+  // insights, readings, settings) reloads every time the screen is actually looked at,
+  // which is also what picks up a fresh `dream`/`interpretation` for the auto-regenerate
+  // effect below. Mirrors loadEntries()'s isLoading handling: only the very first load
+  // shows the spinner — a refocus reload updates the content in place.
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
+
+  // Continuation of the FR-031 edit-and-regenerate flow: the interpretation screen
+  // forwards this value after a successful re-interpretation, and this fires the same
+  // `generate()` call the manual "Generate image" button makes, through this screen's
+  // own useImageGeneration() instance so DreamImageActionBar reflects the pending state.
+  // Keyed on the interpretation's own id (unique per regeneration) rather than a plain
+  // fired-once flag, so a *second* edit-and-regenerate cycle later in the same session
+  // — this screen never remounts, see above — still fires.
+  //
+  // `load()` sets `dream` and `interpretation` via two separate setState calls, so a
+  // dream that already had an older interpretation briefly renders with a fresh `dream`
+  // next to the *stale, pre-edit* `interpretation` before the requery resolves. Gating
+  // on `interpretation.id === autoRegenerateImage` (not just interpretation being
+  // non-null) waits for the specific interpretation this request is about — otherwise
+  // this could fire once against the old interpretation's keywords and then never again,
+  // since the ref would already read as "handled" by the time the real one loads.
+  useEffect(() => {
+    if (!autoRegenerateImage || isLoading || !dream || !interpretation) return;
+    if (interpretation.id !== autoRegenerateImage) return;
+    if (autoRegenerateImageHandledForRef.current === autoRegenerateImage) return;
+    autoRegenerateImageHandledForRef.current = autoRegenerateImage;
+    void generate({
+      dreamId: dream.id,
+      description: dream.description,
+      keywords: interpretation.keywords,
+    });
+  }, [autoRegenerateImage, isLoading, dream, interpretation, generate]);
 
   const confirmDelete = async () => {
+    setIsDeleteModalOpen(false);
     await deleteDream(dreamId);
     // The entry is already gone from every screen; this starts the server-side purge
     // now rather than at the next foreground/reconnect. Best-effort — the dream stays
@@ -238,26 +331,64 @@ export default function DreamDetailScreen() {
     router.back();
   };
 
-  const handleDelete = () => {
-    Alert.alert(t('dream.deleteConfirmTitle'), t('dream.deleteConfirmBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('dream.delete'),
-        style: 'destructive',
-        onPress: () => {
-          void confirmDelete();
-        },
-      },
-    ]);
-  };
-
   if (isLoading) return <LoadingState message={t('common.loading')} />;
   if (!dream) return <ErrorState message={t('dream.notFound')} fullScreen />;
 
   const activeImage = imageState.status === 'success' ? imageState.media : imageMedia;
   // Prefer the on-device copy so an opened dream never re-fetches from the provider
   // (FR-013); fall back to the signed URL until the cache is warm.
-  const heroUri = activeImage?.localCachePath ?? activeImage?.signedUrl ?? null;
+  //
+  // A regeneration updates the *same* media row in place (FluxImageGenerationService
+  // never changes the id), so the local cache file lives at the same path before and
+  // after — ExpoStorageService correctly overwrites the file's bytes, but expo-image
+  // (SDWebImage/Glide under the hood) caches by the URI string alone and, seeing the
+  // same `file://…` URI as last time, kept serving its previously-decoded bitmap. The
+  // `updatedAt` query param changes on every generate/regenerate (the edge function
+  // always bumps it), forcing a real reload while still resolving to the same file.
+  const heroUri = activeImage?.localCachePath
+    ? `${activeImage.localCachePath}?v=${encodeURIComponent(activeImage.updatedAt)}`
+    : (activeImage?.signedUrl ?? null);
+
+  const goToInterpretation = (alsoRegenerateImage: boolean) => {
+    const base = `/(main)/journal/${dream.id}/interpretation?dreamId=${dream.id}&description=${encodeURIComponent(dream.description)}`;
+    router.push(alsoRegenerateImage ? `${base}&regenerateImage=1` : base);
+  };
+
+  // FR-031: offered whenever the dream has changed since its last reading. Only
+  // "interpretation only" and "interpretation + image" are offered — never image-only,
+  // since regenerating the image alone would hand it stale keywords from the old text.
+  const handleRegenerate = () => {
+    const buttons: Parameters<typeof Alert.alert>[2] = [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('dream.regenerateInterpretationOnlyAction'),
+        onPress: () => goToInterpretation(false),
+      },
+    ];
+    if (activeImage) {
+      buttons.push({
+        text: t('dream.regenerateBothAction'),
+        onPress: () => goToInterpretation(true),
+      });
+    }
+    Alert.alert(
+      t('dream.editBannerTitle'),
+      activeImage ? t('dream.regenerateBothBody') : t('dream.regenerateInterpretationOnlyBody'),
+      buttons
+    );
+  };
+
+  // Gated by AnotherAngleSheet's style pick: the first reading stays, this one asks
+  // for a fresh reading under the chosen reading grid.
+  const goToInterpretationWithStyle = (style: AngleStyle) => {
+    const base = `/(main)/journal/${dream.id}/interpretation?dreamId=${dream.id}&description=${encodeURIComponent(dream.description)}&style=${style}`;
+    router.push(base);
+  };
+
+  const handleAnotherAngleConfirm = () => {
+    setIsAngleSheetOpen(false);
+    goToInterpretationWithStyle(selectedAngleStyle);
+  };
 
   const isImageGenerating = imageState.status === 'generating';
 
@@ -269,16 +400,14 @@ export default function DreamDetailScreen() {
       ? imageState.message
       : imageState.status === 'safety_blocked'
         ? t('dream.imageSafetyBlockedBody')
-        : imageState.status === 'regeneration_limit'
-          ? t('dream.imageRegenLimitBody', { max: imageState.max })
-          : imageState.status === 'image_limit'
-            ? t('dream.imageLimitReachedBody', {
-                date: imageState.resetDate.toLocaleDateString(i18n.language, {
-                  day: 'numeric',
-                  month: 'long',
-                }),
-              })
-            : null;
+        : imageState.status === 'image_limit'
+          ? t('dream.imageLimitReachedBody', {
+              date: imageState.resetDate.toLocaleDateString(i18n.language, {
+                day: 'numeric',
+                month: 'long',
+              }),
+            })
+          : null;
   const occurred = new Date(dream.occurredAt);
   const dateLabel = occurred.toLocaleDateString(i18n.language, {
     weekday: 'long',
@@ -350,9 +479,12 @@ export default function DreamDetailScreen() {
   return (
     <>
       <ScrollView
+        ref={scrollRef}
         style={styles.screen}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
       >
         <View style={styles.hero}>
           {isImageGenerating ? (
@@ -393,6 +525,14 @@ export default function DreamDetailScreen() {
           >
             <Text style={styles.heroGlyph}>‹</Text>
           </Pressable>
+          <Pressable
+            onPress={() => setIsMenuOpen(prev => !prev)}
+            accessibilityRole="button"
+            accessibilityLabel={t('dream.menuLabel')}
+            style={[styles.heroButtonRight, { top: insets.top + spacing.sm }]}
+          >
+            <MoreIcon />
+          </Pressable>
         </View>
 
         <View style={styles.sheet}>
@@ -401,6 +541,7 @@ export default function DreamDetailScreen() {
             isGenerating={isImageGenerating}
             errorMessage={imageErrorMessage}
             canRegenerate={true}
+            imagesRemaining={imagesRemaining}
             onGenerate={() => {
               void generate({
                 dreamId: dream.id,
@@ -449,6 +590,38 @@ export default function DreamDetailScreen() {
 
           <Text style={styles.narrative}>{dream.description}</Text>
 
+          <View style={styles.editDeleteRow}>
+            <Button
+              label={t('dream.edit')}
+              variant="neutral"
+              icon={<MoonFullIcon />}
+              // `log` is a persistent tab: re-editing the *same* dream a second time in
+              // one session pushes an identical `editId`, which alone wouldn't retrigger
+              // the log screen's hydration effect. The timestamp makes every press distinct.
+              onPress={() => router.push(`/(main)/log?editId=${dream.id}&editedAt=${Date.now()}`)}
+              style={styles.flexAction}
+            />
+            <Button
+              label={t('dream.delete')}
+              variant="destructive"
+              icon={<MoonWaningIcon />}
+              onPress={() => setIsDeleteModalOpen(true)}
+            />
+          </View>
+
+          {dream.editedSinceInterpretation && interpretation ? (
+            <View style={styles.editBanner}>
+              <Text style={styles.editBannerTitle}>{t('dream.editBannerTitle')}</Text>
+              <Text style={styles.editBannerBody}>{t('dream.editBannerBody')}</Text>
+              <Button
+                label={t('dream.editBannerCta')}
+                variant="secondary"
+                onPress={handleRegenerate}
+                fullWidth
+              />
+            </View>
+          ) : null}
+
           {interpretation ? (
             <LinearGradient
               colors={[...gradients.interpretation.colors]}
@@ -484,13 +657,10 @@ export default function DreamDetailScreen() {
 
               <View style={styles.interpretationActions}>
                 <Button
-                  label={t('dream.anotherAngle')}
-                  variant="secondary"
-                  onPress={() =>
-                    router.push(
-                      `/(main)/journal/${dream.id}/interpretation?dreamId=${dream.id}&description=${encodeURIComponent(dream.description)}`
-                    )
-                  }
+                  label={t('dream.anotherAngleCta')}
+                  variant="primary"
+                  icon={<MoonDashedIcon color={colors.textOnAccent} />}
+                  onPress={() => setIsAngleSheetOpen(true)}
                   style={styles.flexAction}
                 />
               </View>
@@ -720,18 +890,79 @@ export default function DreamDetailScreen() {
               ))}
             </View>
           ) : null}
-
-          {/* The "Edit dream" affordance from the design is intentionally absent: the
-            log screen does not yet accept an editId, so the button led nowhere.
-            Tracked as the FR-031 edit-flow ticket. */}
-          <Button
-            label={t('dream.delete')}
-            variant="ghost"
-            onPress={handleDelete}
-            style={styles.delete}
-          />
         </View>
       </ScrollView>
+
+      <ScrollToTopButton
+        visible={isScrollToTopVisible}
+        onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        bottomOffset={insets.bottom + spacing.md}
+      />
+
+      {isMenuOpen ? (
+        <>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setIsMenuOpen(false)}
+            accessibilityElementsHidden
+          />
+          <View style={[styles.menu, { top: insets.top + spacing.sm + sizes.circleButton + 6 }]}>
+            <Pressable
+              onPress={() => {
+                setIsMenuOpen(false);
+                router.push(`/(main)/log?editId=${dream.id}&editedAt=${Date.now()}`);
+              }}
+              accessibilityRole="button"
+              style={styles.menuItem}
+            >
+              <MoonFullIcon />
+              <Text style={styles.menuItemLabel}>{t('dream.edit')}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setIsMenuOpen(false);
+                setIsAngleSheetOpen(true);
+              }}
+              accessibilityRole="button"
+              style={styles.menuItem}
+            >
+              <MoonDashedIcon />
+              <Text style={styles.menuItemLabel}>{t('dream.anotherAngle')}</Text>
+            </Pressable>
+            <View style={styles.menuDivider} />
+            <Pressable
+              onPress={() => {
+                setIsMenuOpen(false);
+                setIsDeleteModalOpen(true);
+              }}
+              accessibilityRole="button"
+              style={styles.menuItem}
+            >
+              <MoonWaningIcon />
+              <Text style={[styles.menuItemLabel, styles.menuItemLabelDestructive]}>
+                {t('dream.delete')}
+              </Text>
+            </Pressable>
+          </View>
+        </>
+      ) : null}
+
+      <DeleteDreamModal
+        visible={isDeleteModalOpen}
+        onConfirm={() => {
+          void confirmDelete();
+        }}
+        onCancel={() => setIsDeleteModalOpen(false)}
+      />
+
+      <AnotherAngleSheet
+        visible={isAngleSheetOpen}
+        selectedStyle={selectedAngleStyle}
+        onSelectStyle={setSelectedAngleStyle}
+        interpretationsRemaining={interpretationsRemaining}
+        onConfirm={handleAnotherAngleConfirm}
+        onCancel={() => setIsAngleSheetOpen(false)}
+      />
 
       <Modal
         visible={isFullscreenOpen}
@@ -927,6 +1158,57 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 20,
   },
+  heroButtonRight: {
+    position: 'absolute',
+    right: spacing.md,
+    width: sizes.circleButton,
+    height: sizes.circleButton,
+    borderRadius: radius.full,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.borderElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menu: {
+    position: 'absolute',
+    right: spacing.md,
+    width: 206,
+    padding: spacing.xs,
+    borderRadius: radius.panel,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderElevated,
+    ...glow.soft,
+  },
+  menuItem: {
+    minHeight: sizes.circleButton,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 3,
+    paddingVertical: spacing.sm + 3,
+    paddingHorizontal: spacing.sm + 4,
+    borderRadius: radius.button,
+  },
+  menuItemLabel: {
+    ...typography.chip,
+    flex: 1,
+    color: colors.textPrimary,
+  },
+  menuItemLabelDestructive: {
+    color: colors.error,
+  },
+  menuDivider: {
+    height: 1,
+    marginVertical: spacing.xs,
+    marginHorizontal: spacing.sm,
+    backgroundColor: colors.border,
+  },
+  editDeleteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
+  },
   sheet: {
     marginTop: -CONTENT_OVERLAP,
     paddingHorizontal: 18,
@@ -966,6 +1248,21 @@ const styles = StyleSheet.create({
     ...typography.dreamBody,
     fontSize: 15.5,
     lineHeight: 26,
+  },
+  editBanner: {
+    borderRadius: radius.card,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  editBannerTitle: {
+    ...typography.cardTitle,
+    fontSize: 14,
+  },
+  editBannerBody: {
+    ...typography.meta,
   },
   interpretationCard: {
     borderRadius: radius.panel,
@@ -1007,9 +1304,6 @@ const styles = StyleSheet.create({
   },
   flexAction: {
     flex: 1,
-  },
-  delete: {
-    alignSelf: 'center',
   },
   contextBlock: {
     gap: 9,

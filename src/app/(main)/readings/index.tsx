@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,10 +7,12 @@ import { useTranslation } from 'react-i18next';
 import { LoadingState } from '@shared/components/LoadingState';
 import { EmptyState } from '@shared/components/EmptyState';
 import { Chip, ChipRow } from '@shared/components/Chip';
+import { ScrollToTopButton } from '@shared/components/ScrollToTopButton';
+import { useScrollToTopVisibility } from '@shared/hooks/useScrollToTopVisibility';
 import { getTopRecurrences } from '@features/recurrence/recurrenceRepository';
 import { getReadings, type ReadingEntry } from '@features/readings/readingsRepository';
 import { supabase } from '../../../supabase/client';
-import { colors, radius, spacing, typography } from '@theme/tokens';
+import { colors, radius, sizes, spacing, typography } from '@theme/tokens';
 
 const FILTER_LIMIT = 8;
 
@@ -30,6 +32,8 @@ export default function ReadingsScreen() {
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [readings, setReadings] = useState<ReadingEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const scrollRef = useRef<ScrollView>(null);
+  const { isVisible: isScrollToTopVisible, onScroll } = useScrollToTopVisibility();
 
   useEffect(() => {
     async function init() {
@@ -79,64 +83,75 @@ export default function ReadingsScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + spacing.sm, paddingBottom: spacing.xxl },
-      ]}
-      showsVerticalScrollIndicator={false}
-    >
-      <Text style={styles.headerMeta}>
-        {t('readings.subtitle', {
-          count: readings.length,
-          since: readings[readings.length - 1]?.occurredAt
-            ? new Date(readings[readings.length - 1]!.occurredAt).toLocaleDateString(
-                i18n.language,
-                { month: 'long', year: 'numeric' }
-              )
-            : '',
-        })}
-      </Text>
-      <Text style={styles.headerTitle}>{t('readings.title')}</Text>
+    <View style={styles.screen}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.screen}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + spacing.sm, paddingBottom: spacing.xxl },
+        ]}
+        showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      >
+        <Text style={styles.headerMeta}>
+          {t('readings.subtitle', {
+            count: readings.length,
+            since: readings[readings.length - 1]?.occurredAt
+              ? new Date(readings[readings.length - 1]!.occurredAt).toLocaleDateString(
+                  i18n.language,
+                  { month: 'long', year: 'numeric' }
+                )
+              : '',
+          })}
+        </Text>
+        <Text style={styles.headerTitle}>{t('readings.title')}</Text>
 
-      {filters.length > 0 ? (
-        <ChipRow>
-          <FilterChip
-            label={t('readings.filterAll')}
-            selected={activeFilter === null}
-            onPress={() => setActiveFilter(null)}
-          />
-          {filters.map(term => (
+        {filters.length > 0 ? (
+          <ChipRow>
             <FilterChip
-              key={term}
-              label={term}
-              selected={activeFilter === term}
-              onPress={() => setActiveFilter(term)}
+              label={t('readings.filterAll')}
+              selected={activeFilter === null}
+              onPress={() => setActiveFilter(null)}
             />
-          ))}
-        </ChipRow>
-      ) : null}
+            {filters.map(term => (
+              <FilterChip
+                key={term}
+                label={term}
+                selected={activeFilter === term}
+                onPress={() => setActiveFilter(term)}
+              />
+            ))}
+          </ChipRow>
+        ) : null}
 
-      {readings.length === 0 ? (
-        <EmptyState
-          title={t('readings.noResultsTitle')}
-          subtitle={t('readings.noResultsSubtitle')}
-          ctaLabel={t('readings.noResultsCta')}
-          onCta={() => setActiveFilter(null)}
-        />
-      ) : (
-        <View style={styles.list}>
-          {readings.map(entry => (
-            <ReadingCard
-              key={entry.dreamId}
-              entry={entry}
-              onPress={() => router.push(`/(main)/journal/${entry.dreamId}/detail`)}
-            />
-          ))}
-        </View>
-      )}
-    </ScrollView>
+        {readings.length === 0 ? (
+          <EmptyState
+            title={t('readings.noResultsTitle')}
+            subtitle={t('readings.noResultsSubtitle')}
+            ctaLabel={t('readings.noResultsCta')}
+            onCta={() => setActiveFilter(null)}
+          />
+        ) : (
+          <View style={styles.list}>
+            {readings.map(entry => (
+              <ReadingCard
+                key={entry.dreamId}
+                entry={entry}
+                onPress={() => router.push(`/(main)/journal/${entry.dreamId}/detail`)}
+              />
+            ))}
+          </View>
+        )}
+      </ScrollView>
+
+      <ScrollToTopButton
+        visible={isScrollToTopVisible}
+        onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        bottomOffset={Math.max(insets.bottom, spacing.md) + sizes.tabBarContentHeight + spacing.md}
+      />
+    </View>
   );
 }
 

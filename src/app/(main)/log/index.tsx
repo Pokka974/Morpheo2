@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
@@ -22,13 +22,17 @@ import { TagInput } from '@shared/components/TagInput';
 import { CollapsibleSection } from '@shared/components/CollapsibleSection';
 import { DateTimePickerSheet } from '@shared/components/DateTimePickerSheet';
 import { ChevronLeftIcon } from '@shared/components/icons';
+import { ScrollToTopButton } from '@shared/components/ScrollToTopButton';
+import { useScrollToTopVisibility } from '@shared/hooks/useScrollToTopVisibility';
 import { generateId } from '@shared/id';
 import { EmotionPicker } from '@features/dream-log/EmotionPicker';
 import { RecordingBar } from '@features/dream-log/RecordingBar';
 import {
+  getDreamById,
   getRecentDreamsForLinking,
   getTagSuggestions,
   saveDream,
+  updateDream,
   type LinkableDream,
 } from '@features/dream-log/dreamRepository';
 import {
@@ -53,12 +57,31 @@ import { colors, glow, MIN_TOUCH_TARGET, radius, sizes, spacing, typography } fr
 
 const MIN_DESCRIPTION = 20;
 
-type Busy = 'interpret' | 'draft' | null;
+type Busy = 'interpret' | 'draft' | 'save' | null;
 type Mode = 'write' | 'dictate';
 type ActivePicker = 'occurredAt' | 'bedtime' | 'wakeTime' | null;
 
 function toTimeString(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Inverse of `toTimeString` — anchors the "HH:MM" stored value on today's date, since
+ * only the time-of-day component is ever read from these fields. */
+function fromTimeString(value: string): Date {
+  const [hours, minutes] = value.split(':').map(Number);
+  const d = new Date();
+  d.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+  return d;
+}
+
+function parseStringArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -75,6 +98,7 @@ function toTimeString(d: Date): string {
  */
 export default function DreamLogScreen() {
   const router = useRouter();
+  const { editId, editedAt } = useLocalSearchParams<{ editId?: string; editedAt?: string }>();
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { auth } = useServices();
@@ -90,6 +114,8 @@ export default function DreamLogScreen() {
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const { isVisible: isScrollToTopVisible, onScroll } = useScrollToTopVisibility();
 
   // --- Sleep ---
   const [bedtime, setBedtime] = useState<Date | null>(null);
@@ -143,6 +169,41 @@ export default function DreamLogScreen() {
     }
     void loadSuggestions();
   }, [auth]);
+
+  // Edit mode: hydrate every field from the existing row rather than starting blank.
+  // This screen is a persistent tab (see resetForm's note above), so re-editing the
+  // *same* dream a second time in one session pushes an identical `editId` — which
+  // alone wouldn't rerun this effect. `editedAt`, a timestamp set fresh on every
+  // "Edit dream" press, makes each visit distinct so hydration always happens.
+  useEffect(() => {
+    if (!editId) return;
+    async function loadForEdit() {
+      const existing = await getDreamById(editId!);
+      if (!existing) return;
+      setDescription(existing.description);
+      setOccurredAt(new Date(existing.occurredAt));
+      setEmotions(parseStringArray(existing.emotions));
+      setBedtime(existing.bedtime ? fromTimeString(existing.bedtime) : null);
+      setWakeTime(existing.wakeTime ? fromTimeString(existing.wakeTime) : null);
+      setSleepQuality(existing.sleepQuality);
+      setClarity(existing.clarity);
+      setLucidity(existing.lucidity);
+      setTone(existing.tone);
+      setDreamEnding(existing.dreamEnding);
+      setDreamType(parseStringArray(existing.dreamType));
+      setCharacters(parseStringArray(existing.characters));
+      setPlaces(parseStringArray(existing.places));
+      setLinkedDreamId(existing.linkedDreamId);
+      setIsLinked(existing.linkedDreamId != null);
+      setDayStress(existing.dayStress);
+      setPresleepSubstances(parseStringArray(existing.presleepSubstances));
+      if (existing.linkedDreamId) {
+        const recent = await getRecentDreamsForLinking(existing.userId, editId!);
+        setLinkableDreams(recent);
+      }
+    }
+    void loadForEdit();
+  }, [editId, editedAt]);
 
   const toggleLinked = async (next: boolean) => {
     setIsLinked(next);
@@ -342,6 +403,51 @@ export default function DreamLogScreen() {
     }
   };
 
+  const handleSaveChanges = async () => {
+    if (!editId || !canInterpret) return;
+    setBusy('save');
+    setError(null);
+    try {
+      await updateDream(editId, {
+        description: description.trim(),
+        occurredAt: occurredAt.toISOString().slice(0, 10),
+        emotions: JSON.stringify(emotions),
+        isLucid: isLucidLevel(lucidity),
+        bedtime: bedtime ? toTimeString(bedtime) : null,
+        wakeTime: wakeTime ? toTimeString(wakeTime) : null,
+        sleepQuality,
+        clarity,
+        lucidity,
+        tone,
+        dreamEnding,
+        dreamType: JSON.stringify(dreamType),
+        characters: JSON.stringify(characters),
+        places: JSON.stringify(places),
+        linkedDreamId,
+        dayStress,
+        presleepSubstances: JSON.stringify(presleepSubstances),
+      });
+      resetForm();
+      // Best-effort — the edit-and-regenerate banner reads local state only, so this
+      // doesn't need to complete before the user sees it on the detail screen.
+      syncPendingDreams().catch((err: unknown) => {
+        console.error('Immediate post-save sync failed; dream stays queued:', err);
+      });
+      // `log` is a bare Tabs.Screen with no Stack of its own — dismissTo/POP_TO is a
+      // StackRouter action, so calling it here would have to reach across into the
+      // *journal* tab's separate nested stack from a navigator that has no stack
+      // history at all, which is not well-defined and misbehaved when tried. `replace`
+      // is correct here: this hop is cross-tab, not same-stack, and the target screen
+      // is a singleton per tab anyway (see useFocusEffect above), so there is nothing
+      // to duplicate the way there was on the same-stack interpretation→detail hop.
+      router.replace(`/(main)/journal/${editId}/detail`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('log.saveError'));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const maxDate = new Date();
   const minDate = new Date();
   minDate.setFullYear(minDate.getFullYear() - 1);
@@ -381,7 +487,7 @@ export default function DreamLogScreen() {
         >
           <ChevronLeftIcon />
         </Pressable>
-        <Text style={styles.title}>{t('log.title')}</Text>
+        <Text style={styles.title}>{t(editId ? 'log.editTitle' : 'log.title')}</Text>
         {/* Balances the back button's width so the title stays visually centred
             now that the date pill (moved below, into the night summary) no
             longer occupies this side. */}
@@ -425,9 +531,12 @@ export default function DreamLogScreen() {
       />
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
       >
         <Pressable
           onPress={() => setActivePicker('occurredAt')}
@@ -662,27 +771,47 @@ export default function DreamLogScreen() {
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         <View style={styles.actions}>
-          <Button
-            label={t('log.interpretCta')}
-            onPress={() => {
-              void handleInterpretNow();
-            }}
-            disabled={!canInterpret || isBusy}
-            loading={busy === 'interpret'}
-            fullWidth
-          />
-          <Button
-            label={t('dream.saveDraft')}
-            variant="secondary"
-            onPress={() => {
-              void handleSaveDraft();
-            }}
-            disabled={!canSaveDraft || isBusy}
-            loading={busy === 'draft'}
-            fullWidth
-          />
+          {editId ? (
+            <Button
+              label={t('common.save')}
+              onPress={() => {
+                void handleSaveChanges();
+              }}
+              disabled={!canInterpret || isBusy}
+              loading={busy === 'save'}
+              fullWidth
+            />
+          ) : (
+            <>
+              <Button
+                label={t('log.interpretCta')}
+                onPress={() => {
+                  void handleInterpretNow();
+                }}
+                disabled={!canInterpret || isBusy}
+                loading={busy === 'interpret'}
+                fullWidth
+              />
+              <Button
+                label={t('dream.saveDraft')}
+                variant="secondary"
+                onPress={() => {
+                  void handleSaveDraft();
+                }}
+                disabled={!canSaveDraft || isBusy}
+                loading={busy === 'draft'}
+                fullWidth
+              />
+            </>
+          )}
         </View>
       </ScrollView>
+
+      <ScrollToTopButton
+        visible={isScrollToTopVisible}
+        onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        bottomOffset={insets.bottom + spacing.md}
+      />
     </KeyboardAvoidingView>
   );
 }

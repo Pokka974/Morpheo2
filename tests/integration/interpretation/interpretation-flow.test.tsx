@@ -12,13 +12,18 @@ import { MockNotificationService } from '@services/notifications/__mocks__/MockN
 import type { ServiceRegistry } from '@services/registry';
 import { sqlite as db } from '@db/client';
 
-const mockRouterReplace = jest.fn();
+const mockDismissTo = jest.fn();
+// Overridden per test via `mockUseLocalSearchParams.mockReturnValue({ ..., style: '...' })`.
+const mockUseLocalSearchParams = jest.fn(
+  () =>
+    ({
+      dreamId: 'test-dream-id',
+      description: 'I was walking through a misty forest and found a glowing door.',
+    }) as { dreamId: string; description: string; regenerateImage?: string; style?: string }
+);
 jest.mock('expo-router', () => ({
-  useLocalSearchParams: () => ({
-    dreamId: 'test-dream-id',
-    description: 'I was walking through a misty forest and found a glowing door.',
-  }),
-  useRouter: () => ({ replace: mockRouterReplace, back: jest.fn() }),
+  useLocalSearchParams: () => mockUseLocalSearchParams(),
+  useRouter: () => ({ dismissTo: mockDismissTo, replace: jest.fn(), back: jest.fn() }),
 }));
 
 jest.mock('@services/../supabase/client', () => ({
@@ -74,7 +79,11 @@ describe('InterpretationScreen', () => {
   beforeEach(() => {
     interpretationService.configure('success');
     entitlementService.configure('free');
-    mockRouterReplace.mockClear();
+    mockDismissTo.mockClear();
+    mockUseLocalSearchParams.mockReset().mockReturnValue({
+      dreamId: 'test-dream-id',
+      description: 'I was walking through a misty forest and found a glowing door.',
+    });
     mockSyncDreamForInterpretation.mockReset().mockResolvedValue(undefined);
     (db.runAsync as jest.Mock).mockClear();
     (db.prepareSync as jest.Mock).mockClear();
@@ -141,6 +150,41 @@ describe('InterpretationScreen', () => {
       occurredAt: '2026-03-17T02:30:00.000Z',
       sleepQuality: 3,
     });
+    interpretSpy.mockRestore();
+  });
+
+  // The "Another angle" sheet passes an explicit style override; every other route
+  // into this screen omits it so the Edge Function falls back to the account default.
+  it('forwards an explicit style route param to the interpret call', async () => {
+    mockUseLocalSearchParams.mockReturnValue({
+      dreamId: 'test-dream-id',
+      description: 'I was walking through a misty forest and found a glowing door.',
+      style: 'mythological',
+    });
+    const interpretSpy = jest.spyOn(interpretationService, 'interpret');
+
+    render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(interpretSpy).toHaveBeenCalled());
+    expect(interpretSpy.mock.calls[0]?.[0].style).toBe('mythological');
+    interpretSpy.mockRestore();
+  });
+
+  it('omits style when no override is given, so the Edge Function falls back to the account default', async () => {
+    const interpretSpy = jest.spyOn(interpretationService, 'interpret');
+
+    render(
+      <ServicesProvider services={buildRegistry()}>
+        <InterpretationScreen />
+      </ServicesProvider>
+    );
+
+    await waitFor(() => expect(interpretSpy).toHaveBeenCalled());
+    expect(interpretSpy.mock.calls[0]?.[0].style).toBeUndefined();
     interpretSpy.mockRestore();
   });
 
@@ -261,7 +305,7 @@ describe('InterpretationScreen', () => {
       );
     });
     await waitFor(() => {
-      expect(mockRouterReplace).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail');
+      expect(mockDismissTo).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail');
     });
   });
 
@@ -308,7 +352,7 @@ describe('InterpretationScreen', () => {
     );
 
     await waitFor(() => {
-      expect(mockRouterReplace).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail');
+      expect(mockDismissTo).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail');
     });
     const insertCalls = (db.prepareSync as jest.Mock).mock.calls.filter(([sql]) =>
       (sql as string).includes('INSERT INTO recurrence_patterns')
@@ -328,7 +372,7 @@ describe('InterpretationScreen', () => {
     );
 
     await waitFor(() => {
-      expect(mockRouterReplace).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail');
+      expect(mockDismissTo).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail');
     });
     const insertCalls = (db.prepareSync as jest.Mock).mock.calls.filter(([sql]) =>
       (sql as string).includes('INSERT INTO recurrence_patterns')
@@ -463,7 +507,7 @@ describe('InterpretationScreen', () => {
 
       await waitFor(() => expect(mockSyncDreamForInterpretation).toHaveBeenCalledTimes(2));
       await waitFor(() =>
-        expect(mockRouterReplace).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail')
+        expect(mockDismissTo).toHaveBeenCalledWith('/(main)/journal/test-dream-id/detail')
       );
     });
 

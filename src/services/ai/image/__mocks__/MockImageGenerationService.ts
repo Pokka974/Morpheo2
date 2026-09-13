@@ -3,14 +3,9 @@ import type {
   ImageGenerationRequest,
   MediaResult,
 } from '../ImageGenerationService';
-import {
-  ContentSafetyError,
-  RegenerationLimitError,
-  ImageLimitError,
-} from '../ImageGenerationService';
+import { ContentSafetyError, ImageLimitError } from '../ImageGenerationService';
 
-export type MockMode =
-  'success' | 'failure' | 'safety_blocked' | 'limit_exceeded' | 'regeneration_limit';
+export type MockMode = 'success' | 'failure' | 'safety_blocked' | 'limit_exceeded';
 
 const SUCCESS_RESULT: MediaResult = {
   id: 'mock-media-id',
@@ -19,8 +14,6 @@ const SUCCESS_RESULT: MediaResult = {
   generationStatus: 'complete',
   signedUrl: 'https://example.com/mock-image.png',
   localCachePath: null,
-  regenerationCount: 0,
-  maxRegenerations: 3,
   errorMessage: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -49,8 +42,6 @@ export class MockImageGenerationService implements ImageGenerationService {
         throw new ContentSafetyError('input');
       case 'limit_exceeded':
         throw new ImageLimitError(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
-      case 'regeneration_limit':
-        throw new RegenerationLimitError(3);
     }
   }
 

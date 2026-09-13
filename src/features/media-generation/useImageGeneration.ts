@@ -1,18 +1,13 @@
 import { useState, useCallback } from 'react';
 import { useServices } from '@services/useServices';
 import type { MediaResult } from '@services/ai/image/ImageGenerationService';
-import {
-  ContentSafetyError,
-  RegenerationLimitError,
-  ImageLimitError,
-} from '@services/ai/image/ImageGenerationService';
+import { ContentSafetyError, ImageLimitError } from '@services/ai/image/ImageGenerationService';
 
 type ImageState =
   | { status: 'idle' }
   | { status: 'generating' }
   | { status: 'success'; media: MediaResult }
   | { status: 'safety_blocked' }
-  | { status: 'regeneration_limit'; max: number }
   | { status: 'image_limit'; resetDate: Date }
   | { status: 'error'; message: string };
 
@@ -32,20 +27,20 @@ export function useImageGeneration() {
     async (params: GenerateImageParams) => {
       setState({ status: 'generating' });
 
-      // Entitlement pre-check (UX guard; server re-checks as the actual gate)
-      if (!params.isRegeneration) {
-        try {
-          const canGenerate = await services.entitlement.canGenerateImage();
-          if (!canGenerate) {
-            setState({
-              status: 'image_limit',
-              resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-            });
-            return;
-          }
-        } catch {
-          // If entitlement check fails, attempt the call; server will gate
+      // Entitlement pre-check (UX guard; server re-checks as the actual gate). Runs for
+      // a regeneration too now — it spends the same monthly image credit generating
+      // does, with no separate per-entry regeneration budget.
+      try {
+        const canGenerate = await services.entitlement.canGenerateImage();
+        if (!canGenerate) {
+          setState({
+            status: 'image_limit',
+            resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          });
+          return;
         }
+      } catch {
+        // If entitlement check fails, attempt the call; server will gate
       }
 
       try {
@@ -54,8 +49,6 @@ export function useImageGeneration() {
       } catch (err) {
         if (err instanceof ContentSafetyError) {
           setState({ status: 'safety_blocked' });
-        } else if (err instanceof RegenerationLimitError) {
-          setState({ status: 'regeneration_limit', max: err.max });
         } else if (err instanceof ImageLimitError) {
           setState({ status: 'image_limit', resetDate: err.resetDate });
         } else {

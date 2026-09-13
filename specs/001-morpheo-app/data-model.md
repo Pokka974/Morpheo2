@@ -184,8 +184,8 @@ One dream can have one image and one video (separate rows by `media_type`).
 | `provider` | `text` | NULLABLE | `'gpt-image-2'` \| `'luma_dream_machine'` |
 | `safety_input_passed` | `boolean` | NULLABLE | Null until evaluated |
 | `safety_output_passed` | `boolean` | NULLABLE | Null until output received |
-| `regeneration_count` | `integer` | NOT NULL DEFAULT `0` | |
-| `max_regenerations` | `integer` | NOT NULL DEFAULT `0` | 0 free / 5 premium; set at row creation and carried forward across regenerations |
+| `regeneration_count` | `integer` | NOT NULL DEFAULT `0` | **Image path: retired**, no longer read or written by `generate-image` — regenerating an image draws the monthly image entitlement instead, with no separate per-entry budget. Still real for the video path (`generate-video`). |
+| `max_regenerations` | `integer` | NOT NULL DEFAULT `0` | **Image path: retired** (see above). Still real for the video path, which sets it independently (currently `1`). |
 | `error_message` | `text` | NULLABLE | Set on failure |
 | `created_at` | `timestamptz` | NOT NULL DEFAULT `now()` | |
 | `updated_at` | `timestamptz` | NOT NULL DEFAULT `now()` | |
@@ -298,7 +298,8 @@ media:          + local_cache_path TEXT
                                        ▼               ▼
                                   'complete'        'failed'
                                                        │
-                                           (regeneration_count < max)
+                                    (image: monthly entitlement remains;
+                                     video: regeneration_count < max)
                                                        │
                                               back to 'pending'
 ```

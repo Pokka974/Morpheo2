@@ -66,17 +66,6 @@ describe('Image generation integration', () => {
     expect(result.current.state.status).toBe('safety_blocked');
   });
 
-  it('shows regen_limit state on regeneration limit error', async () => {
-    imageService.configure('regeneration_limit');
-    const { result } = renderHook(() => useImageGeneration(), { wrapper });
-
-    await act(async () => {
-      result.current.regenerate(testParams);
-    });
-
-    expect(result.current.state.status).toBe('regeneration_limit');
-  });
-
   it('shows image_limit state on monthly image limit error', async () => {
     imageService.configure('limit_exceeded');
     const { result } = renderHook(() => useImageGeneration(), { wrapper });
@@ -147,7 +136,7 @@ describe('Image generation integration', () => {
     expect(result.current.state.status).toBe('success');
   });
 
-  it('regenerate() skips the entitlement pre-check entirely (isRegeneration=true)', async () => {
+  it('regenerate() also runs the entitlement pre-check now — there is no separate per-entry regeneration budget', async () => {
     const registry = buildRegistry();
     const canGenerateSpy = jest.spyOn(registry.entitlement, 'canGenerateImage');
     const localWrapper = ({ children }: { children: React.ReactNode }) => (
@@ -160,7 +149,24 @@ describe('Image generation integration', () => {
     });
 
     expect(result.current.state.status).toBe('success');
-    expect(canGenerateSpy).not.toHaveBeenCalled();
+    expect(canGenerateSpy).toHaveBeenCalled();
+  });
+
+  it('regenerate() short-circuits to image_limit without calling the provider when canGenerateImage() is false — the same monthly credit gates both actions', async () => {
+    const registry = buildRegistry();
+    jest.spyOn(registry.entitlement, 'canGenerateImage').mockResolvedValue(false);
+    const generateSpy = jest.spyOn(registry.imageGeneration, 'generateImage');
+    const localWrapper = ({ children }: { children: React.ReactNode }) => (
+      <ServicesProvider services={registry}>{children}</ServicesProvider>
+    );
+    const { result } = renderHook(() => useImageGeneration(), { wrapper: localWrapper });
+
+    await act(async () => {
+      result.current.regenerate(testParams);
+    });
+
+    expect(result.current.state.status).toBe('image_limit');
+    expect(generateSpy).not.toHaveBeenCalled();
   });
 
   it('reset() returns the state to idle', async () => {
@@ -185,6 +191,7 @@ describe('Image generation integration', () => {
         media={null}
         isGenerating={false}
         canRegenerate={true}
+        imagesRemaining={1}
         onGenerate={onGenerate}
         onRegenerate={onRegenerate}
       />
@@ -204,8 +211,6 @@ describe('Image generation integration', () => {
       generationStatus: 'failed' as const,
       signedUrl: null,
       localCachePath: null,
-      regenerationCount: 0,
-      maxRegenerations: 3,
       errorMessage: 'Image generation failed — retry or skip',
       createdAt: '2026-08-14T00:00:00Z',
       updatedAt: '2026-08-14T00:00:00Z',
@@ -216,6 +221,7 @@ describe('Image generation integration', () => {
         media={failedMedia}
         isGenerating={false}
         canRegenerate={true}
+        imagesRemaining={1}
         onGenerate={onGenerate}
         onRegenerate={() => {}}
       />
@@ -225,7 +231,7 @@ describe('Image generation integration', () => {
     expect(onGenerate).toHaveBeenCalled();
   });
 
-  it('renders regenerate button when regenerations remain', () => {
+  it('renders the regenerate button with the entitlement-based count, regardless of any per-entry media state', () => {
     const media = {
       id: 'media-001',
       dreamId: 'dream-001',
@@ -233,8 +239,6 @@ describe('Image generation integration', () => {
       generationStatus: 'complete' as const,
       signedUrl: 'https://example.com/img.jpg',
       localCachePath: null,
-      regenerationCount: 1,
-      maxRegenerations: 3,
       errorMessage: null,
       createdAt: '2026-08-14T00:00:00Z',
       updatedAt: '2026-08-14T00:00:00Z',
@@ -246,11 +250,39 @@ describe('Image generation integration', () => {
         media={media}
         isGenerating={false}
         canRegenerate={true}
+        imagesRemaining={2}
         onRegenerate={onRegenerate}
       />
     );
 
-    fireEvent.press(getByText(/Regenerate/));
+    fireEvent.press(getByText('Regenerate (2 left)'));
     expect(onRegenerate).toHaveBeenCalled();
+  });
+
+  it('shows the unlimited label instead of a count for a premium account (imagesRemaining=null)', () => {
+    const media = {
+      id: 'media-001',
+      dreamId: 'dream-001',
+      mediaType: 'image' as const,
+      generationStatus: 'complete' as const,
+      signedUrl: 'https://example.com/img.jpg',
+      localCachePath: null,
+      errorMessage: null,
+      createdAt: '2026-08-14T00:00:00Z',
+      updatedAt: '2026-08-14T00:00:00Z',
+    };
+
+    const { getByText, queryByText } = render(
+      <DreamImageActionBar
+        media={media}
+        isGenerating={false}
+        canRegenerate={true}
+        imagesRemaining={null}
+        onRegenerate={() => {}}
+      />
+    );
+
+    expect(getByText('Regenerate')).toBeTruthy();
+    expect(queryByText(/left/)).toBeNull();
   });
 });

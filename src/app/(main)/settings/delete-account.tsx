@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +8,8 @@ import { supabase } from '../../../supabase/client';
 import { Button } from '@shared/components/Button';
 import { ErrorState } from '@shared/components/ErrorState';
 import { TrashIcon, WarningIcon } from '@shared/components/icons';
+import { ScrollToTopButton } from '@shared/components/ScrollToTopButton';
+import { useScrollToTopVisibility } from '@shared/hooks/useScrollToTopVisibility';
 import { colors, radius, spacing, typography } from '@theme/tokens';
 
 // Exact confirmation string per contracts/api-endpoints.md (C1 fix). Never translated —
@@ -23,6 +25,8 @@ export default function DeleteAccountScreen() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleted, setDeleted] = useState(false);
   const [failed, setFailed] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const { isVisible: isScrollToTopVisible, onScroll } = useScrollToTopVisibility();
 
   const isConfirmed = confirmationText === CONFIRMATION_PHRASE;
 
@@ -61,72 +65,83 @@ export default function DeleteAccountScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.sm }]}
-    >
-      <Text style={styles.title}>{t('settingsDeleteAccount.title')}</Text>
+    <View style={styles.container}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.container}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.sm }]}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      >
+        <Text style={styles.title}>{t('settingsDeleteAccount.title')}</Text>
 
-      {step === 1 ? (
-        <>
-          <View style={styles.warningCard}>
-            <View style={styles.warningHeader}>
-              <WarningIcon size={20} />
-              <Text style={styles.warningTitle}>{t('settingsDeleteAccount.warningTitle')}</Text>
+        {step === 1 ? (
+          <>
+            <View style={styles.warningCard}>
+              <View style={styles.warningHeader}>
+                <WarningIcon size={20} />
+                <Text style={styles.warningTitle}>{t('settingsDeleteAccount.warningTitle')}</Text>
+              </View>
+              <Text style={styles.warningText}>{t('settingsDeleteAccount.warningIntro')}</Text>
+              <Text style={styles.bullet}>• {t('settingsDeleteAccount.bullet1')}</Text>
+              <Text style={styles.bullet}>• {t('settingsDeleteAccount.bullet2')}</Text>
+              <Text style={styles.bullet}>• {t('settingsDeleteAccount.bullet3')}</Text>
+              <Text style={styles.bullet}>• {t('settingsDeleteAccount.bullet4')}</Text>
             </View>
-            <Text style={styles.warningText}>{t('settingsDeleteAccount.warningIntro')}</Text>
-            <Text style={styles.bullet}>• {t('settingsDeleteAccount.bullet1')}</Text>
-            <Text style={styles.bullet}>• {t('settingsDeleteAccount.bullet2')}</Text>
-            <Text style={styles.bullet}>• {t('settingsDeleteAccount.bullet3')}</Text>
-            <Text style={styles.bullet}>• {t('settingsDeleteAccount.bullet4')}</Text>
-          </View>
 
-          <Button
-            label={t('settingsDeleteAccount.proceed')}
-            variant="secondary"
-            onPress={() => setStep(2)}
-            style={styles.proceedButton}
-            fullWidth
-          />
+            <Button
+              label={t('settingsDeleteAccount.proceed')}
+              variant="secondary"
+              onPress={() => setStep(2)}
+              style={styles.proceedButton}
+              fullWidth
+            />
 
-          <Button label={t('common.cancel')} variant="ghost" onPress={() => router.back()} />
-        </>
-      ) : (
-        <>
-          <Text style={styles.confirmInstruction}>
-            {t('settingsDeleteAccount.confirmInstructionPrefix')}{' '}
-            <Text style={styles.phraseHighlight}>{CONFIRMATION_PHRASE}</Text>{' '}
-            {t('settingsDeleteAccount.confirmInstructionSuffix')}
-          </Text>
-          <TextInput
-            style={[styles.confirmInput, isConfirmed && styles.confirmInputValid]}
-            value={confirmationText}
-            onChangeText={setConfirmationText}
-            placeholder={CONFIRMATION_PHRASE}
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="characters"
-            accessibilityLabel={t('settingsDeleteAccount.confirmAccessibilityLabel', {
-              phrase: CONFIRMATION_PHRASE,
-            })}
-          />
+            <Button label={t('common.cancel')} variant="ghost" onPress={() => router.back()} />
+          </>
+        ) : (
+          <>
+            <Text style={styles.confirmInstruction}>
+              {t('settingsDeleteAccount.confirmInstructionPrefix')}{' '}
+              <Text style={styles.phraseHighlight}>{CONFIRMATION_PHRASE}</Text>{' '}
+              {t('settingsDeleteAccount.confirmInstructionSuffix')}
+            </Text>
+            <TextInput
+              style={[styles.confirmInput, isConfirmed && styles.confirmInputValid]}
+              value={confirmationText}
+              onChangeText={setConfirmationText}
+              placeholder={CONFIRMATION_PHRASE}
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="characters"
+              accessibilityLabel={t('settingsDeleteAccount.confirmAccessibilityLabel', {
+                phrase: CONFIRMATION_PHRASE,
+              })}
+            />
 
-          {failed ? <ErrorState message={t('settingsDeleteAccount.errorBody')} /> : null}
+            {failed ? <ErrorState message={t('settingsDeleteAccount.errorBody')} /> : null}
 
-          <Button
-            label={t('settingsDeleteAccount.confirmDelete')}
-            onPress={() => {
-              void handleConfirmDelete();
-            }}
-            disabled={!isConfirmed}
-            loading={isDeleting}
-            style={styles.deleteButton}
-            fullWidth
-          />
+            <Button
+              label={t('settingsDeleteAccount.confirmDelete')}
+              onPress={() => {
+                void handleConfirmDelete();
+              }}
+              disabled={!isConfirmed}
+              loading={isDeleting}
+              style={styles.deleteButton}
+              fullWidth
+            />
 
-          <Button label={t('common.back')} variant="ghost" onPress={() => setStep(1)} />
-        </>
-      )}
-    </ScrollView>
+            <Button label={t('common.back')} variant="ghost" onPress={() => setStep(1)} />
+          </>
+        )}
+      </ScrollView>
+
+      <ScrollToTopButton
+        visible={isScrollToTopVisible}
+        onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        bottomOffset={insets.bottom + spacing.md}
+      />
+    </View>
   );
 }
 

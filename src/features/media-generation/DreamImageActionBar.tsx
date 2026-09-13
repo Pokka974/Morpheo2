@@ -17,6 +17,12 @@ interface DreamImageActionBarProps {
   onGenerate?: () => void;
   onRegenerate?: () => void;
   canRegenerate: boolean;
+  /**
+   * Images left against the monthly entitlement (`EntitlementService.fetchEntitlement`)
+   * — regenerating spends the same credit generating does, there is no separate
+   * per-entry regeneration budget. `null` means unlimited (premium).
+   */
+  imagesRemaining: number | null;
 }
 
 /**
@@ -30,6 +36,7 @@ export function DreamImageActionBar({
   onGenerate,
   onRegenerate,
   canRegenerate,
+  imagesRemaining,
 }: DreamImageActionBarProps) {
   const { t } = useTranslation();
 
@@ -58,7 +65,7 @@ export function DreamImageActionBar({
     );
   }
 
-  if (canRegenerate && onRegenerate && media.regenerationCount < media.maxRegenerations) {
+  if (canRegenerate && onRegenerate) {
     return (
       <Pressable
         onPress={onRegenerate}
@@ -66,9 +73,9 @@ export function DreamImageActionBar({
         style={[styles.actionButton, styles.actionButtonAlone]}
       >
         <Text style={styles.actionText}>
-          {t('dream.imageRegenerate', {
-            count: media.maxRegenerations - media.regenerationCount,
-          })}
+          {imagesRemaining === null
+            ? t('dream.imageRegenerateUnlimited')
+            : t('dream.imageRegenerate', { count: imagesRemaining })}
         </Text>
       </Pressable>
     );

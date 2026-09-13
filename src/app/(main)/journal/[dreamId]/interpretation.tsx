@@ -15,7 +15,10 @@ import { useInterpretation } from '@features/interpretation/useInterpretation';
 import { recordRecurrence } from '@features/recurrence/recurrenceRepository';
 import { DreamNotSyncedError, syncDreamForInterpretation } from '@features/dream-log/syncService';
 import { useServices } from '@services/useServices';
-import type { InterpretationRequestMetadata } from '@services/ai/interpretation/InterpretationService';
+import type {
+  InterpretationRequest,
+  InterpretationRequestMetadata,
+} from '@services/ai/interpretation/InterpretationService';
 import { colors } from '@theme/tokens';
 
 /**
@@ -99,7 +102,12 @@ async function loadMetadata(dreamId: string): Promise<InterpretationRequestMetad
  * surfaces to the user as a generic "interpretation unavailable".
  */
 export default function InterpretationScreen() {
-  const { dreamId, description } = useLocalSearchParams<{ dreamId: string; description: string }>();
+  const { dreamId, description, regenerateImage, style } = useLocalSearchParams<{
+    dreamId: string;
+    description: string;
+    regenerateImage?: string;
+    style?: string;
+  }>();
   const { t, i18n } = useTranslation();
   // `retry` from the hook is skipped deliberately: it re-fires the request alone,
   // which cannot fix the most common reason this screen fails.
@@ -142,12 +150,14 @@ export default function InterpretationScreen() {
         // classify — let the interpret call run and report it in the usual way.
         console.error('Pre-interpretation sync failed unexpectedly:', err);
       }
-      // `style` is deliberately omitted: the Edge Function falls back to the dreamer's own
-      // `profiles.interpretation_style`, which the settings screen already writes and which a
-      // hardcoded 'symbolic' here used to override on every single request.
+      // `style` is only set when the "Another angle" sheet passed an explicit override;
+      // otherwise omitted so the Edge Function falls back to the dreamer's own
+      // `profiles.interpretation_style` (set by the settings screen) rather than a
+      // hardcoded value overriding every single request.
       await interpret({
         dreamId,
         description,
+        style: style as InterpretationRequest['style'],
         languageHint: i18n.language,
         metadata: await loadMetadata(dreamId),
       });
@@ -214,9 +224,31 @@ export default function InterpretationScreen() {
           await recordRecurrence(dreamRow.user_id, dreamId, 'emotion', result.emotions);
           await recordRecurrence(dreamRow.user_id, dreamId, 'theme', themes);
         }
-        router.replace(`/(main)/journal/${dreamId}/detail`);
+        // A fresh interpretation resolves the FR-031 "edited since last reading" state,
+        // whatever route led here (the edit-banner offer, "Another angle", or first-time).
+        await db.runAsync(
+          `UPDATE dreams SET edited_since_interpretation = 0, sync_status = 'local' WHERE id = ?`,
+          [dreamId]
+        );
+        // The interpretation's own id, not a literal flag: detail.tsx dedupes its
+        // auto-regenerate-image effect by this value, so a second edit-and-regenerate
+        // cycle later in the same session (that screen never remounts, being a sibling
+        // tab of this one) still carries a distinct value and fires again.
+        //
+        // dismissTo, not replace: every route into this screen (the edit banner,
+        // "Another angle", the retry above) except a brand-new dream's first-ever
+        // interpretation is reached from a detail screen already sitting in the
+        // journal stack underneath this one. `replace` only swaps the current top of
+        // the stack, so it left that older detail screen in place beneath a second,
+        // fresh one — swiping back landed on the stale copy first, needing a second
+        // swipe to actually reach the journal list. dismissTo pops back to the
+        // existing one if it's there, and falls back to a plain replace (identical to
+        // the old behavior) when it isn't — i.e. the first-interpretation case.
+        router.dismissTo(
+          `/(main)/journal/${dreamId}/detail${regenerateImage ? `?autoRegenerateImage=${result.id}` : ''}`
+        );
       });
-  }, [state, dreamId, router]);
+  }, [state, dreamId, router, regenerateImage]);
 
   // Retrying re-runs the sync too: the usual reason a retry succeeds is that the
   // network came back, which is also what was keeping the dream off the server.

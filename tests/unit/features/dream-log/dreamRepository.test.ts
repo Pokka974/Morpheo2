@@ -36,6 +36,7 @@ import {
   validateForInterpretation,
   saveDream,
   updateDream,
+  getDreamById,
   deleteDream,
   purgeDreamLocally,
   getPendingDreams,
@@ -145,9 +146,12 @@ describe('dreamRepository', () => {
     beforeEach(() => {
       mockUpdateWhere.mockReset().mockResolvedValue(undefined);
       mockSet.mockClear();
+      mockSelectWhere.mockReset();
     });
 
-    it('marks editedSinceInterpretation=true when description changes', async () => {
+    it('marks editedSinceInterpretation=true when the description changes meaningfully', async () => {
+      mockSelectWhere.mockResolvedValue([{ description: 'The old dream description.' }]);
+
       await updateDream('dream-1', { description: 'A brand new dream description here.' });
 
       expect(mockUpdateWhere).toHaveBeenCalled();
@@ -167,6 +171,55 @@ describe('dreamRepository', () => {
         unknown
       >;
       expect(setArg['editedSinceInterpretation']).toBeUndefined();
+      // No description in the patch — the pre-update lookup is skipped entirely.
+      expect(mockSelectWhere).not.toHaveBeenCalled();
+    });
+
+    it('does not set editedSinceInterpretation when the description is unchanged after trimming', async () => {
+      mockSelectWhere.mockResolvedValue([{ description: '  Same dream text, just re-saved.  ' }]);
+
+      await updateDream('dream-1', { description: 'Same dream text, just re-saved.' });
+
+      const setArg = mockSet.mock.calls[mockSet.mock.calls.length - 1]![0] as Record<
+        string,
+        unknown
+      >;
+      expect(setArg['editedSinceInterpretation']).toBeUndefined();
+    });
+
+    it('updates the full metadata field set, not just description/occurredAt', async () => {
+      mockSelectWhere.mockResolvedValue([{ description: 'irrelevant' }]);
+
+      await updateDream('dream-1', {
+        description: 'A brand new dream description here.',
+        emotions: '["joy"]',
+        characters: '["mother"]',
+        linkedDreamId: 'dream-0',
+      });
+
+      const setArg = mockSet.mock.calls[mockSet.mock.calls.length - 1]![0] as Record<
+        string,
+        unknown
+      >;
+      expect(setArg['emotions']).toBe('["joy"]');
+      expect(setArg['characters']).toBe('["mother"]');
+      expect(setArg['linkedDreamId']).toBe('dream-0');
+    });
+  });
+
+  describe('getDreamById', () => {
+    it('returns the row when found', async () => {
+      mockSelectWhere.mockReset().mockResolvedValue([baseDream]);
+
+      const result = await getDreamById('dream-1');
+      expect(result).toEqual(baseDream);
+    });
+
+    it('returns null when no row matches', async () => {
+      mockSelectWhere.mockReset().mockResolvedValue([]);
+
+      const result = await getDreamById('missing');
+      expect(result).toBeNull();
     });
   });
 
