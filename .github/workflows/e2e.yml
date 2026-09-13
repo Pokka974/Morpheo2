@@ -41,7 +41,13 @@ jobs:
       - name: Build an Android APK (EAS "preview" profile)
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform android --profile preview --non-interactive --wait --output ./app-e2e.apk
+        # `--output` only works with `--local` builds; a normal (cloud) build has to be
+        # downloaded from the artifact URL the build result reports instead.
+        run: |
+          eas build --platform android --profile preview --non-interactive --wait --json > eas-build-result.json
+          BUILD_URL=$(jq -r 'if type == "array" then .[0].artifacts.buildUrl else .artifacts.buildUrl end' eas-build-result.json)
+          echo "Downloading build artifact from $BUILD_URL"
+          curl -fL "$BUILD_URL" -o ./app-e2e.apk
 
       - name: Install Maestro
         run: |
