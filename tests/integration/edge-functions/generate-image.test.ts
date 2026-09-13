@@ -82,7 +82,7 @@ describe('generate-image Edge Function pre-dispatch content safety screening', (
     expect(source).toContain('await screenDreamText(anthropic, description)');
 
     const screenAt = source.indexOf('await screenDreamText(anthropic, description)');
-    const creditConsumeAt = source.indexOf("supabase.rpc(\n        'consume_image_credit'");
+    const creditConsumeAt = source.indexOf("supabase.rpc('consume_image_credit'");
     const fluxSubmitAt = source.indexOf('await fetch(FLUX_ENDPOINT');
     expect(screenAt).toBeGreaterThan(-1);
     expect(creditConsumeAt).toBeGreaterThan(screenAt);
@@ -136,31 +136,6 @@ describe('generate-image Edge Function prompt sourcing', () => {
   });
 });
 
-describe('generate-image Edge Function regeneration limits', () => {
-  const source = readFile('supabase/functions/generate-image/index.ts');
-
-  // Regression guard: max_regenerations used to be hardcoded to 3 for every
-  // user, so a premium account (5 allowed per data-model.md / FR-029) saw the
-  // same "2 remaining" a free user would after one regeneration.
-  it('derives max_regenerations from subscription_tier instead of hardcoding it', () => {
-    expect(source).not.toMatch(/max_regenerations:\s*3\b/);
-    expect(source).toContain("entitlement?.subscription_tier === 'premium' ? 5 : 0");
-  });
-
-  // Regression guard: each call inserts a new media row rather than updating one
-  // in place, so a hardcoded `regeneration_count: isRegeneration ? 1 : 0` never
-  // climbed past 1 — the regen limit could never actually be reached, and the
-  // "N remaining" the client displays never decreased past the first regenerate.
-  it('carries the running regeneration count forward instead of resetting it to 1', () => {
-    expect(source).not.toMatch(/regeneration_count:\s*isRegeneration\s*\?\s*1\s*:\s*0/);
-    expect(source).toContain('(existingMedia?.regeneration_count ?? 0) + 1');
-  });
-
-  it("carries an existing entry's max_regenerations forward on regeneration rather than re-deriving it from the current tier", () => {
-    expect(source).toContain('existingMedia?.max_regenerations ??');
-  });
-});
-
 describe('generate-image Edge Function image credits', () => {
   const source = readFile('supabase/functions/generate-image/index.ts');
 
@@ -189,10 +164,11 @@ describe('generate-image Edge Function image credits', () => {
     expect(source).toContain('creditConsumed = { userId: user.id, source:');
   });
 
-  it('does not charge a monthly image for a regeneration', () => {
-    // The entry's own max_regenerations bounds regenerations. Charging a second monthly
-    // image would make the feature unreachable for any tier whose monthly limit is one.
-    expect(source).toMatch(/if \(!isRegeneration\) \{[\s\S]*?consume_image_credit/);
+  // Regeneration spends the same monthly image credit generation does — there is no
+  // separate per-entry regeneration budget any more, so the RPC call must not be
+  // conditioned on `isRegeneration` the way it used to be.
+  it('charges the same monthly image credit for a regeneration as for a fresh generation', () => {
+    expect(source).not.toMatch(/if \(!isRegeneration\)/);
   });
 
   it('leaves the premium short-circuit to the RPC rather than re-checking the limit here', () => {
@@ -220,9 +196,10 @@ describe('generate-image Edge Function media cleanup', () => {
 
   it('updates the dream’s existing media row instead of inserting a second one', () => {
     expect(source).toContain(".eq('id', existingMedia.id)");
-    // The lookup that feeds the update has to carry the row id and the key it is about to
-    // replace — reading only the counters is what made an in-place update impossible.
-    expect(source).toContain("select('id, storage_key, regeneration_count, max_regenerations')");
+    // The lookup that feeds the update only needs the row id and the key it is about to
+    // replace — regeneration_count/max_regenerations are no longer read for images (the
+    // dormant Luma video path still owns those columns).
+    expect(source).toContain("select('id, storage_key')");
   });
 
   // `media` has no BEFORE UPDATE trigger, and the client's pull sync pages on
@@ -264,10 +241,11 @@ describe('generate-image Edge Function media cleanup', () => {
     expect(cleanupCallAt).toBeGreaterThan(writeCheckAt);
   });
 
-  // FR-031's re-generate-after-edit arrives with isRegeneration unset. Resetting the count
-  // there would hand back a full regeneration allowance for the price of an edit.
-  it('never resets an existing regeneration count to zero', () => {
-    expect(source).not.toMatch(/regeneration_count:\s*0\b/);
-    expect(source).toContain('(existingMedia?.regeneration_count ?? 0)');
+  // The image path no longer reads or writes regeneration_count/max_regenerations at
+  // all — retired in favor of the monthly image entitlement (no separate per-entry
+  // budget). The columns still exist for the dormant Luma video path.
+  it('does not write regeneration_count/max_regenerations for images any more', () => {
+    expect(source).not.toContain('regeneration_count:');
+    expect(source).not.toContain('max_regenerations:');
   });
 });

@@ -15,9 +15,19 @@ import { sqlite as db } from '@db/client';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
+const mockReplace = jest.fn();
+// Overridden per test via `mockUseLocalSearchParams.mockReturnValue({ dreamId, autoRegenerateImage })`.
+const mockUseLocalSearchParams = jest.fn(() => ({ dreamId: 'dream-1' }) as Record<string, string>);
 jest.mock('expo-router', () => ({
-  useLocalSearchParams: () => ({ dreamId: 'dream-1' }),
-  useRouter: () => ({ push: mockPush, back: mockBack }),
+  useLocalSearchParams: () => mockUseLocalSearchParams(),
+  useRouter: () => ({ push: mockPush, back: mockBack, replace: mockReplace }),
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const React = jest.requireActual('react');
+    // No deps array: re-runs on every render, standing in for "the screen is always
+    // focused" in a test environment that never unmounts/refocuses — same convention
+    // as readings-index.test.tsx.
+    React.useEffect(effect);
+  },
 }));
 
 let mockImageState: {
@@ -140,8 +150,10 @@ describe('DreamDetailScreen', () => {
   beforeEach(() => {
     mockPush.mockClear();
     mockBack.mockClear();
+    mockReplace.mockClear();
     mockGenerate.mockClear();
     mockRegenerate.mockClear();
+    mockUseLocalSearchParams.mockReset().mockReturnValue({ dreamId: 'dream-1' });
     mockImageState = { status: 'idle' };
     imageService.configure('success');
     (db.getFirstAsync as jest.Mock).mockReset();
@@ -281,26 +293,34 @@ describe('DreamDetailScreen', () => {
     await waitFor(() => expect(getByLabelText('Dream illustration')).toBeTruthy());
   });
 
-  it('soft-deletes the dream and navigates back when confirming delete', async () => {
+  it('soft-deletes the dream and navigates back when confirming delete via the custom card', async () => {
+    (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
+    mockDeleteDream.mockReset().mockResolvedValue(undefined);
+    const { getByText } = renderScreen();
+    await waitFor(() => expect(getByText('Delete')).toBeTruthy());
+
+    // Opens DeleteDreamModal — the OS Alert.alert is no longer used for this.
+    fireEvent.press(getByText('Delete'));
+    fireEvent.press(getByText('Delete permanently'));
+
+    // Goes through dreamRepository.deleteDream — the same repository path every
+    // other dream mutation uses — rather than a raw SQL statement, so the deletion
+    // also becomes eligible for the sync queue instead of staying purely local.
+    await waitFor(() => expect(mockDeleteDream).toHaveBeenCalledWith('dream-1'));
+    expect(mockBack).toHaveBeenCalled();
+  });
+
+  it('keeping the dream from the delete card does not delete it', async () => {
     (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
     mockDeleteDream.mockReset().mockResolvedValue(undefined);
     const { getByText } = renderScreen();
     await waitFor(() => expect(getByText('Delete')).toBeTruthy());
 
     fireEvent.press(getByText('Delete'));
-    const alertCall = (Alert.alert as jest.Mock).mock.calls[0];
-    expect(alertCall[0]).toBe('Delete this dream?');
-    const buttons = alertCall[2] as Array<{ text: string; onPress?: () => void }>;
-    const deleteButton = buttons.find(b => b.text === 'Delete')!;
-    const cancelButton = buttons.find(b => b.text === 'Cancel')!;
-    expect(cancelButton.onPress).toBeUndefined();
+    fireEvent.press(getByText('Keep the dream'));
 
-    await deleteButton.onPress!();
-    // Goes through dreamRepository.deleteDream — the same repository path every
-    // other dream mutation uses — rather than a raw SQL statement, so the deletion
-    // also becomes eligible for the sync queue instead of staying purely local.
-    expect(mockDeleteDream).toHaveBeenCalledWith('dream-1');
-    expect(mockBack).toHaveBeenCalled();
+    expect(mockDeleteDream).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
   });
 
   it('surfaces the real reason an image failed instead of a generic placeholder', async () => {
@@ -551,5 +571,249 @@ describe('DreamDetailScreen', () => {
     const earlierRow = await findByText('An earlier flying dream.');
     fireEvent.press(earlierRow);
     expect(mockPush).toHaveBeenCalledWith('/(main)/journal/dream-earlier/detail');
+  });
+
+  describe('refocus reload (FR-031)', () => {
+    // `journal` and `log` are sibling tabs — React Navigation keeps this screen mounted
+    // and re-focuses it rather than remounting it after an edit, so a plain mount-time
+    // effect would keep showing whatever it first loaded. useFocusEffect fixes that;
+    // these tests exercise the *same already-rendered instance* picking up fresh data,
+    // exactly like returning from the edit screen without a remount.
+    it('shows the edit button, wired to the log screen with an editId', async () => {
+      (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
+      const { getByText } = renderScreen();
+
+      await waitFor(() => expect(getByText('Edit dream')).toBeTruthy());
+      fireEvent.press(getByText('Edit dream'));
+      expect(mockPush).toHaveBeenCalledWith(
+        expect.stringMatching(/^\/\(main\)\/log\?editId=dream-1&editedAt=\d+$/)
+      );
+    });
+
+    it('picks up an edited description on refocus, without remounting', async () => {
+      (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
+      // The title (firstLine of the description) and the narrative both render the
+      // same short, single-sentence text, so it appears twice — getAllByText, not
+      // getByText.
+      const { getAllByText, queryAllByText, rerender } = renderScreen();
+      await waitFor(() => expect(getAllByText(DREAM_ROW.description).length).toBeGreaterThan(0));
+
+      const EDITED_ROW = { ...DREAM_ROW, description: 'A completely rewritten dream text.' };
+      (db.getFirstAsync as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce(EDITED_ROW)
+        .mockResolvedValueOnce(null);
+
+      rerender(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamDetailScreen />
+        </ServicesProvider>
+      );
+
+      await waitFor(() =>
+        expect(getAllByText('A completely rewritten dream text.').length).toBeGreaterThan(0)
+      );
+      expect(queryAllByText(DREAM_ROW.description).length).toBe(0);
+    });
+
+    it('shows the edit-and-regenerate banner once edited_since_interpretation flips true, on refocus', async () => {
+      (db.getFirstAsync as jest.Mock)
+        .mockResolvedValueOnce(DREAM_ROW)
+        .mockResolvedValueOnce(INTERP_ROW);
+      const { queryByText, getByText, rerender } = renderScreen();
+      await waitFor(() => expect(getByText('Interpretation')).toBeTruthy());
+      expect(queryByText('You edited this dream')).toBeNull();
+
+      (db.getFirstAsync as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce({ ...DREAM_ROW, edited_since_interpretation: 1 })
+        .mockResolvedValueOnce(INTERP_ROW);
+
+      rerender(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamDetailScreen />
+        </ServicesProvider>
+      );
+
+      await waitFor(() => expect(getByText('You edited this dream')).toBeTruthy());
+    });
+
+    it('waits for the interpretation matching autoRegenerateImage before firing, ignoring a stale one already in state', async () => {
+      // This test's useFocusEffect double reruns `load()` on every render, standing
+      // in for two real refocuses of the same mounted screen: the first delivers the
+      // dream's *older*, already-loaded interpretation ('interp-1'); only the second
+      // delivers the fresh one this auto-regenerate request is actually about
+      // ('interp-2'). The fix must not fire against the first.
+      const NEW_INTERP_ROW = {
+        ...INTERP_ROW,
+        id: 'interp-2',
+        keywords: JSON.stringify(['storm', 'tower']),
+      };
+      mockUseLocalSearchParams.mockReturnValue({
+        dreamId: 'dream-1',
+        autoRegenerateImage: 'interp-2',
+      });
+      (db.getFirstAsync as jest.Mock)
+        .mockResolvedValueOnce(DREAM_ROW)
+        .mockResolvedValueOnce(INTERP_ROW) // stale: id 'interp-1', keywords forest/mist
+        .mockResolvedValueOnce(DREAM_ROW)
+        .mockResolvedValueOnce(NEW_INTERP_ROW); // fresh: id 'interp-2', keywords storm/tower
+
+      renderScreen();
+
+      // Must fire exactly once, and only with the *fresh* interpretation's keywords —
+      // never with 'interp-1's — proving it waited for the matching interpretation
+      // rather than firing against whichever one happened to be in state first.
+      await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1));
+      expect(mockGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({ keywords: ['storm', 'tower'] })
+      );
+    });
+
+    it('fires the auto-regenerate-image effect again for a distinct autoRegenerateImage value in the same mounted instance', async () => {
+      (db.getFirstAsync as jest.Mock)
+        .mockResolvedValueOnce(DREAM_ROW)
+        .mockResolvedValueOnce(INTERP_ROW);
+      mockUseLocalSearchParams.mockReturnValue({
+        dreamId: 'dream-1',
+        autoRegenerateImage: 'interp-1',
+      });
+      const { rerender } = renderScreen();
+      await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1));
+
+      // A second edit-and-regenerate cycle later in the same session (this screen
+      // never remounts) carries a distinct value — the interpretation's own new id.
+      (db.getFirstAsync as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce(DREAM_ROW)
+        .mockResolvedValueOnce({ ...INTERP_ROW, id: 'interp-2' });
+      mockUseLocalSearchParams.mockReturnValue({
+        dreamId: 'dream-1',
+        autoRegenerateImage: 'interp-2',
+      });
+
+      rerender(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamDetailScreen />
+        </ServicesProvider>
+      );
+
+      await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(2));
+    });
+
+    it('does not re-fire auto-regenerate-image for the same value across re-renders', async () => {
+      (db.getFirstAsync as jest.Mock)
+        .mockResolvedValueOnce(DREAM_ROW)
+        .mockResolvedValueOnce(INTERP_ROW);
+      mockUseLocalSearchParams.mockReturnValue({
+        dreamId: 'dream-1',
+        autoRegenerateImage: 'interp-1',
+      });
+      const { rerender } = renderScreen();
+      await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1));
+
+      rerender(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamDetailScreen />
+        </ServicesProvider>
+      );
+      // Stays at 1 through every further settle — if a regression ever re-fired it,
+      // this would keep failing rather than pass by accident.
+      await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1));
+    });
+  });
+
+  describe('overflow menu and Another angle sheet (design refresh)', () => {
+    it('opens the "⋯" menu and shows the three actions, each dismissing the menu on press', async () => {
+      (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
+      const { getByLabelText, getAllByText, queryByText } = renderScreen();
+
+      await waitFor(() => expect(getByLabelText('More actions')).toBeTruthy());
+      fireEvent.press(getByLabelText('More actions'));
+
+      // "Edit dream"/"Another angle"/"Delete" now also exist as menu items, in
+      // addition to the inline row and the interpretation card — getAllByText.
+      expect(getAllByText('Edit dream').length).toBeGreaterThan(0);
+      expect(getAllByText('Another angle').length).toBeGreaterThan(0);
+      expect(getAllByText('Delete').length).toBeGreaterThan(0);
+
+      // Pressing "Another angle" in the menu closes the menu and opens the sheet.
+      fireEvent.press(getAllByText('Another angle')[0]!);
+      expect(queryByText('Suggest another angle')).toBeTruthy();
+    });
+
+    it('pressing "Edit dream" in the menu navigates to the log screen with an editId', async () => {
+      (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
+      const { getByLabelText, getAllByText } = renderScreen();
+
+      await waitFor(() => expect(getByLabelText('More actions')).toBeTruthy());
+      fireEvent.press(getByLabelText('More actions'));
+      fireEvent.press(getAllByText('Edit dream')[0]!);
+
+      expect(mockPush).toHaveBeenCalledWith(
+        expect.stringMatching(/^\/\(main\)\/log\?editId=dream-1&editedAt=\d+$/)
+      );
+    });
+
+    it('pressing "Delete" in the menu opens the delete card', async () => {
+      (db.getFirstAsync as jest.Mock).mockResolvedValueOnce(DREAM_ROW).mockResolvedValueOnce(null);
+      mockDeleteDream.mockReset().mockResolvedValue(undefined);
+      const { getByLabelText, getAllByText, getByText } = renderScreen();
+
+      await waitFor(() => expect(getByLabelText('More actions')).toBeTruthy());
+      fireEvent.press(getByLabelText('More actions'));
+      fireEvent.press(getAllByText('Delete')[0]!);
+
+      fireEvent.press(getByText('Delete permanently'));
+      await waitFor(() => expect(mockDeleteDream).toHaveBeenCalledWith('dream-1'));
+    });
+
+    it("the interpretation card's CTA opens the same style sheet, defaulting to Symbolic", async () => {
+      (db.getFirstAsync as jest.Mock)
+        .mockResolvedValueOnce(DREAM_ROW)
+        .mockResolvedValueOnce(INTERP_ROW);
+      const { getByText, getAllByText } = renderScreen();
+
+      await waitFor(() => expect(getByText('Suggest another angle')).toBeTruthy());
+      fireEvent.press(getByText('Suggest another angle'));
+
+      expect(getAllByText('Symbolic / Archetypal').length).toBeGreaterThan(0);
+      expect(getByText('Mythological / Cultural')).toBeTruthy();
+      expect(getByText('Psychological / Jungian')).toBeTruthy();
+      // Free-tier default entitlement: 3 interpretations/month, none used.
+      expect(getByText('3 readings left this month')).toBeTruthy();
+    });
+
+    it('picking a different reading style and confirming re-interprets with that style', async () => {
+      (db.getFirstAsync as jest.Mock)
+        .mockResolvedValueOnce(DREAM_ROW)
+        .mockResolvedValueOnce(INTERP_ROW);
+      const { getByText } = renderScreen();
+
+      await waitFor(() => expect(getByText('Suggest another angle')).toBeTruthy());
+      fireEvent.press(getByText('Suggest another angle'));
+
+      fireEvent.press(getByText('Mythological / Cultural'));
+      fireEvent.press(getByText('Read from this angle'));
+
+      expect(mockPush).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `/(main)/journal/dream-1/interpretation?dreamId=dream-1&description=${encodeURIComponent(DREAM_ROW.description)}&style=mythological`
+        )
+      );
+    });
+
+    it('cancelling the sheet does not navigate', async () => {
+      (db.getFirstAsync as jest.Mock)
+        .mockResolvedValueOnce(DREAM_ROW)
+        .mockResolvedValueOnce(INTERP_ROW);
+      const { getByText } = renderScreen();
+
+      await waitFor(() => expect(getByText('Suggest another angle')).toBeTruthy());
+      fireEvent.press(getByText('Suggest another angle'));
+      fireEvent.press(getByText('Cancel'));
+
+      expect(mockPush).not.toHaveBeenCalledWith(expect.stringContaining('style='));
+    });
   });
 });

@@ -161,6 +161,30 @@ export function ChevronLeftIcon({
   );
 }
 
+/**
+ * Points back to the top of a scrolled list — the scroll-to-top affordance. A
+ * square viewBox with the chevron's ink vertically centred on it (peak/base
+ * equidistant from the midline), so it sits centred in a circular button rather
+ * than reading as low-and-left the way a tightly-cropped bounding box would.
+ */
+export function ChevronUpIcon({
+  size = 16,
+  color = colors.textPrimary,
+  strokeWidth = 1.8,
+}: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <Path
+        d="M1 11.5l7-7 7 7"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 /** Dismiss — the "×" of the wait screen, drawn as two strokes. */
 export function CloseIcon({
   size = 16,
@@ -214,6 +238,67 @@ export function SearchIcon({ size = 18, color = colors.textMuted, strokeWidth = 
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx="10.5" cy="10.5" r="6.5" stroke={color} strokeWidth={strokeWidth} />
       <Path d="M15.5 15.5L21 21" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/**
+ * The dream detail screen's three actions carry no interface pictograms — each is
+ * preceded by a disc from the lunar cycle instead: full for Edit (the narrative as it
+ * already is), waning-dashed for Delete (what erases), dashed-only for Another angle (a
+ * reading that doesn't exist yet). Continues the app's existing rule that solid marks
+ * what the dreamer wrote and dashed marks what the reading adds.
+ */
+export function MoonFullIcon({ size = 13, color = colors.textSecondary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 14 14">
+      <Circle cx={7} cy={7} r={6} fill={color} />
+    </Svg>
+  );
+}
+
+export function MoonWaningIcon({ size = 13, color = colors.error, strokeWidth = 1 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 14 14" fill="none">
+      <Path d="M7 1a6 6 0 000 12z" fill={color} />
+      <Circle
+        cx={7}
+        cy={7}
+        r={6}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeDasharray="1.8 2.2"
+      />
+    </Svg>
+  );
+}
+
+export function MoonDashedIcon({
+  size = 13,
+  color = colors.accentText,
+  strokeWidth = 1.3,
+}: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 14 14" fill="none">
+      <Circle
+        cx={7}
+        cy={7}
+        r={5.6}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeDasharray="2.2 2.6"
+      />
+    </Svg>
+  );
+}
+
+/** The dream detail screen's "⋯" overflow-menu trigger. */
+export function MoreIcon({ size = 16, color = colors.textSecondary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Circle cx={5} cy={12} r={2} fill={color} />
+      <Circle cx={12} cy={12} r={2} fill={color} />
+      <Circle cx={19} cy={12} r={2} fill={color} />
     </Svg>
   );
 }

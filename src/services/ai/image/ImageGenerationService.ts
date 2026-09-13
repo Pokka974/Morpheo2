@@ -7,8 +7,15 @@ export interface MediaResult {
   generationStatus: GenerationStatus;
   signedUrl: string | null;
   localCachePath: string | null;
-  regenerationCount: number;
-  maxRegenerations: number;
+  /**
+   * Per-entry regeneration budget — still real for the dormant Luma video path
+   * (`LumaVideoGenerationService` populates both from the `media` row), but retired for
+   * images: `generate-image` no longer enforces or returns either, so an image result
+   * never carries them. "Regenerate" for images is bounded by the monthly image
+   * entitlement instead (`EntitlementService.canGenerateImage`), not a per-image count.
+   */
+  regenerationCount?: number;
+  maxRegenerations?: number;
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
@@ -31,13 +38,6 @@ export class ContentSafetyError extends Error {
   constructor(public readonly layer: 'input' | 'output') {
     super(`Content safety check failed at ${layer} layer`);
     this.name = 'ContentSafetyError';
-  }
-}
-
-export class RegenerationLimitError extends Error {
-  constructor(public readonly max: number) {
-    super(`Regeneration limit of ${max} reached for this entry`);
-    this.name = 'RegenerationLimitError';
   }
 }
 

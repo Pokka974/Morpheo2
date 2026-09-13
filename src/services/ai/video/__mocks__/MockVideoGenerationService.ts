@@ -5,10 +5,9 @@ import type {
 } from '../VideoGenerationService';
 import { PremiumRequiredError } from '../VideoGenerationService';
 import type { MediaResult } from '../../image/ImageGenerationService';
-import { ContentSafetyError, RegenerationLimitError } from '../../image/ImageGenerationService';
+import { ContentSafetyError } from '../../image/ImageGenerationService';
 
-export type MockMode =
-  'success' | 'failure' | 'premium_required' | 'safety_blocked' | 'regeneration_limit';
+export type MockMode = 'success' | 'failure' | 'premium_required' | 'safety_blocked';
 
 export class MockVideoGenerationService implements VideoGenerationService {
   private mode: MockMode = 'success';
@@ -38,8 +37,6 @@ export class MockVideoGenerationService implements VideoGenerationService {
         throw new PremiumRequiredError();
       case 'safety_blocked':
         throw new ContentSafetyError('input');
-      case 'regeneration_limit':
-        throw new RegenerationLimitError(1);
     }
   }
 

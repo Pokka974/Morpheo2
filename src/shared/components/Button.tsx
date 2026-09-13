@@ -13,7 +13,7 @@ import {
   typography,
 } from '@theme/tokens';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'neutral' | 'destructive';
 
 interface ButtonProps {
   label: string;
@@ -23,6 +23,8 @@ interface ButtonProps {
   loading?: boolean;
   /** Stretches the button to fill its parent's cross axis. */
   fullWidth?: boolean;
+  /** Rendered before the label — the dream detail screen's moon-phase icons, etc. */
+  icon?: React.ReactNode;
   accessibilityLabel?: string;
   testID?: string;
   style?: ViewStyle;
@@ -39,11 +41,28 @@ export function Button({
   disabled = false,
   loading = false,
   fullWidth = false,
+  icon,
   accessibilityLabel,
   testID,
   style,
 }: ButtonProps) {
   const inert = disabled || loading;
+  const labelStyle =
+    variant === 'primary'
+      ? styles.labelPrimary
+      : variant === 'neutral'
+        ? styles.labelNeutral
+        : variant === 'destructive'
+          ? styles.labelDestructive
+          : styles.labelAccent;
+  const spinnerColor =
+    variant === 'primary'
+      ? colors.textOnAccent
+      : variant === 'neutral'
+        ? colors.textPrimary
+        : variant === 'destructive'
+          ? colors.error
+          : colors.accentText;
 
   return (
     <Pressable
@@ -59,6 +78,8 @@ export function Button({
         variant === 'primary' && !inert && glow.soft,
         variant === 'secondary' && styles.secondary,
         variant === 'ghost' && styles.ghost,
+        variant === 'neutral' && styles.neutral,
+        variant === 'destructive' && styles.destructive,
         fullWidth && styles.fullWidth,
         inert && styles.inert,
         pressed && !inert && styles.pressed,
@@ -66,16 +87,14 @@ export function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator
-          color={variant === 'primary' ? colors.textOnAccent : colors.accentText}
-        />
+        <ActivityIndicator color={spinnerColor} />
       ) : (
-        <Text
-          style={[styles.label, variant === 'primary' ? styles.labelPrimary : styles.labelAccent]}
-          numberOfLines={1}
-        >
-          {label}
-        </Text>
+        <View style={styles.content}>
+          {icon}
+          <Text style={[styles.label, labelStyle]} numberOfLines={1}>
+            {label}
+          </Text>
+        </View>
       )}
     </Pressable>
   );
@@ -136,6 +155,16 @@ const styles = StyleSheet.create({
   ghost: {
     backgroundColor: colors.transparent,
   },
+  neutral: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderElevated,
+  },
+  destructive: {
+    backgroundColor: colors.destructiveSurface,
+    borderWidth: 1,
+    borderColor: colors.errorBorder,
+  },
   fullWidth: {
     alignSelf: 'stretch',
   },
@@ -145,6 +174,11 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
   },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
   label: {
     ...typography.button,
   },
@@ -153,6 +187,12 @@ const styles = StyleSheet.create({
   },
   labelAccent: {
     color: colors.accentText,
+  },
+  labelNeutral: {
+    color: colors.textPrimary,
+  },
+  labelDestructive: {
+    color: colors.error,
   },
 
   fabHit: {

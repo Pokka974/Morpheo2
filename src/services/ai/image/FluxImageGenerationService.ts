@@ -7,7 +7,6 @@ import type {
 } from './ImageGenerationService';
 import {
   ContentSafetyError,
-  RegenerationLimitError,
   ImageLimitError,
   ImageGenerationProviderError,
 } from './ImageGenerationService';
@@ -19,8 +18,6 @@ interface LocalMediaRow {
   media_type: string;
   generation_status: string;
   local_cache_path: string | null;
-  regeneration_count: number;
-  max_regenerations: number;
   error_message: string | null;
   created_at: string;
   updated_at: string;
@@ -48,9 +45,6 @@ export class FluxImageGenerationService implements ImageGenerationService {
       const status = (error as { status?: number }).status;
       const body = data as { error?: string } | null;
       if (status === 400 && body?.error === 'safety_blocked') throw new ContentSafetyError('input');
-      if (status === 409 && body?.error === 'regen_limit_reached') {
-        throw new RegenerationLimitError((body as { max?: number })['max'] ?? 3);
-      }
       if (status === 429) {
         throw new ImageLimitError(
           new Date(
@@ -97,13 +91,11 @@ export class FluxImageGenerationService implements ImageGenerationService {
     try {
       await sqlite.runAsync(
         `INSERT INTO media
-          (id, dream_id, media_type, generation_status, local_cache_path, regeneration_count, max_regenerations, error_message, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, dream_id, media_type, generation_status, local_cache_path, error_message, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            generation_status = excluded.generation_status,
            local_cache_path = excluded.local_cache_path,
-           regeneration_count = excluded.regeneration_count,
-           max_regenerations = excluded.max_regenerations,
            error_message = excluded.error_message,
            updated_at = excluded.updated_at`,
         [
@@ -112,8 +104,6 @@ export class FluxImageGenerationService implements ImageGenerationService {
           media.mediaType,
           media.generationStatus,
           media.localCachePath,
-          media.regenerationCount,
-          media.maxRegenerations,
           media.errorMessage,
           media.createdAt,
           media.updatedAt,
@@ -129,7 +119,7 @@ export class FluxImageGenerationService implements ImageGenerationService {
     // ran is written there immediately by persistLocally(), well before any pull
     // sync would carry it back down from Supabase.
     const localRow = await sqlite.getFirstAsync<LocalMediaRow>(
-      `SELECT id, dream_id, media_type, generation_status, local_cache_path, regeneration_count, max_regenerations, error_message, created_at, updated_at
+      `SELECT id, dream_id, media_type, generation_status, local_cache_path, error_message, created_at, updated_at
        FROM media WHERE dream_id = ? AND media_type = 'image' ORDER BY created_at DESC LIMIT 1`,
       dreamId
     );
@@ -141,8 +131,6 @@ export class FluxImageGenerationService implements ImageGenerationService {
         generationStatus: localRow.generation_status as MediaResult['generationStatus'],
         signedUrl: null,
         localCachePath: localRow.local_cache_path,
-        regenerationCount: localRow.regeneration_count,
-        maxRegenerations: localRow.max_regenerations,
         errorMessage: localRow.error_message,
         createdAt: localRow.created_at,
         updatedAt: localRow.updated_at,
@@ -227,8 +215,6 @@ export class FluxImageGenerationService implements ImageGenerationService {
       generationStatus: row['generation_status'] as MediaResult['generationStatus'],
       signedUrl: null,
       localCachePath: null,
-      regenerationCount: row['regeneration_count'] as number,
-      maxRegenerations: row['max_regenerations'] as number,
       errorMessage: row['error_message'] as string | null,
       createdAt: row['created_at'] as string,
       updatedAt: row['updated_at'] as string,

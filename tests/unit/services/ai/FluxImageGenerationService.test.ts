@@ -1,7 +1,6 @@
 import { FluxImageGenerationService } from '@services/ai/image/FluxImageGenerationService';
 import {
   ContentSafetyError,
-  RegenerationLimitError,
   ImageLimitError,
   ImageGenerationProviderError,
 } from '@services/ai/image/ImageGenerationService';
@@ -71,14 +70,6 @@ describe('FluxImageGenerationService', () => {
       error: { status: 400 },
     });
     await expect(service.generateImage(testRequest)).rejects.toThrow(ContentSafetyError);
-  });
-
-  it('throws RegenerationLimitError on 409 regen_limit_reached', async () => {
-    mockInvoke.mockResolvedValueOnce({
-      data: { error: 'regen_limit_reached', max: 3 },
-      error: { status: 409 },
-    });
-    await expect(service.generateImage(testRequest)).rejects.toThrow(RegenerationLimitError);
   });
 
   it('throws ImageLimitError on 429', async () => {
@@ -178,8 +169,6 @@ describe('FluxImageGenerationService', () => {
         generationStatus: 'complete',
         signedUrl: 'https://example.com/img.jpg',
         localCachePath: null,
-        regenerationCount: 0,
-        maxRegenerations: 3,
         errorMessage: null,
         createdAt: '2026-08-14T00:00:00Z',
         updatedAt: '2026-08-14T00:00:00Z',
@@ -189,14 +178,14 @@ describe('FluxImageGenerationService', () => {
 
     await service.generateImage(testRequest);
 
+    // No regeneration_count/max_regenerations — the image path no longer reads or
+    // writes either; there is no separate per-entry regeneration budget any more.
     expect(sqlite.runAsync).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO media'), [
       'media-001',
       'dream-001',
       'image',
       'complete',
       '/local/path/img.jpg',
-      0,
-      3,
       null,
       '2026-08-14T00:00:00Z',
       '2026-08-14T00:00:00Z',

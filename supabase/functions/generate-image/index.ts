@@ -72,7 +72,7 @@ async function markSafetyBlocked(
   opts: {
     dreamId: string;
     userId: string;
-    existingMedia: { id: string; regeneration_count: number; max_regenerations: number } | null;
+    existingMedia: { id: string } | null;
   }
 ): Promise<void> {
   try {
@@ -224,20 +224,6 @@ serve(async (req: Request) => {
       return json({ error: 'missing_fields' }, 400);
     }
 
-    // Read only what the regeneration allowance below needs. The quota gate itself is no
-    // longer here: it lives in consume_image_credit (019_image_credit_rpc.sql), which
-    // checks and increments in one statement and carries the premium short-circuit this
-    // gate was missing.
-    const { data: entitlement, error: entError } = await supabase
-      .from('entitlements')
-      .select('subscription_tier')
-      .eq('user_id', user.id)
-      .single();
-
-    if (entError) {
-      console.error('Entitlement query failed:', entError);
-    }
-
     // The dream's current image row, if it has one. Read on every call, not just a
     // regeneration: this row is updated in place below rather than joined by a second
     // insert, which is what keeps one live row -- and one live storage object -- per
@@ -250,7 +236,7 @@ serve(async (req: Request) => {
     // is the live one and the rest are swept up by `cleanUpSupersededMedia`.
     const { data: existingMedia, error: existingMediaError } = await supabase
       .from('media')
-      .select('id, storage_key, regeneration_count, max_regenerations')
+      .select('id, storage_key')
       .eq('dream_id', dreamId)
       .eq('media_type', 'image')
       .order('created_at', { ascending: false })
@@ -270,43 +256,32 @@ serve(async (req: Request) => {
       return json({ error: 'safety_blocked' }, 400);
     }
 
-    if (
-      isRegeneration &&
-      existingMedia &&
-      existingMedia.regeneration_count >= existingMedia.max_regenerations
-    ) {
-      return json({ error: 'regen_limit_reached', max: existingMedia.max_regenerations }, 409);
-    }
-
     // Check + spend the image credit in one statement (019_image_credit_rpc.sql). A
     // read-then-write here would let two concurrent taps both pass the check and both
     // increment -- at a free limit of one image a month, that doubles the allowance.
     // The credit is refunded by `fail` below if no image is produced.
     //
-    // Regenerations deliberately do not spend a monthly image: the entry's own
-    // max_regenerations allowance is what bounds them, and charging a second monthly
-    // image for a regeneration would make the feature unreachable for any tier whose
-    // monthly limit is one.
-    if (!isRegeneration) {
-      const { data: creditSource, error: creditError } = await supabase.rpc(
-        'consume_image_credit',
-        { p_user_id: user.id }
-      );
+    // Regenerating spends the same monthly image credit generating does -- there is no
+    // separate per-entry regeneration budget. `media.regeneration_count`/
+    // `max_regenerations` still exist (the dormant Luma video path still writes them)
+    // but the image path no longer reads or writes either.
+    const { data: creditSource, error: creditError } = await supabase.rpc('consume_image_credit', {
+      p_user_id: user.id,
+    });
 
-      if (creditError) {
-        console.error('Image credit check failed:', creditError);
-        return json({ error: 'entitlement_check_failed' }, 500);
-      }
-
-      if (creditSource === 'denied') {
-        const nextMonth = new Date();
-        nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
-        nextMonth.setHours(0, 0, 0, 0);
-        return json({ error: 'limit_reached', resetDate: nextMonth.toISOString() }, 429);
-      }
-
-      creditConsumed = { userId: user.id, source: creditSource as string };
+    if (creditError) {
+      console.error('Image credit check failed:', creditError);
+      return json({ error: 'entitlement_check_failed' }, 500);
     }
+
+    if (creditSource === 'denied') {
+      const nextMonth = new Date();
+      nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
+      nextMonth.setHours(0, 0, 0, 0);
+      return json({ error: 'limit_reached', resetDate: nextMonth.toISOString() }, 429);
+    }
+
+    creditConsumed = { userId: user.id, source: creditSource as string };
 
     // Build prompt. The interpretation model writes the visual prompt while it still has the
     // dream, its emotions, its archetype and its themes in context (system_prompts v2.0.0), so
@@ -491,24 +466,6 @@ serve(async (req: Request) => {
       return await fail({ error: 'upload_failed' }, 503);
     }
 
-    // No regenerations per entry for free users, 5 for premium (data-model.md, FR-029).
-    // Free gets none because three regenerations on top of one image a month is four Flux
-    // calls a month, which would leave the cost exactly where the repricing found it.
-    // A regeneration carries forward the limit + count the entry already had -- the limit
-    // is only derived fresh from the current tier on the first generation for this dream
-    // -- so a mid-cycle tier change doesn't retroactively change an in-progress entry's
-    // allowance, and the count actually climbs instead of resetting to 1 on every
-    // regenerate.
-    const maxRegenerations =
-      existingMedia?.max_regenerations ?? (entitlement?.subscription_tier === 'premium' ? 5 : 0);
-    // Only a regeneration advances the count. A non-regeneration call over an entry
-    // that already has an image (FR-031's re-generate after an edit) carries the
-    // existing count forward untouched -- resetting it to 0 there would hand back a
-    // fresh regeneration allowance for the price of an edit.
-    const regenerationCount = isRegeneration
-      ? (existingMedia?.regeneration_count ?? 0) + 1
-      : (existingMedia?.regeneration_count ?? 0);
-
     // Update the dream's existing image row in place, or create the first one. Updating
     // rather than inserting is what bounds an entry to a single row and a single stored
     // object no matter how many times it is regenerated.
@@ -522,8 +479,6 @@ serve(async (req: Request) => {
           .update({
             storage_key: storagePath,
             generation_status: 'complete',
-            regeneration_count: regenerationCount,
-            max_regenerations: maxRegenerations,
             error_message: null,
             updated_at: new Date().toISOString(),
           })
@@ -538,8 +493,6 @@ serve(async (req: Request) => {
             media_type: 'image',
             storage_key: storagePath,
             generation_status: 'complete',
-            regeneration_count: regenerationCount,
-            max_regenerations: maxRegenerations,
           })
           .select()
           .single();
@@ -583,8 +536,6 @@ serve(async (req: Request) => {
         generationStatus: 'complete',
         signedUrl: signedData?.signedUrl ?? null,
         localCachePath: null,
-        regenerationCount: media.regeneration_count,
-        maxRegenerations: media.max_regenerations,
         errorMessage: null,
         createdAt: media.created_at,
         updatedAt: media.updated_at,

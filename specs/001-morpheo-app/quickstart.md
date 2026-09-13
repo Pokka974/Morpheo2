@@ -238,19 +238,27 @@ Mock implementations must support configurable response scenarios:
 - Clear, non-judgmental message shown in the image slot
 - Interpretation unaffected
 
-### Scenario 4.3: Regeneration limit enforcement
+### Scenario 4.3: Regeneration spends the same monthly image entitlement as generation
 
-**Steps** (premium, `max_regenerations = 5`):
-1. Generate an image successfully (regeneration_count = 0)
-2. Tap "Regenerate" 5 times (reaches the premium limit)
-3. Tap "Regenerate" a 6th time
+Retired the separate per-entry regeneration budget (`media.regeneration_count`/
+`max_regenerations` — still real for the dormant video path, no longer read or written by
+`generate-image`). "Regenerate" is bounded only by the same monthly image entitlement
+"Generate" already is.
+
+**Steps** (free, `monthly_image_limit = 1`, one-time welcome credit already spent):
+1. Generate an image successfully (spends the month's one image)
+2. Tap "Regenerate" (spends the welcome bonus credit, since the month's allowance is gone)
+3. Tap "Regenerate" again (both credits now exhausted)
 
 **Expected outcomes**:
-- Steps 1-2: Each regeneration replaces the previous image; count increments
-- Step 3: User informed the limit is reached
-- On free (`max_regenerations = 0`) the "Regenerate" action is never offered at all
-- Regenerations do not spend a monthly image credit — only the first generation does
-- Verify server-side: `media.regeneration_count` does not exceed `max_regenerations`
+- Steps 1-2: Each call replaces the previous image; the monthly-then-bonus credit order
+  is identical to a fresh generation's
+- Step 3: User informed the monthly image limit is reached (same message a fresh
+  "Generate" attempt would show), with a premium upgrade option
+- The "Regenerate" action is offered to free and premium users alike — never hidden or
+  disabled up front; pressing it when out of credit is what surfaces the limit
+- Verify server-side: `consume_image_credit` is called unconditionally, not skipped for
+  `isRegeneration`
 
 ### Scenario 4.4: Image generation failure → entry unaffected
 

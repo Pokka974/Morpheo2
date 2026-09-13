@@ -190,8 +190,8 @@ or video within a defined per-entry limit if unsatisfied.
 significantly increases each entry's richness and emotional impact.
 
 **Independent Test**: Test with a saved, interpreted entry against mocked generation
-responses: successful image, generation failure, content-safety block, regeneration
-limit, and premium video gate.
+responses: successful image, generation failure, content-safety block, monthly image
+entitlement exhaustion, and premium video gate.
 
 **Acceptance Scenarios**:
 
@@ -207,14 +207,16 @@ limit, and premium video gate.
    the filter evaluates the description, **Then** image/video generation is blocked before
    any provider call is made and the user sees a clear, non-judgmental message.
 5. **Given** a user who dislikes the generated image, **When** they tap "Regenerate",
-   **Then** a new image is generated, the original is replaced, and the regeneration count
-   for this entry increments.
-6. **Given** a free user, who has no per-entry regenerations, **When** they view a
-   generated image, **Then** no "Regenerate" action is offered and a premium upgrade
-   option is shown in its place.
+   **Then** a new image is generated, the original is replaced, and the same monthly
+   image entitlement generating an image would have spent is decremented — there is no
+   separate per-entry regeneration count.
+6. **Given** a free user who has exhausted their monthly image entitlement (and the
+   one-time welcome credit), **When** they view a generated image, **Then** the
+   "Regenerate" action still appears, but pressing it surfaces the same monthly-limit
+   message a fresh "Generate" attempt would, with a premium upgrade option.
 7. **Given** a premium user, **When** they view an entry, **Then** a "Generate Video"
-   option is available in addition to the static image; the regeneration limit for premium
-   users is 5 times per entry.
+   option is available in addition to the static image; image regeneration is unlimited
+   for premium (unlimited monthly image entitlement).
 8. **Given** a free user, **When** they tap "Generate Video", **Then** a premium upgrade
    prompt is shown before any request is made.
 9. **Given** a video generation failure or content-safety block, **When** the request
@@ -411,8 +413,9 @@ export → verify file contents; trigger deletion → verify all backend data is
   failure, the user is prompted to sign in; the saved dream entry is always retained.
 - **Client-side subscription state tampered**: Server entitlement check gates all premium
   features; a tampered client state does not unlock any premium capability.
-- **Regeneration limit reached**: The per-entry regeneration counter is enforced
-  server-side; a client that misreports the count cannot bypass the limit.
+- **Monthly image entitlement exhausted**: Enforced server-side (`consume_image_credit`)
+  for both a fresh generation and a regeneration alike; a client that misreports its usage
+  cannot bypass the limit.
 - **Concurrent multi-device sync conflict**: If two devices both edited the same DreamEntry
   while offline and sync at the same time, the version with the most recent last-modified
   timestamp wins; the losing version is silently discarded with no notification to the user.
@@ -510,8 +513,11 @@ export → verify file contents; trigger deletion → verify all backend data is
   MUST respect the device's notification permission state.
 - **FR-028**: AI provider integrations MUST apply a model-training opt-out by default when
   the provider offers one; no user action is required to activate this protection.
-- **FR-029**: Image regeneration is unavailable to free users (0 per entry) and limited to
-  5 per entry for premium users; these limits MUST be enforced server-side.
+- **FR-029**: ~~Image regeneration is unavailable to free users (0 per entry) and limited to
+  5 per entry for premium users~~ — retired. Regenerating an image draws the same monthly
+  image entitlement (`images_used_this_month`/`monthly_image_limit`/`bonus_image_credits`)
+  that generating one does; there is no separate per-entry regeneration budget. The gate
+  MUST still be enforced server-side (`consume_image_credit`, 019_image_credit_rpc.sql).
 - **FR-030**: Video generation is a premium-only feature; the option is visible to all
   users, with a premium upgrade prompt shown to free users before any request is made.
 - **FR-034**: The app MUST accept dream descriptions written in any language. The AI

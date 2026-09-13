@@ -527,6 +527,12 @@ export const sizes = {
   fab: 58,
   /** How far the centre action rises above the bar. */
   fabLift: 26,
+  /**
+   * `TabBar`'s own content height above its safe-area padding — paddingTop (12) +
+   * icon (24) + gap (5) + label lineHeight (13). Lets floating chrome on tab-root
+   * screens clear the bar without duplicating its layout math.
+   */
+  tabBarContentHeight: 54,
   avatar: 42,
   thumbSmall: 58,
   thumbMedium: 60,

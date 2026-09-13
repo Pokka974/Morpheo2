@@ -1,4 +1,5 @@
 import React from 'react';
+import { Text } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { Button } from '@shared/components/Button';
 
@@ -44,5 +45,30 @@ describe('Button', () => {
       <Button label="Tap" onPress={() => {}} accessibilityLabel="custom-label" />
     );
     expect(getByLabelText('custom-label')).toBeTruthy();
+  });
+
+  it('renders the neutral variant (dream detail Edit button) without crashing', () => {
+    const { getByText } = render(<Button label="Edit" variant="neutral" onPress={() => {}} />);
+    expect(getByText('Edit')).toBeTruthy();
+  });
+
+  it('renders the destructive variant (dream detail Delete button) without crashing', () => {
+    const { getByText } = render(
+      <Button label="Delete" variant="destructive" onPress={() => {}} />
+    );
+    expect(getByText('Delete')).toBeTruthy();
+  });
+
+  it('renders an icon before the label when provided', () => {
+    const { getByText, getByTestId } = render(
+      <Button label="Edit" icon={<Text testID="my-icon">•</Text>} onPress={() => {}} />
+    );
+    expect(getByTestId('my-icon')).toBeTruthy();
+    expect(getByText('Edit')).toBeTruthy();
+  });
+
+  it('renders with no icon at all when none is passed', () => {
+    const { queryByTestId } = render(<Button label="Edit" onPress={() => {}} />);
+    expect(queryByTestId('my-icon')).toBeNull();
   });
 });

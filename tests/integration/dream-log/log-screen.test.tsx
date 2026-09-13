@@ -16,21 +16,29 @@ const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 const mockReplace = jest.fn();
 const mockNavigate = jest.fn();
 const mockPush = jest.fn();
+// Overridden per edit-mode test via `mockUseLocalSearchParams.mockReturnValue({ editId: ... })`;
+// defaults to no params, matching every create-flow test in this file.
+const mockUseLocalSearchParams = jest.fn(() => ({}) as { editId?: string; editedAt?: string });
 jest.mock('expo-router', () => ({
   useRouter: () => ({
     replace: (...args: unknown[]) => mockReplace(...args),
     navigate: (...args: unknown[]) => mockNavigate(...args),
     push: (...args: unknown[]) => mockPush(...args),
   }),
+  useLocalSearchParams: () => mockUseLocalSearchParams(),
 }));
 
 jest.mock('@react-native-community/datetimepicker', () => 'DateTimePicker');
 
 const mockSaveDream = jest.fn().mockResolvedValue({ id: 'mock-id' });
+const mockUpdateDream = jest.fn().mockResolvedValue(undefined);
+const mockGetDreamById = jest.fn().mockResolvedValue(null);
 const mockGetTagSuggestions = jest.fn().mockResolvedValue([]);
 const mockGetRecentDreamsForLinking = jest.fn().mockResolvedValue([]);
 jest.mock('@features/dream-log/dreamRepository', () => ({
   saveDream: (...args: unknown[]) => mockSaveDream(...args),
+  updateDream: (...args: unknown[]) => mockUpdateDream(...args),
+  getDreamById: (...args: unknown[]) => mockGetDreamById(...args),
   validateForInterpretation: jest.fn(),
   getTagSuggestions: (...args: unknown[]) => mockGetTagSuggestions(...args),
   getRecentDreamsForLinking: (...args: unknown[]) => mockGetRecentDreamsForLinking(...args),
@@ -80,11 +88,14 @@ function buildRegistry(): ServiceRegistry {
 describe('DreamLogScreen', () => {
   beforeEach(() => {
     mockSaveDream.mockClear();
+    mockUpdateDream.mockClear().mockResolvedValue(undefined);
+    mockGetDreamById.mockReset().mockResolvedValue(null);
     mockSyncPendingDreams.mockClear();
     mockSyncDreamForInterpretation.mockReset().mockResolvedValue(undefined);
     mockReplace.mockClear();
     mockNavigate.mockClear();
     mockPush.mockClear();
+    mockUseLocalSearchParams.mockReset().mockReturnValue({});
   });
 
   describe('save draft', () => {
@@ -430,6 +441,122 @@ describe('DreamLogScreen', () => {
 
       resolveSync();
       await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+    });
+  });
+
+  describe('edit mode (FR-031)', () => {
+    const EXISTING_DREAM = {
+      id: 'dream-42',
+      userId: 'user-1',
+      description: 'An existing dream about flying over mountains at dawn.',
+      occurredAt: '2026-08-01',
+      emotions: '["awe"]',
+      isLucid: false,
+      loggedAt: '2026-08-01T00:00:00.000Z',
+      lastModifiedAt: '2026-08-01T00:00:00.000Z',
+      isDeleted: false,
+      editedSinceInterpretation: false,
+      syncStatus: 'local',
+      bedtime: '23:00',
+      wakeTime: '07:00',
+      sleepQuality: 4,
+      clarity: 3,
+      lucidity: 'none',
+      tone: null,
+      dreamEnding: null,
+      dreamType: '[]',
+      characters: '[]',
+      places: '[]',
+      linkedDreamId: null,
+      dayStress: null,
+      presleepSubstances: '[]',
+    };
+
+    beforeEach(() => {
+      mockUseLocalSearchParams.mockReturnValue({
+        editId: EXISTING_DREAM.id,
+        editedAt: 'first-press',
+      });
+      mockGetDreamById.mockResolvedValue(EXISTING_DREAM);
+    });
+
+    it('shows the edit title and hydrates the description from the existing dream', async () => {
+      const { findByText, findByDisplayValue } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      await findByText('Edit dream');
+      await findByDisplayValue(EXISTING_DREAM.description);
+    });
+
+    it('shows a single Save button instead of the create-flow pair', async () => {
+      const { findByDisplayValue, queryByText, getByText } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      await findByDisplayValue(EXISTING_DREAM.description);
+      expect(queryByText('Interpret this dream')).toBeNull();
+      expect(queryByText('Save draft')).toBeNull();
+      expect(getByText('Save')).toBeTruthy();
+    });
+
+    it('saves changes via updateDream (not saveDream) and navigates to the dream detail screen', async () => {
+      const { findByDisplayValue, getByLabelText, getByText } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      await findByDisplayValue(EXISTING_DREAM.description);
+      fireEvent.changeText(getByLabelText('Dream description'), LONG_ENOUGH);
+      fireEvent.press(getByText('Save'));
+
+      await waitFor(() => expect(mockUpdateDream).toHaveBeenCalledTimes(1));
+      expect(mockUpdateDream).toHaveBeenCalledWith(
+        EXISTING_DREAM.id,
+        expect.objectContaining({ description: LONG_ENOUGH })
+      );
+      expect(mockSaveDream).not.toHaveBeenCalled();
+      // `replace`, not `dismissTo`: this hop is cross-tab (log has no Stack of its
+      // own), where dismissTo's stack-scoped POP_TO does not apply.
+      await waitFor(() =>
+        expect(mockReplace).toHaveBeenCalledWith(`/(main)/journal/${EXISTING_DREAM.id}/detail`)
+      );
+    });
+
+    it('re-hydrates on a second "Edit dream" press for the same dream, even though editId is unchanged', async () => {
+      // `log` is a persistent tab: this screen is never remounted between two edit
+      // sessions for the same dream in one app session, so editId alone (unchanged
+      // across both presses) cannot be what triggers the second hydration —
+      // `editedAt` (a fresh value on every press) is.
+      const { findByDisplayValue, rerender } = render(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+      await findByDisplayValue(EXISTING_DREAM.description);
+
+      const LATER_REVISION = {
+        ...EXISTING_DREAM,
+        description: 'A second, later revision of the same dream.',
+      };
+      mockGetDreamById.mockResolvedValue(LATER_REVISION);
+      mockUseLocalSearchParams.mockReturnValue({
+        editId: EXISTING_DREAM.id,
+        editedAt: 'second-press',
+      });
+
+      rerender(
+        <ServicesProvider services={buildRegistry()}>
+          <DreamLogScreen />
+        </ServicesProvider>
+      );
+
+      await findByDisplayValue(LATER_REVISION.description);
     });
   });
 });

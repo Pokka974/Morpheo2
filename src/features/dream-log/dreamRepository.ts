@@ -38,18 +38,43 @@ export async function saveDream(
 
 export async function updateDream(
   id: string,
-  changes: Partial<Pick<Dream, 'description' | 'occurredAt'>>
+  changes: Partial<
+    Omit<
+      Dream,
+      | 'id'
+      | 'userId'
+      | 'loggedAt'
+      | 'syncStatus'
+      | 'lastModifiedAt'
+      | 'isDeleted'
+      | 'editedSinceInterpretation'
+    >
+  >
 ): Promise<void> {
   const now = new Date().toISOString();
+  let descriptionChangedMeaningfully = false;
+  if (changes.description !== undefined) {
+    const existing = await db
+      .select({ description: dreams.description })
+      .from(dreams)
+      .where(eq(dreams.id, id));
+    const previous = existing[0]?.description ?? '';
+    descriptionChangedMeaningfully = previous.trim() !== changes.description.trim();
+  }
   await db
     .update(dreams)
     .set({
       ...changes,
       lastModifiedAt: now,
-      ...(changes.description !== undefined ? { editedSinceInterpretation: true } : {}),
+      ...(descriptionChangedMeaningfully ? { editedSinceInterpretation: true } : {}),
       syncStatus: 'local',
     })
     .where(eq(dreams.id, id));
+}
+
+export async function getDreamById(id: string): Promise<Dream | null> {
+  const rows = await db.select().from(dreams).where(eq(dreams.id, id));
+  return rows[0] ?? null;
 }
 
 /**

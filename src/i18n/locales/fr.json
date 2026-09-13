@@ -8,7 +8,8 @@
     "close": "Fermer",
     "back": "Retour",
     "loading": "Chargement…",
-    "premium": "Premium"
+    "premium": "Premium",
+    "scrollToTop": "Remonter en haut"
   },
   "splash": {
     "tagline": "Journal de rêves",
@@ -55,6 +56,13 @@
     "interpretButton": "Interpréter ce rêve",
     "saveDraft": "Enregistrer le brouillon",
     "anotherAngle": "Autre angle",
+    "anotherAngleCta": "Proposer un autre angle",
+    "anotherAngleSheetTitle": "Proposer un autre angle",
+    "anotherAngleSheetBody": "La première lecture reste conservée. Le nouvel angle s'ajoute à côté d'elle.",
+    "rereadFromAngle": "Relire sous cet angle",
+    "interpretationsRemainingCaption": "{{count}} relecture restante ce mois-ci",
+    "interpretationsRemainingCaption_other": "{{count}} relectures restantes ce mois-ci",
+    "menuLabel": "Plus d'actions",
     "monthlyThemeNote": "{{ordinal}} rêve de {{term}} ce mois-ci",
     "seeConstellation": "voir la constellation",
     "aiMetadataTitle": "Généré par Morpheo",
@@ -81,6 +89,16 @@
     "deleteConfirmTitle": "Supprimer ce rêve ?",
     "deleteConfirmBody": "Le rêve, son interprétation et ses images sont supprimés définitivement. C'est irréversible.",
     "delete": "Supprimer",
+    "deletePermanently": "Supprimer définitivement",
+    "keepDream": "Garder le rêve",
+    "edit": "Modifier le rêve",
+    "editBannerTitle": "Vous avez modifié ce rêve",
+    "editBannerBody": "Actualiser sa lecture pour qu'elle corresponde au nouveau texte ?",
+    "editBannerCta": "Actualiser la lecture",
+    "regenerateInterpretationOnlyAction": "Interprétation seule",
+    "regenerateInterpretationOnlyBody": "Cela utilise un crédit d'interprétation.",
+    "regenerateBothAction": "Interprétation + image",
+    "regenerateBothBody": "Cela utilise un crédit d'interprétation et un crédit d'image.",
     "symbols": "Symboles",
     "emotions": "Émotions",
     "culturalReferences": "Références culturelles",
@@ -110,8 +128,8 @@
     "imageGenerateButton": "Générer une image",
     "imageRegenerate": "Regénérer ({{count}} restant)",
     "imageRegenerate_other": "Regénérer ({{count}} restants)",
+    "imageRegenerateUnlimited": "Regénérer",
     "imageSafetyBlockedBody": "Ce rêve n'a pas pu être illustré — sa description a été signalée par le filtrage de sécurité.",
-    "imageRegenLimitBody": "Vous avez utilisé les {{max}} régénérations disponibles pour cette image.",
     "imageLimitReachedBody": "Vos images gratuites se renouvellent le {{date}}."
   },
   "insights": {
@@ -184,6 +202,7 @@
   },
   "log": {
     "title": "Nouveau rêve",
+    "editTitle": "Modifier le rêve",
     "placeholder": "Racontez votre rêve…",
     "saveError": "Impossible d'enregistrer le rêve.",
     "recording": "Enregistrement",

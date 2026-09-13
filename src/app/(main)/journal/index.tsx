@@ -27,6 +27,8 @@ import { Chip, ChipRow } from '@shared/components/Chip';
 import { useJournalSearch } from '@features/journal/useJournalSearch';
 import { useJournalFilters } from '@features/journal/useJournalFilters';
 import { FilterIcon, SearchIcon } from '@shared/components/icons';
+import { ScrollToTopButton } from '@shared/components/ScrollToTopButton';
+import { useScrollToTopVisibility } from '@shared/hooks/useScrollToTopVisibility';
 import { syncPendingDreams } from '@features/dream-log/syncService';
 import {
   isPullInFlight,
@@ -72,6 +74,7 @@ export default function JournalListScreen() {
   // The window that produced `filters.startDate`, kept alongside it so the chip and the
   // sheet keep naming it correctly even after the date it was derived from has passed.
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('all');
+  const { isVisible: isScrollToTopVisible, onScroll } = useScrollToTopVisibility();
 
   const loadEntries = useCallback(async () => {
     try {
@@ -318,6 +321,14 @@ export default function JournalListScreen() {
         showsVerticalScrollIndicator={false}
         refreshing={isRefreshing}
         onRefresh={() => void onRefresh()}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      />
+
+      <ScrollToTopButton
+        visible={isScrollToTopVisible}
+        onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
+        bottomOffset={Math.max(insets.bottom, spacing.md) + sizes.tabBarContentHeight + spacing.md}
       />
 
       <JournalFilterSheet

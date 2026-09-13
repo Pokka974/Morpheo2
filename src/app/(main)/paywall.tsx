@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,8 @@ import { useServices } from '@services/useServices';
 import { Button } from '@shared/components/Button';
 import { Card } from '@shared/components/Card';
 import { CheckIcon } from '@shared/components/icons';
+import { ScrollToTopButton } from '@shared/components/ScrollToTopButton';
+import { useScrollToTopVisibility } from '@shared/hooks/useScrollToTopVisibility';
 import { colors, fontSize, radius, spacing, typography } from '@theme/tokens';
 
 /**
@@ -38,6 +40,8 @@ export default function PaywallScreen() {
   const { entitlement } = useServices();
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [price, setPrice] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const { isVisible: isScrollToTopVisible, onScroll } = useScrollToTopVisibility();
 
   useEffect(() => {
     let active = true;
@@ -66,57 +70,73 @@ export default function PaywallScreen() {
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]}
-    >
-      <Text style={styles.title}>{t('paywall.title')}</Text>
-      <Text style={styles.subtitle}>{t('paywall.subtitle')}</Text>
+    <View style={styles.container}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.container}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      >
+        <Text style={styles.title}>{t('paywall.title')}</Text>
+        <Text style={styles.subtitle}>{t('paywall.subtitle')}</Text>
 
-      <View style={styles.comparison}>
-        <Card style={styles.tier}>
-          <Text style={styles.tierLabel}>{t('paywall.tierFree')}</Text>
-          {FREE_FEATURE_KEYS.map(key => (
-            <View key={key} style={styles.featureRow}>
-              <CheckIcon size={CHECK_SIZE} color={colors.textMuted} />
-              <Text style={styles.featureText}>{t(key)}</Text>
-            </View>
-          ))}
-        </Card>
+        <View style={styles.comparison}>
+          <Card style={styles.tier}>
+            <Text style={styles.tierLabel}>{t('paywall.tierFree')}</Text>
+            {FREE_FEATURE_KEYS.map(key => (
+              <View key={key} style={styles.featureRow}>
+                <CheckIcon size={CHECK_SIZE} color={colors.textMuted} />
+                <Text style={styles.featureText}>{t(key)}</Text>
+              </View>
+            ))}
+          </Card>
 
-        <Card variant="mystic" style={styles.tier}>
-          <View style={styles.premiumHeader}>
-            <Text style={styles.tierLabel}>{t('paywall.tierPremium')}</Text>
-            {/*
+          <Card variant="mystic" style={styles.tier}>
+            <View style={styles.premiumHeader}>
+              <Text style={styles.tierLabel}>{t('paywall.tierPremium')}</Text>
+              {/*
               Only rendered once the store has answered. RevenueCat returns the price it
               will actually charge in the viewer's storefront, already localised, so there
               is nothing here to hardcode and nothing to go stale when the price changes.
             */}
-            {price ? <Text style={styles.price}>{t('paywall.price', { price })}</Text> : null}
-          </View>
-          {PREMIUM_FEATURE_KEYS.map(key => (
-            <View key={key} style={styles.featureRow}>
-              <CheckIcon size={CHECK_SIZE} color={colors.accentText} />
-              <Text style={[styles.featureText, styles.premiumFeatureText]}>{t(key)}</Text>
+              {price ? <Text style={styles.price}>{t('paywall.price', { price })}</Text> : null}
             </View>
-          ))}
-        </Card>
-      </View>
+            {PREMIUM_FEATURE_KEYS.map(key => (
+              <View key={key} style={styles.featureRow}>
+                <CheckIcon size={CHECK_SIZE} color={colors.accentText} />
+                <Text style={[styles.featureText, styles.premiumFeatureText]}>{t(key)}</Text>
+              </View>
+            ))}
+          </Card>
+        </View>
 
-      <Button
-        label={t('paywall.cta')}
-        onPress={() => {
-          void handlePurchase();
-        }}
-        loading={isPurchasing}
-        fullWidth
-        testID="paywall-purchase"
+        <Button
+          label={t('paywall.cta')}
+          onPress={() => {
+            void handlePurchase();
+          }}
+          loading={isPurchasing}
+          fullWidth
+          testID="paywall-purchase"
+        />
+
+        <Button
+          label={t('paywall.later')}
+          onPress={() => router.back()}
+          variant="ghost"
+          fullWidth
+        />
+
+        <Text style={styles.legal}>{t('paywall.legal')}</Text>
+      </ScrollView>
+
+      <ScrollToTopButton
+        visible={isScrollToTopVisible}
+        onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        bottomOffset={insets.bottom + spacing.md}
       />
-
-      <Button label={t('paywall.later')} onPress={() => router.back()} variant="ghost" fullWidth />
-
-      <Text style={styles.legal}>{t('paywall.legal')}</Text>
-    </ScrollView>
+    </View>
   );
 }
 
