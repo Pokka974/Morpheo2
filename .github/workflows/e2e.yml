@@ -1,13 +1,19 @@
 # Runs the Maestro E2E flows (tests/e2e/flows/) against an Android build on a GitHub-hosted
 # emulator, on the same push/PR triggers as ci.yml.
 #
+# Runs on macos-latest, not ubuntu-latest: GitHub's standard Linux runners have no /dev/kvm,
+# so the Android emulator falls back to full software emulation there — confirmed on this
+# workflow's first real run, where the emulator took 356s just to boot and Android's own
+# System UI ANR'd before the app ever got a chance to render. macOS runners get real
+# hardware acceleration (HAXM/Hypervisor.framework) for the emulator. This repo is public,
+# so GitHub Actions minutes are free regardless of runner OS — no cost tradeoff either way.
+#
 # Needs an `EXPO_TOKEN` repo secret (an Expo access token, for a non-interactive `eas build`)
-# — this workflow fails at the build step until one is added. Building via EAS also spends
-# build minutes/credits on every run this triggers.
+# — this workflow fails at the build step until one is added.
 #
 # The flow file this drives (p1-core-flow.yaml) was rewritten to match the current app's
-# screens but has not yet been watched pass on a real build — expect the first runs to need
-# adjustment (timing, keyboard/animation waits, copy drift).
+# screens but has not yet been watched pass end to end — expect further rounds of timing/copy
+# adjustment even with the emulator itself fixed.
 #
 # iOS is intentionally out of scope here: this app signs with a free Apple developer team
 # (see project notes — 7-day provisioning profiles, no CI-eligible distribution), so an iOS
@@ -24,7 +30,7 @@ on:
 jobs:
   maestro-android:
     name: Build + run Maestro flows on an Android emulator
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
