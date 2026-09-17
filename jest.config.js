@@ -50,6 +50,16 @@ module.exports = {
     '^@db/(.*)$': '<rootDir>/src/db/$1',
     '^@theme/(.*)$': '<rootDir>/src/theme/$1',
     '^@i18n/(.*)$': '<rootDir>/src/i18n/$1',
+    // Edge Functions run on Deno and import by URL — these three specifiers are the ones
+    // `supabase/functions/**` actually uses, redirected to Jest-safe shims so a behavioral
+    // test can `require()` a function's index.ts directly. See
+    // tests/integration/edge-functions/_harness/.
+    '^https://deno\\.land/std@[\\d.]+/http/server\\.ts$':
+      '<rootDir>/tests/integration/edge-functions/_harness/denoServeShim.ts',
+    '^https://esm\\.sh/@supabase/supabase-js@2$':
+      '<rootDir>/tests/integration/edge-functions/_harness/supabaseJsShim.ts',
+    '^https://esm\\.sh/@anthropic-ai/sdk@[\\d.]+$':
+      '<rootDir>/tests/integration/edge-functions/_harness/anthropicSdkShim.ts',
   },
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',

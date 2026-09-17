@@ -532,6 +532,7 @@ export default function DreamLogScreen() {
 
       <ScrollView
         ref={scrollRef}
+        testID="log-scroll-view"
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}

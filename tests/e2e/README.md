@@ -16,14 +16,35 @@ maestro test tests/e2e/flows/
 
 ### P1 Core Flow Test
 
-The file `flows/p1-core-flow.yaml` covers the full P1 vertical slice:
-1. Fresh install → onboarding (consent + PIN setup)
-2. Sign up with email
-3. Log a dream offline (airplane mode)
-4. Return online → verify sync
-5. Tap "Interpret Dream" → verify interpretation result renders
-6. Verify image generation triggers automatically
-7. Verify all 4 interpretation sections render
+The file `flows/p1-core-flow.yaml` covers the P1 vertical slice, rewritten to match the app's
+actual current screens/copy rather than an early spec draft (issue #16 — it had never been
+run, and had drifted):
+1. Fresh install → onboarding (welcome, consent, PIN setup)
+2. Sign up with a random email
+3. Log a dream as a draft
+4. Open it from the journal list and tap "Interpret this dream"
+5. Verify the interpretation renders, and that image generation fires automatically
+
+**Known gap, not covered here:** logging a dream offline and verifying it syncs once
+reconnected — the original draft named this as a step but never actually simulated airplane
+mode. Worth its own flow rather than folding back into this one.
+
+### Running in CI — attempted, currently blocked
+
+A GitHub Actions workflow was tried and pulled again: neither of GitHub's hosted runner types
+can run a hardware-accelerated Android emulator today. `ubuntu-latest` has no `/dev/kvm`
+(falls back to full software emulation — a ~356s boot, then Android's own System UI ANR'd
+before the app rendered). `macos-latest` is now Apple Silicon, and its guest processes can't
+reach Hypervisor.framework at all (`HVF error: HV_UNSUPPORTED` — nested virtualization isn't
+exposed to hosted macOS VMs), so the emulator can't even start there. This isn't a flag or
+profile fix; it's a ceiling on both hosted runner families as they exist today.
+
+Real paths forward, not attempted yet: **Maestro Cloud** (mobile.dev's own hosted device farm
+— `maestro cloud`, no local emulator needed), or a **self-hosted runner** with real
+virtualization access. Until one of those is set up, treat this flow as **verified by
+reading, not by execution** — every string in it is copied from the screen it targets, but no
+one has watched it pass on a device yet. Run it by hand against a local emulator/device with
+`maestro test tests/e2e/flows/` in the meantime.
 
 ## Cold Start Profiling (T130)
 
