@@ -29,17 +29,22 @@ run, and had drifted):
 reconnected — the original draft named this as a step but never actually simulated airplane
 mode. Worth its own flow rather than folding back into this one.
 
-### Running in CI
+### Running in CI — attempted, currently blocked
 
-`.github/workflows/e2e.yml` runs this against an Android emulator, `workflow_dispatch` only
-(not on every push) — it spends EAS build minutes and needs an `EXPO_TOKEN` repo secret that
-does not exist yet. See that file's header comment before enabling it further. iOS is out of
-scope for CI: this app currently signs with a free Apple developer team (7-day provisioning
-profiles), which isn't viable for automated distribution.
+A GitHub Actions workflow was tried and pulled again: neither of GitHub's hosted runner types
+can run a hardware-accelerated Android emulator today. `ubuntu-latest` has no `/dev/kvm`
+(falls back to full software emulation — a ~356s boot, then Android's own System UI ANR'd
+before the app rendered). `macos-latest` is now Apple Silicon, and its guest processes can't
+reach Hypervisor.framework at all (`HVF error: HV_UNSUPPORTED` — nested virtualization isn't
+exposed to hosted macOS VMs), so the emulator can't even start there. This isn't a flag or
+profile fix; it's a ceiling on both hosted runner families as they exist today.
 
-Until that secret is added and a first run is supervised, treat this flow as **verified by
-reading, not by execution** — every string in it is copied from the screen it targets, but
-no one has watched it pass on a device yet.
+Real paths forward, not attempted yet: **Maestro Cloud** (mobile.dev's own hosted device farm
+— `maestro cloud`, no local emulator needed), or a **self-hosted runner** with real
+virtualization access. Until one of those is set up, treat this flow as **verified by
+reading, not by execution** — every string in it is copied from the screen it targets, but no
+one has watched it pass on a device yet. Run it by hand against a local emulator/device with
+`maestro test tests/e2e/flows/` in the meantime.
 
 ## Cold Start Profiling (T130)
 
